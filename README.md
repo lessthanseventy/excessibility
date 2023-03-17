@@ -18,7 +18,19 @@ end
 
 ## Usage
 
-Simply call Excessibility.here() and pass it either a Phoenix Conn or a Wallaby Session. It will produce an html file named with the module and line number it was called from.
+Simply call Excessibility.html_snapshot() and pass it either a Phoenix Conn or a Wallaby Session. It will produce an html file named with the module and line number it was called from.
+
+The module also includes a mix task that you can call to run pa11y against the snapshots. ```MIX_ENV=test mix excessibility```
+
+## Default Configuration
+
+```
+config :excessibility,
+  :assets_task, "assets.deploy",
+  :assets_path, "priv/static/assets",
+  :pa11y_path, "/assets/node_modules/pa11y/bin/pa11y.js",
+  :output_path, "test/excessibility"
+```
 
 Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
 and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
