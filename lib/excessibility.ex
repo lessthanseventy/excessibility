@@ -9,6 +9,7 @@ defmodule Excessibility do
                  :excessibility_output_path,
                  "test/excessibility"
                )
+  @snapshots_path "#{@output_path}/html_snapshots"
 
   @moduledoc """
   Documentation for `Excessibility`.
@@ -82,7 +83,9 @@ defmodule Excessibility do
       html
       |> relativize_asset_paths()
 
-    Path.join([File.cwd!(), "#{@output_path}", filename])
+    File.mkdir_p("#{@snapshots_path}")
+
+    Path.join([File.cwd!(), "#{@snapshots_path}", filename])
     |> File.write(html, [:write])
   end
 

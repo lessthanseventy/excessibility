@@ -22,6 +22,10 @@ defmodule Mix.Tasks.Excessibility do
   @impl Mix.Task
   def run(_args) do
     Mix.Task.run(@assets_task)
+
+    File.mkdir_p("#{@ex_assets_path}/css")
+    File.mkdir_p("#{@ex_assets_path}/js")
+
     File.cp!(app_css_path(), test_css_path())
     File.cp!(app_js_path(), test_js_path())
 
@@ -43,7 +47,7 @@ defmodule Mix.Tasks.Excessibility do
   defp run_pa11y(list_of_files) do
     list_of_files
     |> Enum.map(fn file ->
-      file_path = "#{File.cwd!()}/" <> @snapshots_path <> file
+      file_path = "#{File.cwd!()}/" <> "#{@snapshots_path}/" <> file
       pally = "#{File.cwd!()}#{@pally_path}"
 
       System.cmd("sh", ["-c", "#{pally} #{file_path}"])
