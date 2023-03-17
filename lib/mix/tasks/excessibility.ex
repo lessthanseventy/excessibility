@@ -34,6 +34,9 @@ defmodule Mix.Tasks.Excessibility do
 
       System.cmd("sh", ["-c", "#{node_path} #{file_path}"])
     end)
+    |> Enum.sort(fn {_res_one, status_one}, {_res_two, status_two} ->
+      status_one < status_two
+    end)
   end
 
   defp exit_status(results) do
