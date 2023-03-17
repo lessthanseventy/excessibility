@@ -2,12 +2,13 @@ defmodule Mix.Tasks.Excessibility do
   @moduledoc "Library to aid in testing your application for WCAG compliance automatically using Pa11y and Wallaby."
   @shortdoc "Runs pally against generated snapshots"
   @requirements ["app.config"]
-  @assets_task Application.compile_env(:excissibility, :assets_task, "assets.deploy")
-  @assets_path Application.compile_env(:excissibility, :assets_path, "priv/static/assets")
+  @assets_task Application.compile_env(:excessibility, :assets_task, "assets.deploy")
+  @css_folder Application.compile_env(:excessibility, :css_folder, "priv/static/assets")
+  @js_folder Application.compile_env(:excessibility, :js_folder, "priv/static/assets")
   @pally_path Application.compile_env(
-                :excissibility,
-                :pally_path,
-                "/assets/node_modules/pa11y/bin/pa11y.js"
+                :excessibility,
+                :pa11y_path,
+                "assets/node_modules/pa11y/bin/pa11y.js"
               )
   @output_path Application.compile_env(
                  :excessibility,
@@ -23,8 +24,8 @@ defmodule Mix.Tasks.Excessibility do
   def run(_args) do
     Mix.Task.run(@assets_task)
 
-    File.mkdir_p("#{@ex_assets_path}/css")
-    File.mkdir_p("#{@ex_assets_path}/js")
+    File.mkdir_p("#{@ex_assets_path}/css/")
+    File.mkdir_p("#{@ex_assets_path}/js/")
 
     File.cp!(app_css_path(), test_css_path())
     File.cp!(app_js_path(), test_js_path())
@@ -48,7 +49,7 @@ defmodule Mix.Tasks.Excessibility do
     list_of_files
     |> Enum.map(fn file ->
       file_path = "#{File.cwd!()}/" <> "#{@snapshots_path}/" <> file
-      pally = "#{File.cwd!()}#{@pally_path}"
+      pally = "#{File.cwd!()}/#{@pally_path}"
 
       System.cmd("sh", ["-c", "#{pally} #{file_path}"])
     end)
@@ -76,8 +77,8 @@ defmodule Mix.Tasks.Excessibility do
     results
   end
 
-  defp app_css_path(), do: "#{File.cwd!()}/#{@assets_path}/css/app.css"
+  defp app_css_path(), do: "#{File.cwd!()}/#{@css_folder}/app.css"
   defp test_css_path(), do: "#{File.cwd!()}/#{@ex_assets_path}/css/app.css"
-  defp app_js_path(), do: "#{File.cwd!()}/#{@assets_path}/js/app.js"
+  defp app_js_path(), do: "#{File.cwd!()}/#{@js_folder}/app.js"
   defp test_js_path(), do: "#{File.cwd!()}/#{@ex_assets_path}/js/app.js"
 end
