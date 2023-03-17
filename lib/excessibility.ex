@@ -4,6 +4,12 @@ defmodule Excessibility do
   use Wallaby.DSL
   alias Wallaby.Session
 
+  @output_path Application.compile_env(
+                 :excessibility,
+                 :excessibility_output_path,
+                 "test/excessibility"
+               )
+
   @moduledoc """
   Documentation for `Excessibility`.
   """
@@ -52,7 +58,7 @@ defmodule Excessibility do
       message: ~s"""
       html_snapshot/1 cannot be called with an %Element{}
       Instead you can try something like:
-      find(elenent, fn el ->
+      find(element, fn el ->
         el
         |> click_the_thing()
         |> assert_the_stuff()
@@ -76,7 +82,7 @@ defmodule Excessibility do
       html
       |> relativize_asset_paths()
 
-    Path.join([File.cwd!(), "/test/axe_html", filename])
+    Path.join([File.cwd!(), "#{@output_path}", filename])
     |> File.write(html, [:write])
   end
 
