@@ -3,7 +3,7 @@ defmodule IntegrationTestWeb.PageControllerTest do
 
   test "GET /", %{conn: conn} do
     conn = get(conn, ~p"/")
-    assert html_response(conn, 200) =~ "Peace of mind from prototype to production"
+    assert html_response(conn, 200) =~ "Accessibility Fails"
     Excessibility.html_snapshot(conn)
   end
 end

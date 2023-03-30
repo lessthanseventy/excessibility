@@ -61,8 +61,8 @@ config :phoenix, :json_library, Jason
 
 config :excessibility,
   assets_task: "assets.deploy",
-  css_folder: "../priv/static/assets",
-  js_folder: "../priv/static/assets",
+  css_folder: "priv/static/assets",
+  js_folder: "priv/static/assets",
   pa11y_path: "assets/node_modules/pa11y/bin/pa11y.js"
 
 # Import environment specific config. This must remain at the bottom

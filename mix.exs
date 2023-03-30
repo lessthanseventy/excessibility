@@ -38,6 +38,7 @@ defmodule Excessibility.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:credo, "~> 1.7.0", only: [:dev, :test]},
       {:ex_doc, "~> 0.18", only: :dev},
       {:floki, ">= 0.30.0"},
       {:phoenix, ">= 1.5.0"},
