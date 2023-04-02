@@ -42,6 +42,7 @@ defmodule Excessibility.MixProject do
       {:ex_doc, "~> 0.18", only: :dev},
       {:floki, ">= 0.30.0"},
       {:phoenix, ">= 1.5.0"},
+      {:phoenix_live_view, "~> 0.18"},
       {:wallaby, ">= 0.25.0"}
     ]
   end

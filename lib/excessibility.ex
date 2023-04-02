@@ -3,6 +3,8 @@ defmodule Excessibility do
   alias Plug.Conn
   use Wallaby.DSL
   alias Wallaby.Session
+  alias Phoenix.LiveViewTest.{DOM, View}
+  alias Phoenix.LiveViewTest.Element, as: LiveElement
 
   @output_path Application.compile_env(
                  :excessibility,
@@ -31,104 +33,63 @@ defmodule Excessibility do
   end
 
   @doc """
-  The html_snapshot/1 macro can be called to produce an HTML snapshot of any conn or Wallaby session that you pass to it. You can also pass a valid HTML string from a LiveViewTest. These can be used later to run pa11y against..It will return the conn or session that was passed in so that you can include it in a pipeline.
+  The html_snapshot macro can be called to produce an HTML snapshot of any of the following:
+    - A Phoenix Conn
+    - A Wallaby Session
+    - A LiveViewTest View
+    - A LiveViewTest Element
+  These snapshots can then be used later to run pa11y against by calling the mix task..It will return the thing that was passed in so that you can include it in a pipeline.
+  You can optionally pass a second argument of true to open the file in your browser for development purposes.
 
   ## Examples
 
-      iex> Excessibility.html_snapshot(conn_or_session_or_html)
-          conn_or_session
+      iex> Excessibility.html_snapshot(source, opts \\ [])
+          source
   """
 
-  defmacro html_snapshot(conn_or_session_or_html) do
+  defmacro html_snapshot(source, opts \\ []) do
     quote do
-      Excessibility.html_snapshot(unquote(conn_or_session_or_html), __ENV__, __MODULE__)
+      Excessibility.html_snapshot(unquote(source), __ENV__, __MODULE__, unquote(opts))
     end
   end
 
-  @doc """
-  The html_snapshot/2 macro can be called to produce an HTML snapshot of any conn or Wallaby session that you pass to it. You can also pass a valid HTML string from a LiveViewTest. The second argument should be an atom to tag the snapshot with. This can be passed to main_snapshot/2 to handle render_clicks and the like in LiveViewTests.
-
-  ## Examples
-
-      iex> Excessibility.html_snapshot(conn_or_session_or_html, tag)
-          conn_or_session_or_html
-  """
-
-  defmacro html_snapshot(conn_or_session_or_html, tag) when is_atom(tag) do
-    quote do
-      Excessibility.html_snapshot(
-        unquote(conn_or_session_or_html),
-        unquote(tag),
-        __ENV__,
-        __MODULE__
-      )
-    end
-  end
-
-  defmacro html_snapshot(_conn_or_session_or_html, _tag) do
-    raise ArgumentError,
-      message: ~s"""
-      the second argument to html_snapshot/2 must be an atom
-      """
-  end
-
-  @doc """
-  The main_snapshot/2 macro can be called with a valid html string and a tag. The tag should have a corresponding call to html_snapshot/2. This function will then replace the contents of the liveview in the html_snapshot with the html passed into main_snapshot. This is useful for handling functions like render_click in a LiveViewTest.
-
-  ## Examples
-
-      iex> Excessibility.main_snapshot(html, tag)
-          html
-  """
-
-  defmacro main_snapshot(html, tag) do
-    quote do
-      Excessibility.main_snapshot(unquote(html), unquote(tag), __ENV__, __MODULE__)
-    end
-  end
-
-  def html_snapshot(conn_or_session, env, module)
+  def html_snapshot(conn_or_session, env, module, opts)
       when is_struct(conn_or_session, Conn)
       when is_struct(conn_or_session, Session) do
     filename = get_filename(env, module)
 
     get_html(conn_or_session)
-    |> maybe_write_html(filename)
+    |> maybe_wrap_html()
+    |> write_html_file(filename)
+
+    if Keyword.get(opts, :open_browser?, false) do
+      open_with_system_cmd(filename)
+    end
 
     conn_or_session
   end
 
-  def html_snapshot(html, env, module) when is_binary(html) do
+  def html_snapshot(view_or_element, env, module, opts)
+      when is_struct(view_or_element, View)
+      when is_struct(view_or_element, LiveElement) do
+    html = render_tree(view_or_element)
     filename = get_filename(env, module)
 
-    html
-    |> maybe_write_html(filename)
+    view_or_element
+    |> maybe_wrap_html(html)
+    |> write_html_file(filename)
 
-    html
-  end
+    if Keyword.get(opts, :open_browser?, false) do
+      open_with_system_cmd(filename)
+    end
 
-  def html_snapshot(conn_or_session_or_html, tag, env, module) do
-    filename = get_filename(env, module, tag)
-
-    conn_or_session_or_html
-    |> maybe_write_html(filename)
-
-    conn_or_session_or_html
-  end
-
-  def main_snapshot(html, tag, env, module) do
-    filename = get_filename(env, module, tag)
-
-    html
-    |> replace_with_main(filename)
-
-    html
+    view_or_element
   end
 
   defp get_html(%Element{} = _conn_or_session) do
     raise ArgumentError,
       message: ~s"""
-      html_snapshot/1 cannot be called with an %Element{}
+      html_snapshot/1 cannot be called with a Wallaby %Element{}
       Instead you can try something like:
       find(element, fn el ->
         el
@@ -141,58 +102,10 @@ defmodule Excessibility do
 
   defp get_html(%Conn{} = conn) do
     html_response(conn, 200)
-    |> Floki.parse_document!()
-    |> Floki.raw_html(pretty: true)
   end
 
   defp get_html(%Session{} = session) do
     Wallaby.Browser.page_source(session)
-  end
-
-  defp maybe_write_html(html, filename) do
-    html =
-      html
-      |> validate_html()
-      |> relativize_asset_paths()
-
-    File.mkdir_p("#{@snapshots_path}")
-
-    Path.join([File.cwd!(), "#{@snapshots_path}", filename])
-    |> File.write(html, [:write])
-  end
-
-  defp replace_with_main(html, filename) do
-    file_contents =
-      Path.join([File.cwd!(), "#{@snapshots_path}", filename])
-      |> File.read!()
-      |> Floki.parse_document!()
-
-    {:ok, [{"main", attrs, children}]} = Floki.parse_fragment(html)
-
-    contents =
-      file_contents
-      |> Floki.traverse_and_update(fn
-        {"main", _attrs, _children} ->
-          {"main", attrs, children}
-
-        other ->
-          other
-      end)
-      |> Floki.raw_html(pretty: true)
-
-    Path.join([File.cwd!(), "#{@snapshots_path}", filename])
-    |> File.write(contents, [:write])
-  end
-
-  defp validate_html(html) do
-    html
-    |> Floki.parse_document!()
-    |> Floki.raw_html(pretty: true)
-  end
-
-  defp get_filename(_env, module, tag) when is_atom(tag) do
-    "#{module |> get_module_name()}_#{tag}.html"
-    |> String.replace(" ", "_")
   end
 
   defp get_filename(env, module) do
@@ -204,9 +117,120 @@ defmodule Excessibility do
     module |> Atom.to_string() |> String.downcase() |> String.splitter(".") |> Enum.take(-1)
   end
 
-  defp relativize_asset_paths(html) do
+  defp maybe_wrap_html(html) do
+    build_path = Mix.Project.app_path()
+    static_path = Path.join([build_path, "priv", "static"])
+
     html
-    |> String.replace("\"/assets/js/", "\"./assets/js/")
-    |> String.replace("\"/assets/css/", "\"./assets/css/")
+    |> Floki.parse_document!()
+    |> Floki.traverse_and_update(fn
+      {"script", _, _} -> nil
+      {"a", _, _} = link -> link
+      {el, attrs, children} -> {el, maybe_prefix_static_path(attrs, static_path), children}
+      el -> el
+    end)
   end
+
+  defp maybe_wrap_html(view_or_element, content) do
+    {html, static_path} = call(view_or_element, :html)
+
+    head =
+      case DOM.maybe_one(html, "head") do
+        {:ok, head} -> head
+        _ -> {"head", [], []}
+      end
+
+    case Floki.attribute(content, "data-phx-main") do
+      ["true" | _] ->
+        # If we are rendering the main LiveView,
+        # we return the full page html.
+        html
+
+      _ ->
+        # Otherwise we build a basic html structure around the
+        # view_or_element content.
+        [
+          {"html", [],
+           [
+             head,
+             {"body", [],
+              [
+                content
+              ]}
+           ]}
+        ]
+    end
+    |> Floki.traverse_and_update(fn
+      {"a", _, _} = link -> link
+      {el, attrs, children} -> {el, maybe_prefix_static_path(attrs, static_path), children}
+      el -> el
+    end)
+  end
+
+  defp maybe_prefix_static_path(attrs, nil), do: attrs
+
+  defp maybe_prefix_static_path(attrs, static_path) do
+    Enum.map(attrs, fn
+      {"src", path} -> {"src", prefix_static_path(path, static_path)}
+      {"href", path} -> {"href", prefix_static_path(path, static_path)}
+      attr -> attr
+    end)
+  end
+
+  defp prefix_static_path(<<"//" <> _::binary>> = url, _prefix), do: url
+
+  defp prefix_static_path(<<"/" <> _::binary>> = path, prefix),
+    do: "file://#{Path.join([prefix, path])}"
+
+  defp prefix_static_path(url, _), do: url
+
+  defp write_html_file(html, filename) do
+    html = Floki.raw_html(html, pretty: true)
+
+    Path.join([File.cwd!(), "#{@snapshots_path}", filename])
+    |> File.write(html, [:write])
+  end
+
+  defp open_with_system_cmd(path) do
+    cmd =
+      case :os.type() do
+        {:unix, :darwin} -> "open"
+        {:unix, _} -> "xdg-open"
+        {:win32, _} -> "start"
+      end
+
+    path = Path.join([File.cwd!(), "#{@snapshots_path}", path])
+    System.cmd(cmd, [path])
+  end
+
+  defp render_tree(%View{} = view) do
+    render_tree(view, {proxy_topic(view), "render", view.target})
+  end
+
+  defp render_tree(%LiveElement{} = element) do
+    render_tree(element, element)
+  end
+
+  defp render_tree(view_or_element, topic_or_element) do
+    call(view_or_element, {:render_element, :find_element, topic_or_element})
+  end
+
+  defp call(view_or_element, tuple) do
+    try do
+      GenServer.call(proxy_pid(view_or_element), tuple, 30_000)
+    catch
+      :exit, {{:shutdown, {kind, opts}}, _} when kind in [:redirect, :live_redirect] ->
+        {:error, {kind, opts}}
+
+      :exit, {{exception, stack}, _} ->
+        exit({{exception, stack}, {__MODULE__, :call, [view_or_element]}})
+    else
+      :ok -> :ok
+      {:ok, result} -> result
+      {:raise, exception} -> raise exception
+    end
+  end
+
+  defp proxy_pid(%{proxy: {_ref, _topic, pid}}), do: pid
+  defp proxy_topic(%{proxy: {_ref, topic, _pid}}), do: topic
 end
