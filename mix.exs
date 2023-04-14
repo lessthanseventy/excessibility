@@ -4,9 +4,9 @@ defmodule Excessibility.MixProject do
   def project do
     [
       app: :excessibility,
-      version: "0.2.0",
+      version: "0.3.0",
       elixir: "~> 1.12",
-      start_permanent: Mix.env() == :prod,
+      start_permanent: false,
       description: description(),
       package: package(),
       deps: deps()
@@ -38,9 +38,9 @@ defmodule Excessibility.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:credo, "~> 1.7.0", only: [:dev, :test]},
+      {:credo, ">= 1.5.0", only: [:dev, :test]},
       {:ex_doc, "~> 0.18", only: :dev},
-      {:floki, ">= 0.30.0"},
+      {:floki, ">= 0.28.0"},
       {:gettext, ">= 0.0.0"},
       {:phoenix, ">= 1.5.0"},
       {:phoenix_live_view, ">= 0.17.5"},

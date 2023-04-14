@@ -14,7 +14,7 @@ dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:excessibility, "~> 0.2.0"}
+    {:excessibility, "~> 0.3.0"}
   ]
 end
 ```
@@ -33,7 +33,6 @@ snapshots. `MIX_ENV=test mix excessibility`
 ```
 config :excessibility,
   :assets_task, "assets.deploy",
-  :assets_path, "priv/static/assets",
   :pa11y_path, "/assets/node_modules/pa11y/bin/pa11y.js",
   :output_path, "test/excessibility"
 ```
