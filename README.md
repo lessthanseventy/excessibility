@@ -21,21 +21,40 @@ end
 
 ## Usage
 
-Simply call Excessibility.html_snapshot() and pass it either a Phoenix Conn or a
-Wallaby Session. It will produce an html file named with the module and line
-number it was called from.
+Simply call Excessibility.html_snapshot() and pass it any of:
 
-The module also includes a mix task that you can call to run pa11y against the
-snapshots. `MIX_ENV=test mix excessibility`
+- a Phoenix Conn
+- a Wallaby Session
+- a LiveViewTest View struct
+
+It will produce an html file named with the module and line number of where it
+was called from.
+
+You can pass an optional argument of `open_browser?: true` to open the snapshot
+in your browser.
+
+```elixir
+thing
+|> html_snapshot(open_browser?: true)
+```
+
+The module also includes a mix task that you can call to run
+[pa11y](https://github.com/pa11y/pa11y) against the snapshots.
+`MIX_ENV=test mix excessibility`
 
 ## Default Configuration
 
-```
+```elixir
 config :excessibility,
   :assets_task, "assets.deploy",
   :pa11y_path, "/assets/node_modules/pa11y/bin/pa11y.js",
   :output_path, "test/excessibility"
 ```
+
+## Pa11y Configuration
+
+See the [pa11y documentation](https://github.com/pa11y/pa11y#configuration) for
+configuration options.
 
 Documentation can be generated with
 [ExDoc](https://github.com/elixir-lang/ex_doc) and published on
