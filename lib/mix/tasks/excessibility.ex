@@ -3,8 +3,6 @@ defmodule Mix.Tasks.Excessibility do
   @shortdoc "Runs pally against generated snapshots"
   @requirements ["app.config"]
   @assets_task Application.compile_env(:excessibility, :assets_task, "assets.deploy")
-  @css_folder Application.compile_env(:excessibility, :css_folder, "priv/static/assets")
-  @js_folder Application.compile_env(:excessibility, :js_folder, "priv/static/assets")
   @pally_path Application.compile_env(
                 :excessibility,
                 :pa11y_path,
@@ -26,9 +24,7 @@ defmodule Mix.Tasks.Excessibility do
 
     File.mkdir_p("#{@ex_assets_path}/css/")
     File.mkdir_p("#{@ex_assets_path}/js/")
-
-    File.cp!(app_css_path(), test_css_path())
-    File.cp!(app_js_path(), test_js_path())
+    File.mkdir_p("#{@snapshots_path}/")
 
     File.ls!(@snapshots_path)
     |> filter_dirs()
@@ -64,7 +60,9 @@ defmodule Mix.Tasks.Excessibility do
     |> if do
       System.stop(0)
     else
-      System.halt(1)
+      if Mix.env() !== :test do
+        System.halt(1)
+      end
     end
   end
 
@@ -76,9 +74,4 @@ defmodule Mix.Tasks.Excessibility do
 
     results
   end
-
-  defp app_css_path(), do: "#{File.cwd!()}/#{@css_folder}/app.css"
-  defp test_css_path(), do: "#{File.cwd!()}/#{@ex_assets_path}/css/app.css"
-  defp app_js_path(), do: "#{File.cwd!()}/#{@js_folder}/app.js"
-  defp test_js_path(), do: "#{File.cwd!()}/#{@ex_assets_path}/js/app.js"
 end

@@ -41,8 +41,9 @@ defmodule Excessibility.MixProject do
       {:credo, "~> 1.7.0", only: [:dev, :test]},
       {:ex_doc, "~> 0.18", only: :dev},
       {:floki, ">= 0.30.0"},
+      {:gettext, ">= 0.0.0"},
       {:phoenix, ">= 1.5.0"},
-      {:phoenix_live_view, "~> 0.18"},
+      {:phoenix_live_view, ">= 0.17.5"},
       {:wallaby, ">= 0.25.0"}
     ]
   end

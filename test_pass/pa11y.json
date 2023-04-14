@@ -1,0 +1,13 @@
+{
+  "chromeLaunchConfig": {
+    "ignoreHTTPSErrors": false,
+    "executablePath": "/usr/bin/google-chrome"
+  },
+  "rules": [
+    "Principle1.Guideline1_3.1_3_1_AAA"
+  ],
+  "runners": [
+    "axe",
+    "htmlcs"
+  ]
+}
