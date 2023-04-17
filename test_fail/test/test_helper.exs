@@ -1,2 +1,2 @@
-ExUnit.start(exclude: [:flipper])
+ExUnit.start()
 Ecto.Adapters.SQL.Sandbox.mode(TestFail.Repo, :manual)
