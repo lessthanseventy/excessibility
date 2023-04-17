@@ -9,6 +9,7 @@ defmodule Excessibility.MixProject do
       start_permanent: false,
       description: description(),
       package: package(),
+      aliases: aliases(),
       deps: deps()
     ]
   end
@@ -45,6 +46,15 @@ defmodule Excessibility.MixProject do
       {:phoenix, ">= 1.5.0"},
       {:phoenix_live_view, ">= 0.17.5"},
       {:wallaby, ">= 0.25.0"}
+    ]
+  end
+
+  defp aliases do
+    [
+      "assets.deploy": [
+        "cmd --cd assets node build.mjs --deploy",
+        "phx.digest"
+      ]
     ]
   end
 end

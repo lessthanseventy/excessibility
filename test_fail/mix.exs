@@ -34,7 +34,7 @@ defmodule TestFail.MixProject do
     [
       {:ecto_sql, "~> 3.6"},
       {:esbuild, "~> 0.5", runtime: Mix.env() == :dev},
-      {:excessibility, "~> 0.2.0", only: [:dev, :test], path: "../"},
+      {:excessibility, "~> 0.3.0", only: [:dev, :test], path: "../"},
       {:finch, "~> 0.13"},
       {:floki, ">= 0.30.0", only: [:dev, :test]},
       {:gettext, "~> 0.20"},

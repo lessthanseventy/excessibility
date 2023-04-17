@@ -1,0 +1,14 @@
+name: App Tests
+description: "Run Elixir tests"
+runs:
+  using: "composite"
+  steps:
+    - name: Run elixir tests
+      shell: bash
+      run: |
+        cd test_pass
+        mix test
+        cd ../test_fail
+        mix test
+        cd ..
+        mix test

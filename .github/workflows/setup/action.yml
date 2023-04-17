@@ -1,0 +1,49 @@
+nGame: Build App
+description: "Build the app"
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout Project
+      uses: actions/checkout@v3
+    - name: Set up Elixir
+      uses: erlef/setup-beam@v1
+      with:
+        otp-version: "25.1" # Define the OTP version [required]
+        elixir-version: "1.14.0" # Define the elixir version [required]
+    - name: Store/Retrieve Mix Dependencies Cache
+      uses: actions/cache@v3
+      id: mix-cache # id to use in retrieve action
+      with:
+        path: |
+          deps
+          _build
+          test_pass/deps
+          test_pass/_build
+          test_fail/deps
+          test_fail/_build
+        key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-mix-
+    - name: Store/Retrieve Javascript Dependencies Cache
+      uses: c-hive/gha-npm-cache@v1
+      with:
+        directory: test_pass/assets
+    - name: Clean deps to rule out incremental build as a source of flakiness
+      if: github.run_attempt != '1'
+      run: |
+        mix deps.clean --all && mix clean
+        cd test_pass && mix deps.clean --all && mix clean
+        cd ../test_fail && mix deps.clean --all && mix clean
+      shell: sh
+    - name: Install Elixir Dependencies
+      if: steps.mix-cache.outputs.cache-hit != 'true' || github.run_attempt != '1'
+      run: |
+        mix deps.get && mix deps.compile
+        cd test_pass && mix deps.get && mix compile
+        cd ../test_fail && mix deps.get && mix compile
+      shell: sh
+    - name: Install JS Dependencies for test apps
+      run: |
+        npm install --prefix ./test_pass/assets
+        npm install --prefix ./test_fail/assets
+      shell: sh
