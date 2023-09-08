@@ -134,8 +134,6 @@ defmodule Excessibility do
   defp maybe_wrap_html(view_or_element, content) do
     {html, static_path} = call(view_or_element, :html)
 
-    IO.inspect(html)
-
     head =
       case DOM.maybe_one(html, "head") do
         {:ok, head} -> head
