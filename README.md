@@ -19,9 +19,15 @@ def deps do
 end
 ```
 
+You'll also need to install `pa11y`:
+
+```sh
+npm i pa11y --save-dev --prefix=./assets/
+```
+
 ## Usage
 
-Simply call Excessibility.html_snapshot() and pass it any of:
+To use it `require Excessibility` and then call `Excessibility.html_snapshot/2` and pass it any of:
 
 - a Phoenix Conn
 - a Wallaby Session
@@ -41,6 +47,8 @@ thing
 The module also includes a mix task that you can call to run
 [pa11y](https://github.com/pa11y/pa11y) against the snapshots.
 `MIX_ENV=test mix excessibility`
+
+You may want to add `Excessbility` as an `import` or `require` in your `ConnCase` or `FeatureCase`.
 
 ## Default Configuration
 
