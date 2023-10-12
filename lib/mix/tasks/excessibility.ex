@@ -2,7 +2,6 @@ defmodule Mix.Tasks.Excessibility do
   @moduledoc "Library to aid in testing your application for WCAG compliance automatically using Pa11y and Wallaby."
   @shortdoc "Runs pally against generated snapshots"
   @requirements ["app.config"]
-  @assets_task Application.compile_env(:excessibility, :assets_task, "assets.deploy")
   @pally_path Application.compile_env(
                 :excessibility,
                 :pa11y_path,
@@ -14,18 +13,11 @@ defmodule Mix.Tasks.Excessibility do
                  "test/excessibility"
                )
   @snapshots_path "#{@output_path}/html_snapshots"
-  @ex_assets_path "#{@output_path}/assets"
 
   use Mix.Task
 
   @impl Mix.Task
   def run(_args) do
-    Mix.Task.run(@assets_task)
-
-    File.mkdir_p("#{@ex_assets_path}/css/")
-    File.mkdir_p("#{@ex_assets_path}/js/")
-    File.mkdir_p("#{@snapshots_path}/")
-
     File.ls!(@snapshots_path)
     |> filter_dirs()
     |> run_pa11y()

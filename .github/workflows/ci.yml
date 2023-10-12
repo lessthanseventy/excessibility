@@ -1,0 +1,31 @@
+name: CI
+
+on: push
+
+jobs:
+  app-test:
+    name: Run Application Tests
+    runs-on: ubuntu-20.04
+    env:
+      MIX_ENV: test
+
+    services:
+      db:
+        image: postgres
+        ports: ["5432:5432"]
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTRGES_DB: excessibility_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout Project
+        uses: actions/checkout@v3
+      - name: Setup App
+        uses: ./.github/workflows/setup
+      - name: Run Application Tests
+        uses: ./.github/workflows/app_test
