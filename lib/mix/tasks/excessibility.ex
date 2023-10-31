@@ -1,6 +1,8 @@
 defmodule Mix.Tasks.Excessibility do
-  @moduledoc "Library to aid in testing your application for WCAG compliance automatically using Pa11y and Wallaby."
   @shortdoc "Runs pally against generated snapshots"
+  @moduledoc "Library to aid in testing your application for WCAG compliance automatically using Pa11y and Wallaby."
+  use Mix.Task
+
   @requirements ["app.config"]
   @assets_task Application.compile_env(:excessibility, :assets_task, "assets.deploy")
   @pally_path Application.compile_env(
@@ -16,8 +18,6 @@ defmodule Mix.Tasks.Excessibility do
   @snapshots_path "#{@output_path}/html_snapshots"
   @ex_assets_path "#{@output_path}/assets"
 
-  use Mix.Task
-
   @impl Mix.Task
   def run(_args) do
     Mix.Task.run(@assets_task)
@@ -26,7 +26,8 @@ defmodule Mix.Tasks.Excessibility do
     File.mkdir_p("#{@ex_assets_path}/js/")
     File.mkdir_p("#{@snapshots_path}/")
 
-    File.ls!(@snapshots_path)
+    @snapshots_path
+    |> File.ls!()
     |> filter_dirs()
     |> run_pa11y()
     |> print_results()
@@ -34,11 +35,7 @@ defmodule Mix.Tasks.Excessibility do
   end
 
   defp filter_dirs(list_of_files) do
-    list_of_files
-    |> Enum.filter(fn file ->
-      file
-      |> String.contains?(".html")
-    end)
+    Enum.filter(list_of_files, fn file -> String.contains?(file, ".html") end)
   end
 
   defp run_pa11y(list_of_files) do
@@ -67,11 +64,7 @@ defmodule Mix.Tasks.Excessibility do
   end
 
   defp print_results(results) do
-    results
-    |> Enum.each(fn {result, _status} ->
-      IO.puts(result)
-    end)
-
+    Enum.each(results, fn {result, _status} -> IO.puts(result) end)
     results
   end
 end

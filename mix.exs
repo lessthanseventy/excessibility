@@ -24,7 +24,7 @@ defmodule Excessibility.MixProject do
       files: ["lib", "mix.exs", "README*", "LICENSE*"],
       maintainers: ["Andrew Moore"],
       licenses: ["MIT"],
-      links: %{"GitHub" => "https://github.com/launchscout/excessibility"}
+      links: %{"GitHub" => "https://github.com/lessthanseventy/excessibility"}
     ]
   end
 
@@ -44,6 +44,7 @@ defmodule Excessibility.MixProject do
       {:gettext, ">= 0.0.0"},
       {:phoenix, ">= 1.5.0"},
       {:phoenix_live_view, ">= 0.17.5"},
+      {:styler, "~> 0.9", only: [:dev, :test], runtime: false},
       {:wallaby, ">= 0.25.0"}
     ]
   end

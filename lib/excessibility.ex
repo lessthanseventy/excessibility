@@ -1,10 +1,17 @@
 defmodule Excessibility do
-  import Phoenix.ConnTest, only: [html_response: 2]
-  alias Plug.Conn
+  @moduledoc """
+  Documentation for `Excessibility`.
+  """
+
   use Wallaby.DSL
-  alias Wallaby.Session
-  alias Phoenix.LiveViewTest.{DOM, View}
+
+  import Phoenix.ConnTest, only: [html_response: 2]
+
+  alias Phoenix.LiveViewTest.DOM
   alias Phoenix.LiveViewTest.Element, as: LiveElement
+  alias Phoenix.LiveViewTest.View
+  alias Plug.Conn
+  alias Wallaby.Session
 
   @output_path Application.compile_env(
                  :excessibility,
@@ -12,10 +19,6 @@ defmodule Excessibility do
                  "test/excessibility"
                )
   @snapshots_path "#{@output_path}/html_snapshots"
-
-  @moduledoc """
-  Documentation for `Excessibility`.
-  """
 
   @doc """
   Using the Excessibility macro will require the file for you.
@@ -58,7 +61,8 @@ defmodule Excessibility do
       when is_struct(conn_or_session, Session) do
     filename = get_filename(env, module)
 
-    get_html(conn_or_session)
+    conn_or_session
+    |> get_html()
     |> maybe_wrap_html()
     |> write_html_file(filename)
 
@@ -109,8 +113,7 @@ defmodule Excessibility do
   end
 
   defp get_filename(env, module) do
-    "#{module |> get_module_name()}_#{env.line}.html"
-    |> String.replace(" ", "_")
+    String.replace("#{get_module_name(module)}_#{env.line}.html", " ", "_")
   end
 
   defp get_module_name(module) do
@@ -140,27 +143,29 @@ defmodule Excessibility do
         _ -> {"head", [], []}
       end
 
-    case Floki.attribute(content, "data-phx-main") do
-      ["true" | _] ->
-        # If we are rendering the main LiveView,
-        # we return the full page html.
-        html
+    case_result =
+      case Floki.attribute(content, "data-phx-main") do
+        ["true" | _] ->
+          # If we are rendering the main LiveView,
+          # we return the full page html.
+          html
 
-      _ ->
-        # Otherwise we build a basic html structure around the
-        # view_or_element content.
-        [
-          {"html", [],
-           [
-             head,
-             {"body", [],
-              [
-                content
-              ]}
-           ]}
-        ]
-    end
-    |> Floki.traverse_and_update(fn
+        _ ->
+          # Otherwise we build a basic html structure around the
+          # view_or_element content.
+          [
+            {"html", [],
+             [
+               head,
+               {"body", [],
+                [
+                  content
+                ]}
+             ]}
+          ]
+      end
+
+    Floki.traverse_and_update(case_result, fn
       {"a", _, _} = link -> link
       {el, attrs, children} -> {el, maybe_prefix_static_path(attrs, static_path), children}
       el -> el
@@ -179,15 +184,15 @@ defmodule Excessibility do
 
   defp prefix_static_path(<<"//" <> _::binary>> = url, _prefix), do: url
 
-  defp prefix_static_path(<<"/" <> _::binary>> = path, prefix),
-    do: "file://#{Path.join([prefix, path])}"
+  defp prefix_static_path(<<"/" <> _::binary>> = path, prefix), do: "file://#{Path.join([prefix, path])}"
 
   defp prefix_static_path(url, _), do: url
 
   defp write_html_file(html, filename) do
     html = Floki.raw_html(html, pretty: true)
 
-    Path.join([File.cwd!(), "#{@snapshots_path}", filename])
+    [File.cwd!(), "#{@snapshots_path}", filename]
+    |> Path.join()
     |> File.write(html, [:write])
   end
 
@@ -216,19 +221,17 @@ defmodule Excessibility do
   end
 
   defp call(view_or_element, tuple) do
-    try do
-      GenServer.call(proxy_pid(view_or_element), tuple, 30_000)
-    catch
-      :exit, {{:shutdown, {kind, opts}}, _} when kind in [:redirect, :live_redirect] ->
-        {:error, {kind, opts}}
+    GenServer.call(proxy_pid(view_or_element), tuple, 30_000)
+  catch
+    :exit, {{:shutdown, {kind, opts}}, _} when kind in [:redirect, :live_redirect] ->
+      {:error, {kind, opts}}
 
-      :exit, {{exception, stack}, _} ->
-        exit({{exception, stack}, {__MODULE__, :call, [view_or_element]}})
-    else
-      :ok -> :ok
-      {:ok, result} -> result
-      {:raise, exception} -> raise exception
-    end
+    :exit, {{exception, stack}, _} ->
+      exit({{exception, stack}, {__MODULE__, :call, [view_or_element]}})
+  else
+    :ok -> :ok
+    {:ok, result} -> result
+    {:raise, exception} -> raise exception
   end
 
   defp proxy_pid(%{proxy: {_ref, _topic, pid}}), do: pid

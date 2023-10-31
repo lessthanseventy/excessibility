@@ -14,8 +14,7 @@ defmodule ExcessibilityTest do
         assert capture_io(fn ->
                  Mix.Task.run("excessibility")
                end) =~
-                 "Error:"
-                 |> IO.inspect()
+                 IO.inspect("Error:")
       end)
     end
 
@@ -24,8 +23,7 @@ defmodule ExcessibilityTest do
         assert capture_io(fn ->
                  Mix.Task.run("excessibility")
                end) =~
-                 "Error:"
-                 |> IO.inspect()
+                 IO.inspect("Error:")
       end)
     end
 
