@@ -4,7 +4,7 @@ defmodule Excessibility.MixProject do
   def project do
     [
       app: :excessibility,
-      version: "0.4.0",
+      version: "0.3.0",
       elixir: "~> 1.12",
       start_permanent: false,
       description: description(),
@@ -21,7 +21,7 @@ defmodule Excessibility.MixProject do
 
   defp package do
     [
-      files: ["lib", "mix.exs", "README*", "LICENSE*"],
+      files: ["lib", "assets", "package.json", "mix.exs", "README*", "LICENSE*"],
       maintainers: ["Andrew Moore"],
       licenses: ["MIT"],
       links: %{"GitHub" => "https://github.com/lessthanseventy/excessibility"}
@@ -38,14 +38,15 @@ defmodule Excessibility.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:credo, ">= 1.5.0", only: [:dev, :test]},
+      {:chromic_pdf, "~> 1.14"},
+      {:credo, "~> 1.5", only: [:dev, :test]},
       {:ex_doc, "~> 0.18", only: :dev},
-      {:floki, ">= 0.28.0"},
-      {:gettext, ">= 0.0.0"},
-      {:phoenix, ">= 1.5.0"},
-      {:phoenix_live_view, ">= 0.17.5"},
-      {:styler, "~> 0.9", only: [:dev, :test], runtime: false},
-      {:wallaby, ">= 0.25.0"}
+      {:floki, "~> 0.28"},
+      {:mix_test_interactive, "~> 5.0", only: :dev, runtime: false},
+      {:mox, "~> 1.1", only: :test},
+      {:phoenix, "~> 1.5"},
+      {:phoenix_live_view, "~> 0.17"},
+      {:wallaby, "~> 0.25"}
     ]
   end
 end
