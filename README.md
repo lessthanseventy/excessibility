@@ -1,64 +1,106 @@
 # Excessibility
 
-## What is it for?
+[![Hex.pm](https://img.shields.io/hexpm/v/excessibility.svg)](https://hex.pm/packages/excessibility)
+[![Hex Docs](https://img.shields.io/badge/hex-docs-lightgrey.svg)](https://hexdocs.pm/excessibility)
+[![CI](https://github.com/your-org/excessibility/actions/workflows/ci.yml/badge.svg)](https://github.com/your-org/excessibility/actions)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Excessibility allows you to easily take snapshots of the DOM at any given point in your ExUnit or Wallaby Tests.<br/>
-These snapshots can then be passed to [pa11y](https://github.com/pa11y/pa11y) to test for WCAG compliance.
+**Accessibility Snapshot Testing for Elixir + Phoenix**
 
-## Installation
+Excessibility helps you test your Phoenix apps for accessibility (WCAG compliance) by taking HTML snapshots during tests and running them through Pa11y.
 
-The package can be installed by adding `excessibility` to your list of dependencies in `mix.exs`:
+It integrates with Plug.Conn, Wallaby.Session, Phoenix.LiveViewTest.View, and more. You can also diff snapshots against a baseline, auto-open mismatches, and interactively approve changes.
+✨ Features
 
-```elixir
+    ✅ Snapshot HTML from Conn/LiveView/Wallaby
+
+    ✅ Save and manage snapshot files
+
+    ✅ Automatically diff against saved baselines
+
+    ✅ Interactive approval (good/bad) when snapshots change
+
+    ✅ Mockable system/browser calls for CI
+
+    ✅ Clean test output and file organization
+
+🛠 Installation
+
+Add to mix.exs:
+
 def deps do
   [
-    {:excessibility, "~> 0.3.0"}
+    {:excessibility, github: "your-org/excessibility"}
   ]
 end
-```
 
-You'll also need to install `pa11y`:
+📸 Usage
+In your test:
 
-```sh
-npm i pa11y --save-dev --prefix=./assets/
-```
+import Excessibility
 
-## Usage
+html_snapshot(conn, __ENV__, __MODULE__)
 
-To use it `require Excessibility` and then call `Excessibility.html_snapshot/2` and pass it any of:
+You can snapshot from:
 
-- a Phoenix Conn
-- a Wallaby Session
-- a LiveViewTest View struct
+    Plug.Conn
 
-It will produce an html file named with the module and line number of where it was called from.
+    Wallaby.Session
 
-You can pass an optional argument of `open_browser?: true` to open the snapshot in your browser.
+    Phoenix.LiveViewTest.View
 
-```elixir
-thing
-|> html_snapshot(open_browser?: true)
-```
+    Phoenix.LiveViewTest.Element
 
-The module also includes a mix task that you can call to run [pa11y](https://github.com/pa11y/pa11y) against the snapshots.<br/>
-`MIX_ENV=test mix excessibility`
+Options
 
-You may want to add `Excessbility` as an `import` or `require` in your `ConnCase` or `FeatureCase`.
+html_snapshot(source, env, mod, [
+  open_browser?: true,
+  cleanup?: true,
+  tag_on_diff: true,
+  prompt_on_diff: true,
+  name: "homepage.html"
+])
 
-## Default Configuration
+🔍 Snapshot Diffing
 
-```elixir
-config :excessibility,
-  :assets_task, "assets.deploy",
-  :pa11y_path, "/assets/node_modules/pa11y/bin/pa11y.js",
-  :output_path, "test/excessibility"
-```
+    Snapshots are saved to: test/excessibility/html_snapshots/
 
-## Pa11y Configuration
+    Baselines live in: test/excessibility/baseline/
 
-See the [pa11y documentation](https://github.com/pa11y/pa11y#configuration) for configuration options.
+If a snapshot differs:
 
-Documentation can be generated with:<br/>
-[ExDoc](https://github.com/elixir-lang/ex_doc) and published on<br/>
-[HexDocs](https://hexdocs.pm). Once published, the docs can be found at<br/>
-<https://hexdocs.pm/excessibility>.
+    You’ll be shown .good.html (baseline) and .bad.html (new).
+
+    You're prompted to keep the good or bad version.
+
+    The baseline is updated accordingly.
+
+🧪 Testing
+
+Set up mocks in test/test_helper.exs:
+
+Mox.defmock(Excessibility.SystemMock, for: Excessibility.SystemBehaviour)
+Application.put_env(:excessibility, :system_mod, Excessibility.SystemMock)
+
+Then define expectations in your test:
+
+SystemMock
+|> expect(:open_with_system_cmd, fn path -> ... end)
+
+🧼 Cleaning Up
+
+To remove old snapshots for a test module:
+
+html_snapshot(conn, env, mod, cleanup?: true)
+
+🧩 Coming Soon
+
+    mix excessibility.lint — run Pa11y on snapshots
+
+    mix excessibility.approve — promote diffs to baseline
+
+    Visual snapshot diffing
+
+📄 License
+
+MIT © Andrew Moore
