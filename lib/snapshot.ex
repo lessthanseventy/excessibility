@@ -66,6 +66,7 @@ defmodule Excessibility.Snapshot do
           File.write!(good_path, old_html)
 
           if Keyword.get(opts, :screenshot?, false) do
+            ensure_chromic_pdf_started()
             screenshot_path(bad_path) |> screenshot(new_html)
             screenshot_path(good_path) |> screenshot(old_html)
           end
@@ -113,6 +114,7 @@ defmodule Excessibility.Snapshot do
     Logger.info("Snapshot written to #{path}")
 
     if Keyword.get(opts, :screenshot?, false) do
+      ensure_chromic_pdf_started()
       screenshot_path(path) |> screenshot(new_html)
     end
 
@@ -128,6 +130,27 @@ defmodule Excessibility.Snapshot do
     rescue
       e -> Logger.error("Screenshot failed: #{inspect(e)}")
     end
+  end
+
+  defp ensure_chromic_pdf_started do
+    case Process.whereis(ChromicPDF) do
+      nil ->
+        case ChromicPDF.start_link(name: ChromicPDF) do
+          {:ok, _pid} ->
+            Logger.info("ChromicPDF process started for Excessibility screenshots")
+
+          {:error, {:already_started, _pid}} ->
+            :ok
+
+          {:error, reason} ->
+            Logger.error("Could not start ChromicPDF: #{inspect(reason)}")
+        end
+
+      _pid ->
+        :ok
+    end
+  rescue
+    exception -> Logger.error("Could not ensure ChromicPDF is running: #{Exception.message(exception)}")
   end
 
   defp maybe_open_browser(path, opts) do

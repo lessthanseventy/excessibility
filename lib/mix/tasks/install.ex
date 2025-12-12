@@ -10,7 +10,7 @@ defmodule Mix.Tasks.Excessibility.Install do
 
   @impl true
   def run(_args) do
-    dep_path = Mix.Project.deps_paths()[:excessibility]
+    dep_path = Mix.Project.deps_paths()[:excessibility] || File.cwd!()
     assets_dir = Path.join(dep_path, "assets")
 
     unless File.exists?(Path.join(assets_dir, "package.json")) do
