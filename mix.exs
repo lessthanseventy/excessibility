@@ -38,17 +38,17 @@ defmodule Excessibility.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:chromic_pdf, "~> 1.14"},
+      {:chromic_pdf, ">= 1.14.0"},
       {:credo, "~> 1.5", only: [:dev, :test]},
       {:ex_doc, "~> 0.18", only: :dev},
-      {:floki, "~> 0.28", only: [:dev, :test]},
-      {:igniter, "~> 0.7", only: [:dev, :test], runtime: false},
+      {:floki, ">= 0.30.0"},
+      {:igniter, ">= 0.7.0", runtime: false},
       {:mix_test_interactive, "~> 5.0", only: :dev, runtime: false},
       {:mox, "~> 1.1", only: :test},
-      {:phoenix, "~> 1.5"},
-      {:phoenix_live_view, "~> 0.17"},
+      {:phoenix, ">= 1.5.0"},
+      {:phoenix_live_view, ">= 0.17.0"},
       {:styler, "~> 0.9", only: [:dev, :test], runtime: false},
-      {:wallaby, "~> 0.25"}
+      {:wallaby, ">= 0.25.0"}
     ]
   end
 end
