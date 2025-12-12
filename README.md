@@ -34,6 +34,23 @@ def deps do
   ]
 end
 
+Run `mix excessibility.install` once after fetching deps so Pa11y is installed under `assets/node_modules/`.
+
+### Configuration
+
+Add the endpoint and optional overrides to your config or test helper:
+
+```elixir
+config :excessibility,
+  :endpoint, MyAppWeb.Endpoint,
+  :system_mod, Excessibility.System,
+  :browser_mod, Wallaby.Browser,
+  :live_view_mod, Excessibility.LiveView,
+  :excessibility_output_path, "test/excessibility"
+```
+
+If you enable `screenshot?: true`, ensure `ChromicPDF` is supervised in your application (e.g., `{ChromicPDF, name: ChromicPDF}`) so the library can render PNGs of each snapshot.
+
 📸 Usage
 In your test:
 
@@ -58,7 +75,8 @@ html_snapshot(source, env, mod, [
   cleanup?: true,
   tag_on_diff: true,
   prompt_on_diff: true,
-  name: "homepage.html"
+  name: "homepage.html",
+  screenshot?: true
 ])
 
 🔍 Snapshot Diffing
@@ -92,6 +110,12 @@ SystemMock
 To remove old snapshots for a test module:
 
 html_snapshot(conn, env, mod, cleanup?: true)
+
+🧰 Mix Tasks
+
+- `mix excessibility.install` – installs Pa11y into `assets/node_modules/`.
+- `mix excessibility` – runs Pa11y against every generated snapshot (fails fast if Pa11y is missing).
+- `mix excessibility.approve [--keep good|bad]` – promotes `.good/.bad.html` diffs back into the `baseline/` directory without rerunning the test suite.
 
 🧩 Coming Soon
 
