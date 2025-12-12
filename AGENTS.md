@@ -1,35 +1,21 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-Elixir sources live in `lib/`, organized by domain (`excessibility/html`, `excessibility/system`, etc.), and should mirror the public API exposed via `Excessibility.*` modules. Shared compile-time config belongs in `mix.exs`, while CLI scaffolding or JS helpers stay under `assets/`. Tests sit in `test/`, with helpers in `test/support/`. Snapshot artifacts are nested under `test/excessibility/html_snapshots/` and `test/excessibility/baseline/`; keep each test module’s files in its own folder so reviewers can diff quickly. Documentation content is generated from module docs plus `README.md`.
+Elixir modules live in `lib/`, grouped by capability (`excessibility/html`, `excessibility/system`, etc.) and exposed through the `Excessibility.*` namespace. Assets needed for Pa11y and browser automation sit under `assets/`, including the vendored npm workspace. ExUnit tests live in `test/`, with HTML snapshots stored in `test/excessibility/html_snapshots/` and approved baselines in `test/excessibility/baseline/`. Keep helper modules close to the code they exercise to simplify HexDocs generation and release reviews.
 
 ## Build, Test, and Development Commands
-- `mix deps.get && mix compile` – install deps and build the library.
-- `mix igniter.install excessibility` – scaffold the recommended configuration and install the Pa11y npm dependency in the vendored assets folder.
-- `mix test` – run the ExUnit suite; use `mix test path/to/file_test.exs` for targeted loops.
-- `mix excessibility` / `mix excessibility.approve` – run Pa11y on snapshots and promote `.good/.bad` diffs back into `baseline/`.
-- `MIX_ENV=test mix credo --strict` – lint and catch common pitfalls; resolves most CI style failures.
-- `mix format` – run the Styler-backed formatter before committing; `mix docs` regenerates HexDocs when touching public APIs.
-
-## Configuration & Tooling
-Add required config in `config/test.exs` or `test/test_helper.exs`:
-
-```elixir
-config :excessibility,
-  :endpoint, Excessibility.TestEndpoint,
-  :browser_mod, Wallaby.Browser,
-  :live_view_mod, Excessibility.LiveView,
-  :system_mod, Excessibility.System,
-  :excessibility_output_path, "test/excessibility"
-```
-
-Start `{ChromicPDF, name: ChromicPDF}` in tests or rely on `Excessibility.Snapshot` auto-start before generating screenshots; keep `assets/node_modules/` ignored via `.gitignore`.
+- `mix deps.get && mix compile` – fetch deps and verify the library still builds.
+- `mix igniter.install excessibility` – apply the recommended `test/test_helper.exs` config and install Pa11y’s npm dependency inside `assets/`.
+- `mix test` – run the suite; `mix test test/source_test.exs` targets a file while iterating.
+- `mix excessibility` and `mix excessibility.approve` – run Pa11y against snapshots, then promote `.bad` diffs into `baseline/`.
+- `mix format && MIX_ENV=test mix credo --strict` – enforce Styler-backed formatting and linting before committing.
+- `mix docs` – regenerate HexDocs prior to publishing.
 
 ## Coding Style & Naming Conventions
-Follow idiomatic Elixir with two-space indentation, snake_case function names, and PascalCase modules (e.g., `Excessibility.SystemMock`). Keep functions pure where possible and push side effects into dedicated modules under `Excessibility.System`. Always run `mix format` to apply `.formatter.exs` with the Styler plugin, and fix lint warnings flagged by Credo. Snapshot files should use the `{module}/{test}/name.good.html` pattern so automated diffs remain deterministic.
+Favor idiomatic Elixir: two-space indentation, snake_case functions, PascalCase modules (e.g., `Excessibility.SystemMock`). Keep module files focused—public API modules wrap lower-level helpers. Run `mix format` to enforce `.formatter.exs` rules (Styler plugin) and keep imports/aliases sorted. Snapshot filenames should read like `MyModule/my_test/step.good.html` so reviewers can trace origins quickly.
 
 ## Testing Guidelines
-Tests use ExUnit plus Mox stubs configured in `test/test_helper.exs`. Add unit coverage near the module under test (e.g., `lib/excessibility/source` -> `test/source_test.exs`) and keep integration flows in `test/integration_test.exs`. When snapshots change, inspect both `.good.html` and `.bad.html`, approve intentional changes with `mix excessibility.approve`, and rerun `mix test` to ensure baselines align. Prefer descriptive `test "describes behavior"` names and include assertions around Pa11y failure thresholds or ChromicPDF screenshot flows when touching those code paths.
+Tests use ExUnit plus Mox; set expectations in `test/test_helper.exs` and call `html_snapshot/4` (or related helpers) inside Conn, LiveView, or Wallaby cases. When snapshots change, inspect the `.good/.bad` pair, approve intentional diffs via `mix excessibility.approve`, and rerun `mix test` to ensure baselines match. Include regression tests whenever you add options to `Excessibility.Snapshot` or new mix tasks so Pa11y behavior stays predictable.
 
 ## Commit & Pull Request Guidelines
-Recent history favors concise, imperative commits such as `add max_failures ...` or `move capture_html ...`; emulate that style and keep unrelated changes separate. Each PR should summarize the change, link to any HexDocs or issue references, note snapshot/baseline updates, and attach screenshots or terminal output for accessibility diffs when relevant. Ensure CI-critical commands (`mix test`, `mix credo --strict`, `mix format --check-formatted`) pass locally before opening the PR, and mention any follow-up steps or configuration toggles reviewers must apply.
+Write imperative commit subjects (`add snapshot pruning flag`, `document igniter flow`) and keep scope narrow so changelog entries stay meaningful. PRs should describe the why, mention Pa11y or snapshot updates, and link to any docs that need review. Confirm `mix test`, `mix excessibility`, and `mix format --check-formatted` locally before requesting review, and include terminal output or screenshots when touching the snapshot pipeline.
