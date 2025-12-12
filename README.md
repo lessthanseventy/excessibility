@@ -2,7 +2,7 @@
 
 [![Hex.pm](https://img.shields.io/hexpm/v/excessibility.svg)](https://hex.pm/packages/excessibility)
 [![Hex Docs](https://img.shields.io/badge/hex-docs-lightgrey.svg)](https://hexdocs.pm/excessibility)
-[![CI](https://github.com/your-org/excessibility/actions/workflows/ci.yml/badge.svg)](https://github.com/your-org/excessibility/actions)
+[![CI](https://github.com/lessthanseventy/excessibility/actions/workflows/ci.yml/badge.svg)](https://github.com/lessthanseventy/excessibility/actions)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 **Accessibility Snapshot Testing for Elixir + Phoenix**
@@ -31,15 +31,17 @@ It integrates with Plug.Conn, Wallaby.Session, Phoenix.LiveViewTest.View, and mo
 
 🛠 Installation
 
-Add to mix.exs:
+Add to `mix.exs`:
 
+```elixir
 def deps do
   [
-    {:excessibility, github: "your-org/excessibility"}
+    {:excessibility, "~> 0.5"}
   ]
 end
+```
 
-Run `mix igniter.install excessibility` after fetching deps so Pa11y’s npm dependency is installed and the recommended configuration is added.
+Fetch dependencies with `mix deps.get`, then run `mix igniter.install excessibility` to insert the recommended `test/test_helper.exs` configuration and install Pa11y’s npm dependency inside `assets/`.
 
 ## Quick Start
 
@@ -72,50 +74,21 @@ Run `mix igniter.install excessibility` after fetching deps so Pa11y’s npm dep
     end
     ```
 
-3. Run `mix test`. Snapshots land in `test/excessibility/html_snapshots/` and baselines in `test/excessibility/baseline/`. Run `mix excessibility` to execute Pa11y, and `mix excessibility.approve [--keep bad|good]` to promote intentional diffs.
-
-### Configuration
-
-Add the endpoint and optional overrides to your config or test helper:
-
-```elixir
-config :excessibility,
-  :endpoint, MyAppWeb.Endpoint,
-  :system_mod, Excessibility.System,
-  :browser_mod, Wallaby.Browser,
-  :live_view_mod, Excessibility.LiveView,
-  :excessibility_output_path, "test/excessibility"
-```
-
-If you enable `screenshot?: true`, ensure `ChromicPDF` is supervised in your application (e.g., `{ChromicPDF, name: ChromicPDF}`) so the library can render PNGs of each snapshot.
+3. Run `mix test`. Snapshots land in `test/excessibility/html_snapshots/` and baselines in `test/excessibility/baseline/`. Run `mix excessibility` to execute Pa11y, and `mix excessibility.approve [--keep bad|good]` to promote intentional diffs. If you enable `screenshot?: true`, ensure `ChromicPDF` is supervised (e.g., `{ChromicPDF, name: ChromicPDF}`) so PNG rendering works automatically.
 
 📸 Usage
-In your test:
 
+```elixir
 import Excessibility
 
-html_snapshot(conn, __ENV__, __MODULE__)
-
-You can snapshot from:
-
-    Plug.Conn
-
-    Wallaby.Session
-
-    Phoenix.LiveViewTest.View
-
-    Phoenix.LiveViewTest.Element
-
-Options
-
-html_snapshot(source, env, mod, [
-  open_browser?: true,
-  cleanup?: true,
-  tag_on_diff: true,
-  prompt_on_diff: true,
+html_snapshot(conn, __ENV__, __MODULE__,
   name: "homepage.html",
+  prompt_on_diff: false,
   screenshot?: true
-])
+)
+```
+
+`html_snapshot/4` works with `Plug.Conn`, `Wallaby.Session`, `Phoenix.LiveViewTest.View`, and `Phoenix.LiveViewTest.Element`. Options let you control prompts, cleanup, tagging, screenshot generation, and custom filenames on a per-snapshot basis.
 
 🔍 Snapshot Diffing
 
@@ -151,17 +124,9 @@ html_snapshot(conn, env, mod, cleanup?: true)
 
 🧰 Mix Tasks
 
-- `mix igniter.install excessibility` – configures `test/test_helper.exs` and installs Pa11y via npm.
+- `mix igniter.install excessibility` – inserts the recommended `test/test_helper.exs` configuration and installs Pa11y via npm.
 - `mix excessibility` – runs Pa11y against every generated snapshot (fails fast if Pa11y is missing).
 - `mix excessibility.approve [--keep good|bad]` – promotes `.good/.bad.html` diffs back into the `baseline/` directory without rerunning the test suite.
-
-🧩 Coming Soon
-
-    mix excessibility.lint — run Pa11y on snapshots
-
-    mix excessibility.approve — promote diffs to baseline
-
-    Visual snapshot diffing
 
 📄 License
 
