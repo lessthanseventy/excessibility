@@ -3,8 +3,6 @@ defmodule Excessibility do
   Documentation for `Excessibility`.
   """
 
-  alias Excessibility.CaptureHTML
-
   @doc """
   Using the Excessibility macro will require the file for you.
 
@@ -37,12 +35,7 @@ defmodule Excessibility do
 
   defmacro html_snapshot(source, opts \\ []) do
     quote do
-      Excessibility.capture_html!(unquote(source), __ENV__, __MODULE__, unquote(opts))
+      Excessibility.Snapshot.html_snapshot(unquote(source), __ENV__, __MODULE__, unquote(opts))
     end
   end
-
-  @doc """
-  Captures an HTML screenshot
-  """
-  defdelegate capture_html!(source, env, module, opts), to: CaptureHTML
 end
