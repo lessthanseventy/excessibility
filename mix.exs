@@ -4,7 +4,7 @@ defmodule Excessibility.MixProject do
   def project do
     [
       app: :excessibility,
-      version: "0.5.2",
+      version: "0.5.3",
       elixir: "~> 1.12",
       start_permanent: false,
       description: description(),
