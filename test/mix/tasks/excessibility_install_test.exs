@@ -46,7 +46,7 @@ defmodule Mix.Tasks.Excessibility.InstallTest do
 
     mix_content = file_content(igniter, "mix.exs")
 
-    assert mix_content =~ "{:floki, \"~> 0.28\"}"
+    assert mix_content =~ "{:floki, \">= 0.28.0\"}"
   end
 
   test "ensures igniter dependency is present with runtime false" do
@@ -82,7 +82,7 @@ defmodule Mix.Tasks.Excessibility.InstallTest do
 
       defp deps do
         [
-          {:floki, "~> 0.28", only: :test}
+          {:floki, \"~> 0.28\", only: :test}
         ]
       end
     end
