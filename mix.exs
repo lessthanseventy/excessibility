@@ -46,6 +46,7 @@ defmodule Excessibility.MixProject do
       {:mox, "~> 1.1", only: :test},
       {:phoenix, "~> 1.5"},
       {:phoenix_live_view, "~> 0.17"},
+      {:styler, "~> 0.9", only: [:dev, :test], runtime: false},
       {:wallaby, "~> 0.25"}
     ]
   end
