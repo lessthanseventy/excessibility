@@ -1,4 +1,5 @@
 defmodule Mix.Tasks.Excessibility.Approve do
+  @shortdoc "Approves snapshot diffs and updates the baseline"
   @moduledoc """
   Promotes snapshot diffs into the baseline directory.
 
@@ -8,7 +9,6 @@ defmodule Mix.Tasks.Excessibility.Approve do
   """
   use Mix.Task
 
-  @shortdoc "Approves snapshot diffs and updates the baseline"
   @requirements ["app.config"]
 
   @impl true
@@ -41,19 +41,17 @@ defmodule Mix.Tasks.Excessibility.Approve do
   end
 
   defp approve_diff(bad_path, keep) do
-    filename = Path.basename(bad_path) |> String.replace_suffix(".bad.html", ".html")
+    filename = bad_path |> Path.basename() |> String.replace_suffix(".bad.html", ".html")
     snapshot_path = Path.join(snapshots_dir(), filename)
     good_path = String.replace_suffix(bad_path, ".bad.html", ".good.html")
     baseline_path = Path.join(baseline_dir(), filename)
 
     choice =
       keep ||
-        prompt_choice(
-          """
-          Snapshot diff detected for #{filename}
-          Approve (g)ood baseline or (b)ad new version? [g/b]:
-          """
-        )
+        prompt_choice("""
+        Snapshot diff detected for #{filename}
+        Approve (g)ood baseline or (b)ad new version? [g/b]:
+        """)
 
     {html, label} =
       case choice do
@@ -77,8 +75,12 @@ defmodule Mix.Tasks.Excessibility.Approve do
       input -> String.trim(String.downcase(input))
     end
     |> case do
-      choice when choice in ["g", "good"] -> :good
-      choice when choice in ["b", "bad"] -> :bad
+      choice when choice in ["g", "good"] ->
+        :good
+
+      choice when choice in ["b", "bad"] ->
+        :bad
+
       _ ->
         Mix.shell().info("Unrecognized response, defaulting to bad version.")
         :bad

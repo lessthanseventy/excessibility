@@ -2,12 +2,13 @@ defmodule Excessibility.TestEndpoint do
   @moduledoc false
   use Phoenix.Endpoint, otp_app: :excessibility
 
-  plug Plug.Parsers,
+  plug(Plug.Parsers,
     parsers: [:urlencoded, :multipart, :json],
     pass: ["*/*"],
     json_decoder: Phoenix.json_library()
+  )
 
-  plug :dispatch
+  plug(:dispatch)
 
   defp dispatch(conn, _opts) do
     conn

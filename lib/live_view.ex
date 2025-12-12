@@ -6,10 +6,10 @@ defmodule Excessibility.LiveView do
   from LiveView test views and elements, enabling accurate HTML snapshotting
   for accessibility testing.
   """
-  alias Phoenix.LiveViewTest.View
-  alias Phoenix.LiveViewTest.Element, as: LiveElement
-
   @behaviour Excessibility.LiveView.Behaviour
+
+  alias Phoenix.LiveViewTest.Element, as: LiveElement
+  alias Phoenix.LiveViewTest.View
 
   def render_tree(%View{} = view) do
     render_tree(view, {proxy_topic(view), "render", view.target})
@@ -24,19 +24,17 @@ defmodule Excessibility.LiveView do
   end
 
   def call(view_or_element, tuple) do
-    try do
-      GenServer.call(proxy_pid(view_or_element), tuple, 30_000)
-    catch
-      :exit, {{:shutdown, {kind, opts}}, _} when kind in [:redirect, :live_redirect] ->
-        {:error, {kind, opts}}
+    GenServer.call(proxy_pid(view_or_element), tuple, 30_000)
+  catch
+    :exit, {{:shutdown, {kind, opts}}, _} when kind in [:redirect, :live_redirect] ->
+      {:error, {kind, opts}}
 
-      :exit, {{exception, stack}, _} ->
-        exit({{exception, stack}, {__MODULE__, :call, [view_or_element]}})
-    else
-      :ok -> :ok
-      {:ok, result} -> result
-      {:raise, exception} -> raise exception
-    end
+    :exit, {{exception, stack}, _} ->
+      exit({{exception, stack}, {__MODULE__, :call, [view_or_element]}})
+  else
+    :ok -> :ok
+    {:ok, result} -> result
+    {:raise, exception} -> raise exception
   end
 
   def proxy_pid(%{proxy: {_ref, _topic, pid}}), do: pid
@@ -44,5 +42,6 @@ defmodule Excessibility.LiveView do
 end
 
 defmodule Excessibility.LiveView.Behaviour do
+  @moduledoc false
   @callback render_tree(any()) :: String.t()
 end

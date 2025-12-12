@@ -2,6 +2,7 @@ defmodule Excessibility.LiveViewBehaviourTest do
   use ExUnit.Case, async: true
 
   defmodule ProxyServer do
+    @moduledoc false
     use GenServer
 
     def start_link(response) do

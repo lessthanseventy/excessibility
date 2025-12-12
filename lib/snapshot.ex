@@ -3,8 +3,9 @@ defmodule Excessibility.Snapshot do
   Handles snapshot generation, file writing, naming, diffing, and screenshots.
   """
 
-  require Logger
   alias Excessibility.HTML
+
+  require Logger
 
   @output_path Application.compile_env(
                  :excessibility,
@@ -37,7 +38,7 @@ defmodule Excessibility.Snapshot do
     html
     |> HTML.wrap()
     |> maybe_diff_and_write(path, filename, opts)
-    |> then(&maybe_open_browser(&1, opts))
+    |> maybe_open_browser(opts)
 
     source
   end
@@ -67,8 +68,8 @@ defmodule Excessibility.Snapshot do
 
           if Keyword.get(opts, :screenshot?, false) do
             ensure_chromic_pdf_started()
-            screenshot_path(bad_path) |> screenshot(new_html)
-            screenshot_path(good_path) |> screenshot(old_html)
+            bad_path |> screenshot_path() |> screenshot(new_html)
+            good_path |> screenshot_path() |> screenshot(old_html)
           end
         end
 
@@ -88,7 +89,7 @@ defmodule Excessibility.Snapshot do
           IO.puts("Choose which version to keep:")
           IO.puts("(g)ood (baseline) or (b)ad (new)?")
 
-          user_choice = IO.gets(">> ") |> String.trim()
+          user_choice = ">> " |> IO.gets() |> String.trim()
 
           selected =
             case user_choice do
@@ -99,9 +100,7 @@ defmodule Excessibility.Snapshot do
 
           File.write!(baseline_path, selected)
 
-          Logger.info(
-            "Updated baseline with #{if selected == old_html, do: "good", else: "bad"} version"
-          )
+          Logger.info("Updated baseline with #{if selected == old_html, do: "good", else: "bad"} version")
         else
           Logger.info("Skipping diff prompt; baseline unchanged")
         end
@@ -115,7 +114,7 @@ defmodule Excessibility.Snapshot do
 
     if Keyword.get(opts, :screenshot?, false) do
       ensure_chromic_pdf_started()
-      screenshot_path(path) |> screenshot(new_html)
+      path |> screenshot_path() |> screenshot(new_html)
     end
 
     path
@@ -124,12 +123,10 @@ defmodule Excessibility.Snapshot do
   defp screenshot_path(path), do: String.replace(path, ".html", ".png")
 
   defp screenshot(output_path, html) do
-    try do
-      ChromicPDF.capture_screenshot({:html, html}, output: output_path)
-      Logger.info("Wrote screenshot: #{output_path}")
-    rescue
-      e -> Logger.error("Screenshot failed: #{inspect(e)}")
-    end
+    ChromicPDF.capture_screenshot({:html, html}, output: output_path)
+    Logger.info("Wrote screenshot: #{output_path}")
+  rescue
+    e -> Logger.error("Screenshot failed: #{inspect(e)}")
   end
 
   defp ensure_chromic_pdf_started do

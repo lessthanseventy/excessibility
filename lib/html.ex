@@ -41,7 +41,8 @@ defmodule Excessibility.HTML do
     path = Application.get_env(:excessibility, :head_render_path, "/")
 
     conn =
-      Plug.Test.conn(:get, path)
+      :get
+      |> Plug.Test.conn(path)
       |> app_endpoint().call([])
 
     body = conn.resp_body
@@ -70,8 +71,7 @@ defmodule Excessibility.HTML do
   end
 
   defp build_static_path do
-    Mix.Project.app_path()
-    |> Path.join("priv/static")
+    Path.join(Mix.Project.app_path(), "priv/static")
   end
 
   defp prefix_paths({"script", _, _}, _), do: nil
