@@ -49,6 +49,17 @@ defmodule Mix.Tasks.Excessibility.InstallTest do
     assert mix_content =~ "{:floki, \"~> 0.28\"}"
   end
 
+  test "ensures igniter dependency is present with runtime false" do
+    igniter =
+      Igniter.Test.test_project(files: %{"test/test_helper.exs" => "ExUnit.start()\n"})
+      |> put_args(endpoint: "DemoWeb.Endpoint", test_helper: "test/test_helper.exs", skip_npm: true)
+      |> Install.igniter()
+
+    mix_content = file_content(igniter, "mix.exs")
+
+    assert mix_content =~ "{:igniter, \"~> 0.7\", runtime: false}"
+  end
+
   test "upgrades floki dependency when previously test-only" do
     mix_file = """
     defmodule Demo.MixProject do
