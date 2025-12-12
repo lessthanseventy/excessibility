@@ -10,7 +10,6 @@ defmodule Mix.Tasks.Excessibility.Install do
   use Igniter.Mix.Task
 
   alias Igniter.Mix.Task.Info
-  alias Igniter.Project.Deps
   alias Igniter.Project.Module, as: ProjectModule
   alias Rewrite.Source
 
@@ -42,6 +41,7 @@ defmodule Mix.Tasks.Excessibility.Install do
 
     igniter
     |> ensure_test_helper_config(test_helper, endpoint)
+    |> ensure_pa11y_config()
     |> maybe_install_pa11y(assets_dir, skip_npm?)
   end
 
@@ -73,6 +73,23 @@ defmodule Mix.Tasks.Excessibility.Install do
         |> then(&Source.update(source, :content, &1))
       end
     end)
+  end
+
+  defp ensure_pa11y_config(igniter) do
+    Igniter.create_or_update_file(igniter, "pa11y.json", pa11y_config(), fn source ->
+      # Don't overwrite existing config
+      source
+    end)
+  end
+
+  defp pa11y_config do
+    """
+    {
+      "ignore": [
+        "WCAG2AA.Principle3.Guideline3_2.3_2_2.H32.2"
+      ]
+    }
+    """
   end
 
   defp config_snippet(endpoint_module) do
