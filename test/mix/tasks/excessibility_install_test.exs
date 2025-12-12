@@ -38,6 +38,17 @@ defmodule Mix.Tasks.Excessibility.InstallTest do
            |> length() == 2
   end
 
+  test "adds floki dependency when missing" do
+    igniter =
+      Igniter.Test.test_project(files: %{"test/test_helper.exs" => "ExUnit.start()\n"})
+      |> put_args(endpoint: "DemoWeb.Endpoint", test_helper: "test/test_helper.exs", skip_npm: true)
+      |> Install.igniter()
+
+    mix_content = file_content(igniter, "mix.exs")
+
+    assert mix_content =~ "{:floki, \"~> 0.28\"}"
+  end
+
   defp put_args(igniter, opts) do
     args = %Args{options: opts, positional: [], argv: [], argv_flags: []}
     Map.put(igniter, :args, args)
