@@ -1,9 +1,9 @@
 defmodule Mix.Tasks.Excessibility do
-  @moduledoc "Library to aid in testing your application for WCAG compliance automatically using Pa11y and Wallaby."
   @shortdoc "Runs pally against generated snapshots"
-  @requirements ["app.config"]
-
+  @moduledoc "Library to aid in testing your application for WCAG compliance automatically using Pa11y and Wallaby."
   use Mix.Task
+
+  @requirements ["app.config"]
 
   @impl Mix.Task
   def run(_args) do

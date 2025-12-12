@@ -1,5 +1,6 @@
 defmodule Excessibility.SystemTest do
   use ExUnit.Case, async: true
+
   import ExUnit.CaptureIO
 
   alias Excessibility.System

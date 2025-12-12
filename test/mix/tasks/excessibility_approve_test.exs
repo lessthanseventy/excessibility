@@ -1,5 +1,6 @@
 defmodule Mix.Tasks.Excessibility.ApproveTest do
   use ExUnit.Case
+
   import ExUnit.CaptureIO
 
   alias Mix.Tasks.Excessibility.Approve

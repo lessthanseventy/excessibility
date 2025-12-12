@@ -1,12 +1,12 @@
 defmodule Mix.Tasks.Excessibility.Install do
-  use Mix.Task
-
   @shortdoc "Installs JavaScript dependencies needed for Excessibility (e.g. pa11y)"
   @moduledoc """
   Installs vendored JavaScript dependencies for Excessibility.
 
   This runs `npm install` in the ./assets/ directory to install `pa11y`.
   """
+
+  use Mix.Task
 
   @impl true
   def run(_args) do

@@ -1,5 +1,6 @@
 defmodule Excessibility.SourceTest do
   use ExUnit.Case
+
   import Mox
 
   setup :verify_on_exit!
@@ -12,7 +13,8 @@ defmodule Excessibility.SourceTest do
 
   test "Plug.Conn returns HTML" do
     conn =
-      Plug.Test.conn(:get, "/")
+      :get
+      |> Plug.Test.conn("/")
       |> Plug.Conn.put_resp_content_type("text/html")
       |> Plug.Conn.send_resp(200, "<div>Hello</div>")
 
@@ -22,18 +24,14 @@ defmodule Excessibility.SourceTest do
   test "Wallaby.Session uses injected browser_mod" do
     session = %Wallaby.Session{id: "test"}
 
-    Excessibility.BrowserMock
-    |> expect(:page_source, fn ^session -> "<html>Wallaby</html>" end)
-
+    expect(Excessibility.BrowserMock, :page_source, fn ^session -> "<html>Wallaby</html>" end)
     assert Excessibility.Source.to_html(session) =~ "Wallaby"
   end
 
   test "LiveView.View uses injected live_view_mod" do
     view = %Phoenix.LiveViewTest.View{proxy: {nil, nil, self()}}
 
-    Excessibility.LiveViewMock
-    |> expect(:render_tree, fn ^view -> "<html>Mocked View</html>" end)
-
+    expect(Excessibility.LiveViewMock, :render_tree, fn ^view -> "<html>Mocked View</html>" end)
     assert Excessibility.Source.to_html(view) =~ "Mocked View"
   end
 end
