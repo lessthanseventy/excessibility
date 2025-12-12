@@ -1,4 +1,5 @@
 defmodule Mix.Tasks.Excessibility.Install do
+  @shortdoc "Installs Excessibility configuration into your project"
   @moduledoc """
   Installs Excessibility into a host project using Igniter.
 
@@ -6,6 +7,8 @@ defmodule Mix.Tasks.Excessibility.Install do
   recommended `Application.put_env/3` configuration to the target project's
   `test/test_helper.exs` and (by default) runs `npm install` inside the vendored Excessibility
   assets directory to fetch Pa11y.
+
+  Requires Igniter to be installed in the host project.
   """
   use Igniter.Mix.Task
 
