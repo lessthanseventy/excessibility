@@ -42,8 +42,6 @@ defmodule Mix.Tasks.Excessibility.Install do
 
     igniter
     |> ensure_test_helper_config(test_helper, endpoint)
-    |> ensure_igniter_dependency()
-    |> ensure_floki_dependency()
     |> maybe_install_pa11y(assets_dir, skip_npm?)
   end
 
@@ -87,14 +85,6 @@ defmodule Mix.Tasks.Excessibility.Install do
     Application.put_env(:excessibility, :live_view_mod, Excessibility.LiveView)
     Application.put_env(:excessibility, :system_mod, Excessibility.System)
     """
-  end
-
-  defp ensure_floki_dependency(igniter) do
-    Deps.add_dep(igniter, {:floki, ">= 0.28.0"}, on_exists: :overwrite, yes?: true)
-  end
-
-  defp ensure_igniter_dependency(igniter) do
-    Deps.add_dep(igniter, {:igniter, "~> 0.7", runtime: false}, on_exists: :overwrite, yes?: true)
   end
 
   defp maybe_install_pa11y(igniter, assets_dir, true), do: add_npm_notice(igniter, assets_dir)
