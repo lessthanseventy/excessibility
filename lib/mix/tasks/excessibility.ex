@@ -20,6 +20,8 @@ defmodule Mix.Tasks.Excessibility do
       exit({:shutdown, 1})
     end
 
+    config_args = pa11y_config_args()
+
     snapshot_dir
     |> Path.join("*.html")
     |> Path.wildcard()
@@ -30,7 +32,7 @@ defmodule Mix.Tasks.Excessibility do
       Mix.shell().info("🔍 Running Pa11y on #{file_url}...")
 
       {output, status} =
-        System.cmd("node", [pa11y, file_url], stderr_to_stdout: true)
+        System.cmd("node", [pa11y | config_args] ++ [file_url], stderr_to_stdout: true)
 
       IO.puts(output)
 
@@ -38,6 +40,16 @@ defmodule Mix.Tasks.Excessibility do
         Mix.shell().error("❌ Pa11y failed on #{file}")
       end
     end)
+  end
+
+  defp pa11y_config_args do
+    config_path = Application.get_env(:excessibility, :pa11y_config, "pa11y.json")
+
+    if File.exists?(config_path) do
+      ["--config", config_path]
+    else
+      []
+    end
   end
 
   defp pa11y_path do
