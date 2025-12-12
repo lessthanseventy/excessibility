@@ -89,7 +89,7 @@ defmodule Mix.Tasks.Excessibility.Install do
   end
 
   defp ensure_floki_dependency(igniter) do
-    Deps.add_dep(igniter, {:floki, "~> 0.28"}, on_exists: :skip)
+    Deps.add_dep(igniter, {:floki, "~> 0.28"}, on_exists: :overwrite, yes?: true)
   end
 
   defp maybe_install_pa11y(igniter, assets_dir, true), do: add_npm_notice(igniter, assets_dir)

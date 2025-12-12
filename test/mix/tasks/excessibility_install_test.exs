@@ -49,6 +49,48 @@ defmodule Mix.Tasks.Excessibility.InstallTest do
     assert mix_content =~ "{:floki, \"~> 0.28\"}"
   end
 
+  test "upgrades floki dependency when previously test-only" do
+    mix_file = """
+    defmodule Demo.MixProject do
+      use Mix.Project
+
+      def project do
+        [
+          app: :demo,
+          version: "0.1.0",
+          elixir: "~> 1.14",
+          deps: deps()
+        ]
+      end
+
+      def application do
+        [
+          extra_applications: [:logger]
+        ]
+      end
+
+      defp deps do
+        [
+          {:floki, "~> 0.28", only: :test}
+        ]
+      end
+    end
+    """
+
+    igniter =
+      Igniter.Test.test_project(files: %{
+        "mix.exs" => mix_file,
+        "test/test_helper.exs" => "ExUnit.start()\n"
+      })
+      |> put_args(endpoint: "DemoWeb.Endpoint", test_helper: "test/test_helper.exs", skip_npm: true)
+      |> Install.igniter()
+
+    mix_content = file_content(igniter, "mix.exs")
+
+    assert mix_content =~ "{:floki, \"~> 0.28\"}"
+    refute mix_content =~ "{:floki, \"~> 0.28\", only: :test}"
+  end
+
   defp put_args(igniter, opts) do
     args = %Args{options: opts, positional: [], argv: [], argv_flags: []}
     Map.put(igniter, :args, args)
