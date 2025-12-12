@@ -39,8 +39,8 @@ defmodule Excessibility.MixProject do
   defp deps do
     [
       {:chromic_pdf, ">= 1.14.0"},
-      {:credo, "~> 1.5", only: [:dev, :test]},
-      {:ex_doc, "~> 0.18", only: :dev},
+      {:credo, "~> 1.5", only: [:dev, :test], runtime: false},
+      {:ex_doc, "~> 0.18", only: :dev, runtime: false},
       {:floki, ">= 0.30.0"},
       {:igniter, ">= 0.7.0", runtime: false},
       {:mix_test_interactive, "~> 5.0", only: :dev, runtime: false},
