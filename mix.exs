@@ -42,6 +42,7 @@ defmodule Excessibility.MixProject do
       {:credo, "~> 1.5", only: [:dev, :test]},
       {:ex_doc, "~> 0.18", only: :dev},
       {:floki, "~> 0.28"},
+      {:igniter, "~> 0.7", runtime: false},
       {:mix_test_interactive, "~> 5.0", only: :dev, runtime: false},
       {:mox, "~> 1.1", only: :test},
       {:phoenix, "~> 1.5"},

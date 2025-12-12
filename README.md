@@ -39,11 +39,11 @@ def deps do
   ]
 end
 
-Run `mix excessibility.install` once after fetching deps so Pa11y is installed under `assets/node_modules/`.
+Run `mix igniter.install excessibility` after fetching deps so Pa11y’s npm dependency is installed and the recommended configuration is added.
 
 ## Quick Start
 
-1. Configure the endpoint and helper modules in `test/test_helper.exs` (or `config/test.exs`):
+1. Configure the endpoint and helper modules in `test/test_helper.exs` (or `config/test.exs`). The installer command (`mix igniter.install excessibility`) can do this for you, or add the following manually:
 
     ```elixir
     Application.put_env(:excessibility, :endpoint, MyAppWeb.Endpoint)
@@ -151,7 +151,7 @@ html_snapshot(conn, env, mod, cleanup?: true)
 
 🧰 Mix Tasks
 
-- `mix excessibility.install` – installs Pa11y into `assets/node_modules/`.
+- `mix igniter.install excessibility` – configures `test/test_helper.exs` and installs Pa11y via npm.
 - `mix excessibility` – runs Pa11y against every generated snapshot (fails fast if Pa11y is missing).
 - `mix excessibility.approve [--keep good|bad]` – promotes `.good/.bad.html` diffs back into the `baseline/` directory without rerunning the test suite.
 
