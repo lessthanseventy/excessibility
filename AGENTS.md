@@ -5,7 +5,7 @@ Elixir sources live in `lib/`, organized by domain (`excessibility/html`, `exces
 
 ## Build, Test, and Development Commands
 - `mix deps.get && mix compile` – install deps and build the library.
-- `mix excessibility.install` – install Pa11y into `assets/node_modules/` so `mix excessibility` can run offline.
+- `mix igniter.install excessibility` – scaffold the recommended configuration and install the Pa11y npm dependency in the vendored assets folder.
 - `mix test` – run the ExUnit suite; use `mix test path/to/file_test.exs` for targeted loops.
 - `mix excessibility` / `mix excessibility.approve` – run Pa11y on snapshots and promote `.good/.bad` diffs back into `baseline/`.
 - `MIX_ENV=test mix credo --strict` – lint and catch common pitfalls; resolves most CI style failures.
