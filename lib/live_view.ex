@@ -1,16 +1,41 @@
 defmodule Excessibility.LiveView do
   @moduledoc """
-  Provides functions for working with Phoenix LiveView test structures.
+  LiveView HTML extraction for snapshot testing.
 
-  This module handles rendering LiveView trees and extracting proxy information
-  from LiveView test views and elements, enabling accurate HTML snapshotting
-  for accessibility testing.
+  Renders `Phoenix.LiveViewTest.View` and `Phoenix.LiveViewTest.Element`
+  structs to HTML for accessibility testing.
+
+  This module communicates with the LiveView test proxy to extract the
+  current rendered HTML, including all nested LiveView components.
+
+  ## Usage
+
+  This module is used automatically when you call `html_snapshot/2` with
+  a LiveView test view or element. You typically don't need to call it directly.
+
+  ## Configuration
+
+  Can be mocked via the `:live_view_mod` config key:
+
+      Application.put_env(:excessibility, :live_view_mod, MyMockLiveView)
   """
   @behaviour Excessibility.LiveView.Behaviour
 
   alias Phoenix.LiveViewTest.Element, as: LiveElement
   alias Phoenix.LiveViewTest.View
 
+  @doc """
+  Renders a LiveView test view or element to HTML.
+
+  ## Parameters
+
+  - `view` - A `Phoenix.LiveViewTest.View` or `Phoenix.LiveViewTest.Element`
+
+  ## Returns
+
+  The rendered HTML as a Floki-parsed tree.
+  """
+  @impl true
   def render_tree(%View{} = view) do
     render_tree(view, {proxy_topic(view), "render", view.target})
   end
@@ -23,6 +48,7 @@ defmodule Excessibility.LiveView do
     call(view_or_element, {:render_element, :find_element, topic_or_element})
   end
 
+  @doc false
   def call(view_or_element, tuple) do
     GenServer.call(proxy_pid(view_or_element), tuple, 30_000)
   catch
@@ -37,11 +63,18 @@ defmodule Excessibility.LiveView do
     {:raise, exception} -> raise exception
   end
 
+  @doc false
   def proxy_pid(%{proxy: {_ref, _topic, pid}}), do: pid
+  @doc false
   def proxy_topic(%{proxy: {_ref, topic, _pid}}), do: topic
 end
 
 defmodule Excessibility.LiveView.Behaviour do
-  @moduledoc false
+  @moduledoc """
+  Behaviour for LiveView HTML rendering.
+
+  Implement this behaviour to provide custom LiveView rendering logic,
+  useful for testing or alternative rendering strategies.
+  """
   @callback render_tree(any()) :: String.t()
 end
