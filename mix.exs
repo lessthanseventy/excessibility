@@ -46,7 +46,8 @@ defmodule Excessibility.MixProject do
       {:mox, "~> 1.1", only: :test},
       {:phoenix, "~> 1.5"},
       {:phoenix_live_view, "~> 0.17"},
-      {:wallaby, "~> 0.25"}
+      {:wallaby, "~> 0.25"},
+      {:anubis_mcp, github: "zoedsoupe/anubis-mcp"}
     ]
   end
 end
