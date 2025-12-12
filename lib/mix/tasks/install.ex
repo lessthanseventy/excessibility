@@ -90,7 +90,7 @@ defmodule Mix.Tasks.Excessibility.Install do
   end
 
   defp ensure_floki_dependency(igniter) do
-    Deps.add_dep(igniter, {:floki, "~> 0.28"}, on_exists: :overwrite, yes?: true)
+    Deps.add_dep(igniter, {:floki, ">= 0.28.0"}, on_exists: :overwrite, yes?: true)
   end
 
   defp ensure_igniter_dependency(igniter) do
