@@ -1,6 +1,36 @@
 defmodule Mix.Tasks.Excessibility do
-  @shortdoc "Runs pally against generated snapshots"
-  @moduledoc "Library to aid in testing your application for WCAG compliance automatically using Pa11y and Wallaby."
+  @shortdoc "Runs Pa11y against generated snapshots"
+  @moduledoc """
+  Runs Pa11y accessibility checks against all generated HTML snapshots.
+
+  ## Usage
+
+      $ mix excessibility
+
+  This task scans `test/excessibility/html_snapshots/` for `.html` files
+  (excluding `.good.html` and `.bad.html` diff files) and runs Pa11y on each one.
+
+  ## Configuration
+
+  - `:pa11y_path` - Custom path to Pa11y executable (auto-detected by default)
+  - `:pa11y_config` - Path to pa11y.json config file (default: `"pa11y.json"`)
+  - `:excessibility_output_path` - Base directory for snapshots (default: `"test/excessibility"`)
+
+  ## Pa11y Configuration
+
+  If a `pa11y.json` file exists in your project root, it will be passed to Pa11y
+  via the `--config` flag. Use this to ignore specific WCAG rules:
+
+      {
+        "ignore": [
+          "WCAG2AA.Principle3.Guideline3_2.3_2_2.H32.2"
+        ]
+      }
+
+  ## Prerequisites
+
+  Run `mix igniter.install excessibility` first to install Pa11y via npm.
+  """
   use Mix.Task
 
   @requirements ["app.config"]

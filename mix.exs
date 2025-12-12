@@ -1,15 +1,45 @@
 defmodule Excessibility.MixProject do
   use Mix.Project
 
+  @source_url "https://github.com/lessthanseventy/excessibility"
+  @version "0.5.5"
+
   def project do
     [
       app: :excessibility,
-      version: "0.5.6",
+      version: @version,
       elixir: "~> 1.12",
       start_permanent: false,
+      name: "Excessibility",
       description: description(),
       package: package(),
-      deps: deps()
+      deps: deps(),
+      docs: docs()
+    ]
+  end
+
+  defp docs do
+    [
+      main: "readme",
+      source_ref: "v#{@version}",
+      source_url: @source_url,
+      extras: ["README.md", "LICENSE.md"],
+      groups_for_modules: [
+        Core: [
+          Excessibility,
+          Excessibility.Snapshot,
+          Excessibility.HTML,
+          Excessibility.Source
+        ],
+        Behaviours: [
+          Excessibility.SystemBehaviour,
+          Excessibility.BrowserBehaviour
+        ],
+        Implementations: [
+          Excessibility.System,
+          Excessibility.LiveView
+        ]
+      ]
     ]
   end
 

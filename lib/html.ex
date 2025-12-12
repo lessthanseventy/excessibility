@@ -1,6 +1,19 @@
 defmodule Excessibility.HTML do
   @moduledoc """
-  Handles HTML parsing, wrapping, and static asset path prefixing.
+  HTML parsing, wrapping, and static asset path handling.
+
+  This module transforms partial HTML (like LiveView renders or controller
+  responses) into complete, standalone HTML documents suitable for Pa11y analysis.
+
+  ## Responsibilities
+
+  - Wrapping partial HTML in complete document structure
+  - Extracting `<head>` content from the Phoenix endpoint
+  - Prefixing static asset paths with `file://` for local Pa11y access
+  - Removing scripts (which can't execute in static snapshots)
+
+  This module is used internally by `Excessibility.Snapshot` and typically
+  doesn't need to be called directly.
   """
 
   @type html_tree :: tuple() | list(tuple())

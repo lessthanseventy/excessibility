@@ -3,9 +3,34 @@ defmodule Mix.Tasks.Excessibility.Approve do
   @moduledoc """
   Promotes snapshot diffs into the baseline directory.
 
-  For every `*.bad.html`/`*.good.html` pair in the snapshot directory, this task
-  either prompts for approval or automatically keeps the version passed through
+  For every `.bad.html`/`.good.html` pair in the snapshot directory, this task
+  either prompts for approval or automatically keeps the version specified by
   `--keep`.
+
+  ## Usage
+
+      # Interactive mode - prompts for each diff
+      $ mix excessibility.approve
+
+      # Keep all baseline (good) versions
+      $ mix excessibility.approve --keep good
+
+      # Accept all new (bad) versions as baseline
+      $ mix excessibility.approve --keep bad
+
+  ## Options
+
+  - `--keep good` - Automatically keep all baseline versions
+  - `--keep bad` - Automatically accept all new versions
+
+  ## Workflow
+
+  1. Run your tests to generate snapshots
+  2. Review diffs (`.good.html` = baseline, `.bad.html` = new)
+  3. Run this task to approve changes
+  4. The selected version becomes the new baseline
+
+  The `.good.html` and `.bad.html` files are deleted after approval.
   """
   use Mix.Task
 

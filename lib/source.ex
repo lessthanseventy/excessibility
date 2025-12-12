@@ -1,6 +1,30 @@
 defprotocol Excessibility.Source do
+  @moduledoc """
+  Protocol for extracting HTML from various test sources.
+
+  Excessibility uses this protocol to support multiple test source types:
+
+  - `Plug.Conn` - Phoenix controller test responses
+  - `Wallaby.Session` - Browser-based feature test sessions
+  - `Phoenix.LiveViewTest.View` - LiveView test views
+  - `Phoenix.LiveViewTest.Element` - LiveView test elements
+
+  ## Extending
+
+  To add support for a custom source type, implement this protocol:
+
+      defimpl Excessibility.Source, for: MyCustomSource do
+        def to_html(source) do
+          # Return HTML string or Floki-parsed tree
+          MyCustomSource.get_html(source)
+        end
+      end
+  """
+
   @doc """
-  Converts a source (Conn, Session, LiveView View/Element) into an HTML string or parsed HTML tree.
+  Converts a test source into HTML content.
+
+  Returns either a binary HTML string or a Floki-parsed HTML tree.
   """
   @spec to_html(term()) :: binary() | tuple() | list(tuple())
   def to_html(source)

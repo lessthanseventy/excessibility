@@ -1,6 +1,34 @@
 defmodule Excessibility.Snapshot do
   @moduledoc """
-  Handles snapshot generation, file writing, naming, diffing, and screenshots.
+  Core snapshot generation, diffing, and file management.
+
+  This module handles:
+
+  - Converting test sources to HTML snapshots
+  - Writing snapshots to the filesystem
+  - Comparing snapshots against baselines
+  - Interactive diff resolution
+  - Screenshot generation via ChromicPDF
+
+  ## File Locations
+
+  By default, files are stored in:
+
+  - `test/excessibility/html_snapshots/` - Current test snapshots
+  - `test/excessibility/baseline/` - Approved baseline snapshots
+
+  Configure with `:excessibility_output_path` to change the base directory.
+
+  ## Diff Workflow
+
+  When a snapshot differs from its baseline:
+
+  1. `.good.html` (baseline) and `.bad.html` (new) files are created
+  2. If `prompt_on_diff: true`, both files open and you choose which to keep
+  3. The baseline is updated with your selection
+
+  This module is typically used via the `Excessibility.html_snapshot/2` macro
+  rather than called directly.
   """
 
   alias Excessibility.HTML
@@ -16,14 +44,28 @@ defmodule Excessibility.Snapshot do
   @baseline_path Path.join(@output_path, "baseline")
 
   @doc """
-  Produces a snapshot from a supported source.
-  Options:
-    * `:open_browser?` - open the snapshot in a browser (default: false)
-    * `:cleanup?` - deletes existing snapshots for the current test module (default: false)
-    * `:name` - custom filename (overrides default module/line-based name)
-    * `:tag_on_diff` - if true, saves diffs as `.bad.html` or `.good.html` when mismatch occurs
-    * `:prompt_on_diff` - interactively choose which snapshot to keep (default: true)
-    * `:screenshot?` - generate screenshots of snapshot and baseline HTML (default: false)
+  Generates an HTML snapshot from a test source.
+
+  ## Parameters
+
+  - `source` - A `Plug.Conn`, `Wallaby.Session`, `Phoenix.LiveViewTest.View`,
+    or `Phoenix.LiveViewTest.Element`
+  - `env` - The `__ENV__` of the calling test (injected by macro)
+  - `module` - The `__MODULE__` of the calling test (injected by macro)
+  - `opts` - Keyword list of options
+
+  ## Options
+
+  - `:name` - Custom filename (default: `ModuleName_LineNumber.html`)
+  - `:prompt_on_diff` - Interactively choose which snapshot to keep (default: `true`)
+  - `:tag_on_diff` - Save `.good.html` and `.bad.html` on diff (default: `true`)
+  - `:screenshot?` - Generate PNG screenshots (default: `false`)
+  - `:open_browser?` - Open snapshot in browser after writing (default: `false`)
+  - `:cleanup?` - Delete existing snapshots for this module first (default: `false`)
+
+  ## Returns
+
+  The original `source`, unchanged (for pipeline compatibility).
   """
   @spec html_snapshot(term(), Macro.Env.t(), module(), keyword()) :: term()
   def html_snapshot(source, env, module, opts \\ []) do
