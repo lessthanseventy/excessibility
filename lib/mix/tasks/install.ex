@@ -1,6 +1,4 @@
 defmodule Mix.Tasks.Excessibility.Install do
-  use Mix.Task
-
   @shortdoc "Installs JavaScript dependencies needed for Excessibility (e.g. pa11y)"
   @moduledoc """
   Installs vendored JavaScript dependencies for Excessibility.
@@ -8,9 +6,11 @@ defmodule Mix.Tasks.Excessibility.Install do
   This runs `npm install` in the ./assets/ directory to install `pa11y`.
   """
 
+  use Mix.Task
+
   @impl true
   def run(_args) do
-    dep_path = Mix.Project.deps_paths()[:excessibility]
+    dep_path = Mix.Project.deps_paths()[:excessibility] || File.cwd!()
     assets_dir = Path.join(dep_path, "assets")
 
     unless File.exists?(Path.join(assets_dir, "package.json")) do

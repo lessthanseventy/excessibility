@@ -4,7 +4,7 @@ defmodule Excessibility.MixProject do
   def project do
     [
       app: :excessibility,
-      version: "0.3.0",
+      version: "0.5.0",
       elixir: "~> 1.12",
       start_permanent: false,
       description: description(),
@@ -21,7 +21,7 @@ defmodule Excessibility.MixProject do
 
   defp package do
     [
-      files: ["lib", "assets", "package.json", "mix.exs", "README*", "LICENSE*"],
+      files: ["lib", "assets", "mix.exs", "README*", "LICENSE*"],
       maintainers: ["Andrew Moore"],
       licenses: ["MIT"],
       links: %{"GitHub" => "https://github.com/lessthanseventy/excessibility"}
@@ -46,6 +46,7 @@ defmodule Excessibility.MixProject do
       {:mox, "~> 1.1", only: :test},
       {:phoenix, "~> 1.5"},
       {:phoenix_live_view, "~> 0.17"},
+      {:styler, "~> 0.9", only: [:dev, :test], runtime: false},
       {:wallaby, "~> 0.25"}
     ]
   end

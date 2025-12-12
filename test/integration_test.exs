@@ -3,7 +3,8 @@ defmodule Excessibility.FullIntegrationTest do
 
   test "creates snapshot from Plug.Conn" do
     conn =
-      Plug.Test.conn(:get, "/")
+      :get
+      |> Plug.Test.conn("/")
       |> Plug.Conn.put_resp_content_type("text/html")
       |> Plug.Conn.send_resp(200, "<h1>Hello World</h1>")
 

@@ -3,8 +3,9 @@ defmodule Excessibility.Snapshot do
   Handles snapshot generation, file writing, naming, diffing, and screenshots.
   """
 
-  require Logger
   alias Excessibility.HTML
+
+  require Logger
 
   @output_path Application.compile_env(
                  :excessibility,
@@ -37,7 +38,7 @@ defmodule Excessibility.Snapshot do
     html
     |> HTML.wrap()
     |> maybe_diff_and_write(path, filename, opts)
-    |> then(&maybe_open_browser(&1, opts))
+    |> maybe_open_browser(opts)
 
     source
   end
@@ -66,8 +67,9 @@ defmodule Excessibility.Snapshot do
           File.write!(good_path, old_html)
 
           if Keyword.get(opts, :screenshot?, false) do
-            screenshot_path(bad_path) |> screenshot(new_html)
-            screenshot_path(good_path) |> screenshot(old_html)
+            ensure_chromic_pdf_started()
+            bad_path |> screenshot_path() |> screenshot(new_html)
+            good_path |> screenshot_path() |> screenshot(old_html)
           end
         end
 
@@ -87,7 +89,7 @@ defmodule Excessibility.Snapshot do
           IO.puts("Choose which version to keep:")
           IO.puts("(g)ood (baseline) or (b)ad (new)?")
 
-          user_choice = IO.gets(">> ") |> String.trim()
+          user_choice = ">> " |> IO.gets() |> String.trim()
 
           selected =
             case user_choice do
@@ -98,9 +100,7 @@ defmodule Excessibility.Snapshot do
 
           File.write!(baseline_path, selected)
 
-          Logger.info(
-            "Updated baseline with #{if selected == old_html, do: "good", else: "bad"} version"
-          )
+          Logger.info("Updated baseline with #{if selected == old_html, do: "good", else: "bad"} version")
         else
           Logger.info("Skipping diff prompt; baseline unchanged")
         end
@@ -113,7 +113,8 @@ defmodule Excessibility.Snapshot do
     Logger.info("Snapshot written to #{path}")
 
     if Keyword.get(opts, :screenshot?, false) do
-      screenshot_path(path) |> screenshot(new_html)
+      ensure_chromic_pdf_started()
+      path |> screenshot_path() |> screenshot(new_html)
     end
 
     path
@@ -122,12 +123,31 @@ defmodule Excessibility.Snapshot do
   defp screenshot_path(path), do: String.replace(path, ".html", ".png")
 
   defp screenshot(output_path, html) do
-    try do
-      ChromicPDF.capture_screenshot({:html, html}, output: output_path)
-      Logger.info("Wrote screenshot: #{output_path}")
-    rescue
-      e -> Logger.error("Screenshot failed: #{inspect(e)}")
+    ChromicPDF.capture_screenshot({:html, html}, output: output_path)
+    Logger.info("Wrote screenshot: #{output_path}")
+  rescue
+    e -> Logger.error("Screenshot failed: #{inspect(e)}")
+  end
+
+  defp ensure_chromic_pdf_started do
+    case Process.whereis(ChromicPDF) do
+      nil ->
+        case ChromicPDF.start_link(name: ChromicPDF) do
+          {:ok, _pid} ->
+            Logger.info("ChromicPDF process started for Excessibility screenshots")
+
+          {:error, {:already_started, _pid}} ->
+            :ok
+
+          {:error, reason} ->
+            Logger.error("Could not start ChromicPDF: #{inspect(reason)}")
+        end
+
+      _pid ->
+        :ok
     end
+  rescue
+    exception -> Logger.error("Could not ensure ChromicPDF is running: #{Exception.message(exception)}")
   end
 
   defp maybe_open_browser(path, opts) do

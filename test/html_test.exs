@@ -1,5 +1,6 @@
 defmodule Excessibility.HTMLTest do
   use ExUnit.Case, async: true
+
   alias Excessibility.HTML
 
   test "parses binary HTML content" do

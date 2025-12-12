@@ -1,5 +1,6 @@
 defmodule Excessibility.SnapshotTest do
   use ExUnit.Case
+
   import Mox
 
   setup :verify_on_exit!
@@ -14,12 +15,12 @@ defmodule Excessibility.SnapshotTest do
     full_path = Path.join([File.cwd!(), "test/excessibility/html_snapshots", filename])
 
     conn =
-      Plug.Test.conn(:get, "/")
+      :get
+      |> Plug.Test.conn("/")
       |> Plug.Conn.put_resp_content_type("text/html")
       |> Plug.Conn.send_resp(200, "<html><body>Hello</body></html>")
 
-    Excessibility.SystemMock
-    |> expect(:open_with_system_cmd, fn actual_path ->
+    expect(Excessibility.SystemMock, :open_with_system_cmd, fn actual_path ->
       assert actual_path == full_path
       :ok
     end)
@@ -36,6 +37,7 @@ end
 
 defmodule Excessibility.ScreenshotTest do
   use ExUnit.Case, async: false
+
   import Mox
 
   setup :verify_on_exit!
@@ -53,7 +55,8 @@ defmodule Excessibility.ScreenshotTest do
     File.write!(baseline_path, "<html><body>Baseline</body></html>")
 
     conn =
-      Plug.Test.conn(:get, "/")
+      :get
+      |> Plug.Test.conn("/")
       |> Plug.Conn.put_resp_content_type("text/html")
       |> Plug.Conn.send_resp(200, "<html><body>Changed</body></html>")
 
