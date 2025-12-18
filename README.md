@@ -15,6 +15,13 @@ Excessibility helps you test your Phoenix apps for accessibility (WCAG complianc
 - **Ship safer refactors.** Baseline comparison saves `.good/.bad.html` (plus screenshots when enabled) so reviewers can see exactly what changed and approve intentionally.
 - **Debug CI-only failures quickly.** Pa11y output points to the failing snapshot, and the saved artifacts make it easy to reproduce locally.
 
+## How It Works
+
+1. **During tests**, call `html_snapshot(conn)` to capture HTML from your Phoenix responses, LiveViews, or Wallaby sessions
+2. **After tests**, run `mix excessibility` to check all snapshots with Pa11y for WCAG violations
+3. **When HTML changes**, snapshots are diffed against approved baselines — review and approve changes with `mix excessibility.approve`
+4. **In CI**, Pa11y reports accessibility violations alongside your test failures
+
 ## Features
 
 - Snapshot HTML from `Plug.Conn`, `Wallaby.Session`, `Phoenix.LiveViewTest.View`, and `Phoenix.LiveViewTest.Element`
@@ -79,12 +86,17 @@ The installer will:
     end
     ```
 
-3. **Run tests and Pa11y:**
+3. **Typical workflow:**
 
     ```bash
-    mix test                    # Generates snapshots
-    mix excessibility           # Runs Pa11y against snapshots
-    mix excessibility.approve   # Approve diffs interactively
+    # Write tests with html_snapshot calls, then:
+    mix test                    # Generates snapshots in test/excessibility/
+
+    # Check accessibility
+    mix excessibility           # Runs Pa11y against snapshots, reports violations
+
+    # When snapshots change (after updating your UI)
+    mix excessibility.approve   # Review and approve/reject changes
     ```
 
 ## Usage
@@ -122,10 +134,20 @@ It returns the source unchanged, so you can use it in pipelines.
 
 Snapshots are saved to `test/excessibility/html_snapshots/` and baselines live in `test/excessibility/baseline/`.
 
-When a snapshot differs from baseline:
-1. `.good.html` (baseline) and `.bad.html` (new) files are created
-2. If `prompt_on_diff: true`, you're prompted to keep good or bad
-3. The baseline is updated with your choice
+**When a snapshot differs from its baseline:**
+
+1. **Diff files are created:**
+   - `.good.html` — the current approved baseline
+   - `.bad.html` — the new snapshot from your test
+
+2. **You choose which to keep:**
+   - If `prompt_on_diff: true` (default), both files open in your browser and you're prompted to keep "good" (baseline) or "bad" (new)
+   - Choose "good" to reject the changes
+   - Choose "bad" to approve the changes as the new baseline
+
+3. **Baseline is updated** with your choice, and the `.good.html`/`.bad.html` files are cleaned up
+
+**First run:** If no baseline exists yet, the snapshot is automatically saved as the baseline.
 
 ## Configuration
 
@@ -182,15 +204,16 @@ Add additional rules to ignore as needed for your project:
 
 ## Screenshots
 
-To enable PNG screenshots, add ChromicPDF to your supervision tree:
+To enable PNG screenshots, start ChromicPDF in your test helper:
 
 ```elixir
-# application.ex
-children = [
-  {ChromicPDF, name: ChromicPDF},
-  # ...
-]
+# test/test_helper.exs
+{:ok, _} = ChromicPDF.start_link(name: ChromicPDF)
+
+ExUnit.start()
 ```
+
+Alternatively, for production use, add it to your application supervision tree in `application.ex`.
 
 Then use `screenshot?: true` in your snapshots:
 
@@ -210,9 +233,9 @@ Screenshots are saved alongside HTML files with `.png` extension.
 | `mix excessibility.approve --keep good` | Keep all baseline (good) versions |
 | `mix excessibility.approve --keep bad` | Accept all new (bad) versions as baseline |
 
-## Testing / Mocking
+## CI and Non-Interactive Environments
 
-For CI environments where you don't want interactive prompts or browser opens, mock the system module:
+For CI or headless environments where you don't want interactive prompts or browser opens, mock the system module:
 
 ```elixir
 # test/test_helper.exs
