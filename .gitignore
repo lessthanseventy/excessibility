@@ -27,3 +27,6 @@ pally_test-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/
+
+# Test snapshots and baselines
+/test/excessibility/
