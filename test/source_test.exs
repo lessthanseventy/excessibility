@@ -34,4 +34,38 @@ defmodule Excessibility.SourceTest do
     expect(Excessibility.LiveViewMock, :render_tree, fn ^view -> "<html>Mocked View</html>" end)
     assert Excessibility.Source.to_html(view) =~ "Mocked View"
   end
+
+  test "LiveView.Element calls LiveView.render_tree directly" do
+    # Set up a minimal GenServer to handle the proxy call
+    {:ok, proxy} =
+      Agent.start_link(fn -> "<span>Element Content</span>" end)
+
+    # Create a GenServer that responds to LiveView protocol
+    defmodule TestProxy do
+      use GenServer
+
+      def start_link(response) do
+        GenServer.start_link(__MODULE__, response)
+      end
+
+      @impl true
+      def init(response), do: {:ok, response}
+
+      @impl true
+      def handle_call({:render_element, :find_element, _topic}, _from, response) do
+        {:reply, {:ok, response}, response}
+      end
+    end
+
+    {:ok, proxy_pid} = TestProxy.start_link("<span>Element HTML</span>")
+
+    element = %Phoenix.LiveViewTest.Element{
+      proxy: {nil, "topic", proxy_pid}
+    }
+
+    # The Element protocol implementation calls Excessibility.LiveView.render_tree directly
+    # (not through the configurable live_view_mod)
+    result = Excessibility.Source.to_html(element)
+    assert result =~ "Element HTML"
+  end
 end
