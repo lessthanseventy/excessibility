@@ -91,75 +91,94 @@ defmodule Excessibility.Snapshot do
   end
 
   defp maybe_diff_and_write(new_html, path, filename, opts) do
-    system_mod = Application.get_env(:excessibility, :system_mod, Excessibility.System)
     baseline_path = Path.join([@baseline_path, filename])
     File.mkdir_p!(@baseline_path)
 
-    if File.exists?(baseline_path) do
-      old_html = File.read!(baseline_path)
+    case File.read(baseline_path) do
+      {:ok, old_html} when old_html != new_html ->
+        handle_snapshot_diff(old_html, new_html, path, filename, baseline_path, opts)
 
-      if old_html != new_html do
-        Logger.warning("Snapshot differs from baseline: #{filename}")
+      {:ok, _same_html} ->
+        :no_diff
 
-        if Keyword.get(opts, :tag_on_diff, true) do
-          bad_path = String.replace(path, ".html", ".bad.html")
-          good_path = String.replace(path, ".html", ".good.html")
-
-          File.write!(bad_path, new_html)
-          File.write!(good_path, old_html)
-
-          if Keyword.get(opts, :screenshot?, false) do
-            ensure_chromic_pdf_started()
-            bad_path |> screenshot_path() |> screenshot(new_html)
-            good_path |> screenshot_path() |> screenshot(old_html)
-          end
-        end
-
-        if Keyword.get(opts, :prompt_on_diff, true) do
-          Logger.warning("Prompting user to resolve diff")
-
-          bad_path = String.replace(path, ".html", ".bad.html")
-          good_path = String.replace(path, ".html", ".good.html")
-
-          File.write!(bad_path, new_html)
-          File.write!(good_path, old_html)
-
-          system_mod.open_with_system_cmd(good_path)
-          system_mod.open_with_system_cmd(bad_path)
-
-          IO.puts("\n[Excessibility] Snapshot differs from baseline: #{filename}")
-          IO.puts("Choose which version to keep:")
-          IO.puts("(g)ood (baseline) or (b)ad (new)?")
-
-          user_choice = ">> " |> IO.gets() |> String.trim()
-
-          selected =
-            case user_choice do
-              "g" -> old_html
-              "b" -> new_html
-              _ -> new_html
-            end
-
-          File.write!(baseline_path, selected)
-
-          Logger.info("Updated baseline with #{if selected == old_html, do: "good", else: "bad"} version")
-        else
-          Logger.info("Skipping diff prompt; baseline unchanged")
-        end
-      end
-    else
-      Logger.info("No baseline found for #{filename}, skipping diff")
+      {:error, _reason} ->
+        Logger.info("No baseline found for #{filename}, skipping diff")
     end
 
-    File.write!(path, new_html)
+    write_snapshot_and_screenshot(new_html, path, opts)
+    path
+  end
+
+  defp handle_snapshot_diff(old_html, new_html, path, filename, baseline_path, opts) do
+    Logger.warning("Snapshot differs from baseline: #{filename}")
+
+    if Keyword.get(opts, :tag_on_diff, true) do
+      write_diff_files(path, old_html, new_html, opts)
+    end
+
+    if Keyword.get(opts, :prompt_on_diff, true) do
+      prompt_for_diff_choice(path, old_html, new_html, baseline_path, filename)
+    else
+      Logger.info("Skipping diff prompt; baseline unchanged")
+    end
+  end
+
+  defp write_diff_files(path, old_html, new_html, opts) do
+    bad_path = String.replace(path, ".html", ".bad.html")
+    good_path = String.replace(path, ".html", ".good.html")
+
+    File.write!(bad_path, new_html)
+    File.write!(good_path, old_html)
+
+    if Keyword.get(opts, :screenshot?, false) do
+      ensure_chromic_pdf_started()
+      screenshot(screenshot_path(bad_path), new_html)
+      screenshot(screenshot_path(good_path), old_html)
+    end
+  end
+
+  defp prompt_for_diff_choice(path, old_html, new_html, baseline_path, filename) do
+    Logger.warning("Prompting user to resolve diff")
+    system_mod = Application.get_env(:excessibility, :system_mod, Excessibility.System)
+
+    bad_path = String.replace(path, ".html", ".bad.html")
+    good_path = String.replace(path, ".html", ".good.html")
+
+    File.write!(bad_path, new_html)
+    File.write!(good_path, old_html)
+
+    system_mod.open_with_system_cmd(good_path)
+    system_mod.open_with_system_cmd(bad_path)
+
+    selected = prompt_user_choice(old_html, new_html, filename)
+    File.write!(baseline_path, selected)
+
+    result = if selected == old_html, do: "good", else: "bad"
+    Logger.info("Updated baseline with #{result} version")
+  end
+
+  defp prompt_user_choice(old_html, new_html, filename) do
+    IO.puts("\n[Excessibility] Snapshot differs from baseline: #{filename}")
+    IO.puts("Choose which version to keep:")
+    IO.puts("(g)ood (baseline) or (b)ad (new)?")
+
+    user_choice = ">> " |> IO.gets() |> String.trim()
+
+    case user_choice do
+      "g" -> old_html
+      "b" -> new_html
+      _ -> new_html
+    end
+  end
+
+  defp write_snapshot_and_screenshot(html, path, opts) do
+    File.write!(path, html)
     Logger.info("Snapshot written to #{path}")
 
     if Keyword.get(opts, :screenshot?, false) do
       ensure_chromic_pdf_started()
-      path |> screenshot_path() |> screenshot(new_html)
+      screenshot(screenshot_path(path), html)
     end
-
-    path
   end
 
   defp screenshot_path(path), do: String.replace(path, ".html", ".png")
