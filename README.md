@@ -213,8 +213,6 @@ To enable PNG screenshots, start ChromicPDF in your test helper:
 ExUnit.start()
 ```
 
-Alternatively, for production use, add it to your application supervision tree in `application.ex`.
-
 Then use `screenshot?: true` in your snapshots:
 
 ```elixir
