@@ -50,8 +50,8 @@ defmodule Mix.Tasks.Excessibility.Install do
 
   defp fallback_endpoint(nil, igniter) do
     igniter
-    |> ProjectModule.module_name_prefix()
-    |> Module.concat("Web.Endpoint")
+    |> Igniter.Libs.Phoenix.web_module()
+    |> Module.concat("Endpoint")
   rescue
     _ -> "MyAppWeb.Endpoint"
   end
