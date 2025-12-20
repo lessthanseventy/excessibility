@@ -52,11 +52,25 @@ defmodule Mix.Tasks.Excessibility do
 
     config_args = pa11y_config_args()
 
-    snapshot_dir
-    |> Path.join("*.html")
-    |> Path.wildcard()
-    |> Enum.reject(&String.ends_with?(&1, [".bad.html", ".good.html"]))
-    |> Enum.each(fn file ->
+    files =
+      snapshot_dir
+      |> Path.join("*.html")
+      |> Path.wildcard()
+      |> Enum.reject(&String.ends_with?(&1, [".bad.html", ".good.html"]))
+
+    if Enum.empty?(files) do
+      Mix.shell().info("""
+      No snapshots found in #{snapshot_dir}.
+
+      Run your tests first to generate snapshots:
+
+          mix test
+
+      Then run this task again.
+      """)
+    end
+
+    Enum.each(files, fn file ->
       file_url = "file://" <> Path.expand(file)
 
       Mix.shell().info("🔍 Running Pa11y on #{file_url}...")
