@@ -5,36 +5,36 @@ defmodule Mix.Tasks.Excessibility.InstallTest do
   alias Mix.Tasks.Excessibility.Install
   alias Rewrite.Source
 
-  test "adds configuration to test helper" do
+  test "adds configuration to config/test.exs" do
     igniter =
-      [files: %{"test/test_helper.exs" => "ExUnit.start()\n"}]
+      []
       |> Igniter.Test.test_project()
-      |> put_args(endpoint: "DemoWeb.Endpoint", test_helper: "test/test_helper.exs", skip_npm: true)
+      |> put_args(endpoint: "DemoWeb.Endpoint", skip_npm: true)
       |> Install.igniter()
 
-    content = file_content(igniter, "test/test_helper.exs")
+    content = file_content(igniter, "config/test.exs")
 
-    assert content =~ "Application.put_env(:excessibility, :endpoint, DemoWeb.Endpoint)"
-    assert content =~ "Application.put_env(:excessibility, :browser_mod, Wallaby.Browser)"
+    assert content =~ "config :excessibility"
+    assert content =~ "endpoint: DemoWeb.Endpoint"
+    assert content =~ "browser_mod: Wallaby.Browser"
+    assert content =~ "live_view_mod: Excessibility.LiveView"
+    assert content =~ "system_mod: Excessibility.System"
   end
 
   test "does not duplicate configuration" do
-    initial =
-      """
-      ExUnit.start()
-      Application.put_env(:excessibility, :endpoint, DemoWeb.Endpoint)
-      """
-
     igniter =
-      [files: %{"test/test_helper.exs" => initial}]
+      []
       |> Igniter.Test.test_project()
-      |> put_args(endpoint: "DemoWeb.Endpoint", test_helper: "test/test_helper.exs", skip_npm: true)
+      |> put_args(endpoint: "DemoWeb.Endpoint", skip_npm: true)
+      |> Install.igniter()
+      # Run install again
       |> Install.igniter()
 
-    content = file_content(igniter, "test/test_helper.exs")
+    content = file_content(igniter, "config/test.exs")
 
+    # Should only have one endpoint config
     assert content
-           |> String.split("Application.put_env(:excessibility, :endpoint, DemoWeb.Endpoint)")
+           |> String.split("endpoint:")
            |> length() == 2
   end
 
