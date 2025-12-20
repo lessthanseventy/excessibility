@@ -51,20 +51,28 @@ mix deps.get
 mix igniter.install excessibility
 ```
 
+**Apps with authentication:** If your app requires login to access most pages, specify a public route for extracting `<head>` content:
+
+```bash
+mix igniter.install excessibility --head-render-path /login
+```
+
 The installer will:
-- Add configuration to `test/test_helper.exs`
+- Add configuration to `config/test.exs`
 - Create a `pa11y.json` with sensible defaults for Phoenix/LiveView
 - Install Pa11y via npm in your assets directory
 
 ## Quick Start
 
-1. **Configure** the endpoint and helper modules in `test/test_helper.exs`. The installer does this automatically, or add manually:
+1. **Configure** the endpoint and helper modules in `config/test.exs`. The installer does this automatically, or add manually:
 
     ```elixir
-    Application.put_env(:excessibility, :endpoint, MyAppWeb.Endpoint)
-    Application.put_env(:excessibility, :system_mod, Excessibility.System)
-    Application.put_env(:excessibility, :browser_mod, Wallaby.Browser)
-    Application.put_env(:excessibility, :live_view_mod, Excessibility.LiveView)
+    config :excessibility,
+      endpoint: MyAppWeb.Endpoint,
+      head_render_path: "/",  # use "/login" for apps with auth
+      system_mod: Excessibility.System,
+      browser_mod: Wallaby.Browser,
+      live_view_mod: Excessibility.LiveView
     ```
 
 2. **Add `use Excessibility`** in tests where you want snapshots:
@@ -233,7 +241,7 @@ Screenshots are saved alongside HTML files with `.png` extension.
 
 | Task | Description |
 |------|-------------|
-| `mix igniter.install excessibility` | Configure test helper, create pa11y.json, install Pa11y via npm |
+| `mix igniter.install excessibility` | Configure config/test.exs, create pa11y.json, install Pa11y via npm |
 | `mix excessibility` | Run Pa11y against all generated snapshots |
 | `mix excessibility.baseline` | Lock current snapshots as baseline |
 | `mix excessibility.compare` | Compare snapshots against baseline, resolve diffs interactively |

@@ -21,11 +21,12 @@ defmodule Mix.Tasks.Excessibility.Install do
       group: :excessibility,
       schema: [
         endpoint: :string,
+        head_render_path: :string,
         assets_dir: :string,
         skip_npm: :boolean
       ],
-      defaults: [skip_npm: false],
-      example: "mix igniter.install excessibility --endpoint MyAppWeb.Endpoint"
+      defaults: [skip_npm: false, head_render_path: "/"],
+      example: "mix igniter.install excessibility --endpoint MyAppWeb.Endpoint --head-render-path /login"
     }
   end
 
@@ -33,14 +34,13 @@ defmodule Mix.Tasks.Excessibility.Install do
   def igniter(igniter) do
     opts = igniter.args.options
 
-    endpoint =
-      fallback_endpoint(opts[:endpoint], igniter)
-
+    endpoint = fallback_endpoint(opts[:endpoint], igniter)
+    head_render_path = opts[:head_render_path] || "/"
     assets_dir = opts[:assets_dir] || default_assets_dir()
     skip_npm? = opts[:skip_npm]
 
     igniter
-    |> ensure_test_config(endpoint)
+    |> ensure_test_config(endpoint, head_render_path)
     |> ensure_pa11y_config()
     |> maybe_install_pa11y(assets_dir, skip_npm?)
   end
@@ -57,9 +57,10 @@ defmodule Mix.Tasks.Excessibility.Install do
 
   defp fallback_endpoint(module, _igniter), do: module
 
-  defp ensure_test_config(igniter, endpoint) do
+  defp ensure_test_config(igniter, endpoint, head_render_path) do
     igniter
     |> Config.configure("test.exs", :excessibility, [:endpoint], endpoint)
+    |> Config.configure("test.exs", :excessibility, [:head_render_path], head_render_path)
     |> Config.configure("test.exs", :excessibility, [:browser_mod], Wallaby.Browser)
     |> Config.configure("test.exs", :excessibility, [:live_view_mod], Excessibility.LiveView)
     |> Config.configure("test.exs", :excessibility, [:system_mod], Excessibility.System)
