@@ -4,17 +4,16 @@ defmodule Mix.Tasks.Excessibility.Install do
   Installs Excessibility into a host project using Igniter.
 
   This task can be invoked directly or via `mix igniter.install excessibility`. It adds the
-  recommended `Application.put_env/3` configuration to the target project's
-  `test/test_helper.exs` and (by default) runs `npm install` inside the vendored Excessibility
-  assets directory to fetch Pa11y.
+  recommended configuration to the target project's `config/test.exs` and (by default) runs
+  `npm install` inside the vendored Excessibility assets directory to fetch Pa11y.
 
   Requires Igniter to be installed in the host project.
   """
   use Igniter.Mix.Task
 
   alias Igniter.Mix.Task.Info
+  alias Igniter.Project.Config
   alias Igniter.Project.Module, as: ProjectModule
-  alias Rewrite.Source
 
   @impl true
   def info(_argv, _source) do
@@ -22,7 +21,6 @@ defmodule Mix.Tasks.Excessibility.Install do
       group: :excessibility,
       schema: [
         endpoint: :string,
-        test_helper: :string,
         assets_dir: :string,
         skip_npm: :boolean
       ],
@@ -38,12 +36,11 @@ defmodule Mix.Tasks.Excessibility.Install do
     endpoint =
       fallback_endpoint(opts[:endpoint], igniter)
 
-    test_helper = opts[:test_helper] || "test/test_helper.exs"
     assets_dir = opts[:assets_dir] || default_assets_dir()
     skip_npm? = opts[:skip_npm]
 
     igniter
-    |> ensure_test_helper_config(test_helper, endpoint)
+    |> ensure_test_config(endpoint)
     |> ensure_pa11y_config()
     |> maybe_install_pa11y(assets_dir, skip_npm?)
   end
@@ -60,22 +57,12 @@ defmodule Mix.Tasks.Excessibility.Install do
 
   defp fallback_endpoint(module, _igniter), do: module
 
-  defp ensure_test_helper_config(igniter, test_helper, endpoint) do
-    snippet = config_snippet(endpoint)
-    default_contents = "ExUnit.start()\n"
-
-    Igniter.create_or_update_file(igniter, test_helper, default_contents, fn source ->
-      content = Source.get(source, :content)
-
-      if String.contains?(content, "Application.put_env(:excessibility") do
-        source
-      else
-        content
-        |> String.trim_trailing()
-        |> Kernel.<>("\n\n" <> snippet <> "\n")
-        |> then(&Source.update(source, :content, &1))
-      end
-    end)
+  defp ensure_test_config(igniter, endpoint) do
+    igniter
+    |> Config.configure("test.exs", :excessibility, [:endpoint], endpoint)
+    |> Config.configure("test.exs", :excessibility, [:browser_mod], Wallaby.Browser)
+    |> Config.configure("test.exs", :excessibility, [:live_view_mod], Excessibility.LiveView)
+    |> Config.configure("test.exs", :excessibility, [:system_mod], Excessibility.System)
   end
 
   defp ensure_pa11y_config(igniter) do
@@ -92,18 +79,6 @@ defmodule Mix.Tasks.Excessibility.Install do
         "WCAG2AA.Principle3.Guideline3_2.3_2_2.H32.2"
       ]
     }
-    """
-  end
-
-  defp config_snippet(endpoint_module) do
-    endpoint = inspect(endpoint_module)
-
-    """
-    # Excessibility snapshot configuration
-    Application.put_env(:excessibility, :endpoint, #{endpoint})
-    Application.put_env(:excessibility, :browser_mod, Wallaby.Browser)
-    Application.put_env(:excessibility, :live_view_mod, Excessibility.LiveView)
-    Application.put_env(:excessibility, :system_mod, Excessibility.System)
     """
   end
 
