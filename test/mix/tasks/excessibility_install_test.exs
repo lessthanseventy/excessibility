@@ -16,9 +16,22 @@ defmodule Mix.Tasks.Excessibility.InstallTest do
 
     assert content =~ "config :excessibility"
     assert content =~ "endpoint: DemoWeb.Endpoint"
+    assert content =~ ~s|head_render_path: "/"|
     assert content =~ "browser_mod: Wallaby.Browser"
     assert content =~ "live_view_mod: Excessibility.LiveView"
     assert content =~ "system_mod: Excessibility.System"
+  end
+
+  test "uses custom head_render_path for apps with auth" do
+    igniter =
+      []
+      |> Igniter.Test.test_project()
+      |> put_args(endpoint: "DemoWeb.Endpoint", head_render_path: "/login", skip_npm: true)
+      |> Install.igniter()
+
+    content = file_content(igniter, "config/test.exs")
+
+    assert content =~ ~s|head_render_path: "/login"|
   end
 
   test "does not duplicate configuration" do
