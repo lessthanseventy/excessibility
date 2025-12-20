@@ -12,21 +12,22 @@ Excessibility helps you test your Phoenix apps for accessibility (WCAG complianc
 ## Why Excessibility?
 
 - **Keep accessibility in your existing test feedback loop.** Snapshots are captured inside ExUnit, Wallaby, and LiveView tests, so regressions surface together with your functional failures.
-- **Ship safer refactors.** Baseline comparison saves `.good/.bad.html` (plus screenshots when enabled) so reviewers can see exactly what changed and approve intentionally.
+- **Ship safer refactors.** Explicit baseline locking and comparison lets reviewers see exactly what changed and approve intentionally.
 - **Debug CI-only failures quickly.** Pa11y output points to the failing snapshot, and the saved artifacts make it easy to reproduce locally.
 
 ## How It Works
 
 1. **During tests**, call `html_snapshot(conn)` to capture HTML from your Phoenix responses, LiveViews, or Wallaby sessions
 2. **After tests**, run `mix excessibility` to check all snapshots with Pa11y for WCAG violations
-3. **When HTML changes**, snapshots are diffed against approved baselines — review and approve changes with `mix excessibility.approve`
-4. **In CI**, Pa11y reports accessibility violations alongside your test failures
+3. **Lock baselines** with `mix excessibility.baseline` when snapshots represent a known-good state
+4. **Compare changes** with `mix excessibility.compare` to review what changed and approve/reject
+5. **In CI**, Pa11y reports accessibility violations alongside your test failures
 
 ## Features
 
 - Snapshot HTML from `Plug.Conn`, `Wallaby.Session`, `Phoenix.LiveViewTest.View`, and `Phoenix.LiveViewTest.Element`
-- Automatically diff against saved baselines
-- Interactive approval (good/bad) when snapshots change
+- Explicit baseline locking and comparison workflow
+- Interactive good/bad approval when comparing snapshots
 - Optional PNG screenshots via ChromicPDF
 - Mockable system/browser calls for CI
 - Pa11y configuration with sensible LiveView defaults
@@ -75,12 +76,7 @@ The installer will:
 
       test "renders home page", %{conn: conn} do
         conn = get(conn, "/")
-
-        html_snapshot(conn,
-          prompt_on_diff: false,
-          screenshot?: true
-        )
-
+        html_snapshot(conn, screenshot?: true)
         assert html_response(conn, 200) =~ "Welcome!"
       end
     end
@@ -91,12 +87,14 @@ The installer will:
     ```bash
     # Write tests with html_snapshot calls, then:
     mix test                    # Generates snapshots in test/excessibility/
-
-    # Check accessibility
     mix excessibility           # Runs Pa11y against snapshots, reports violations
 
-    # When snapshots change (after updating your UI)
-    mix excessibility.approve   # Review and approve/reject changes
+    # Lock current snapshots as known-good baseline
+    mix excessibility.baseline
+
+    # After making UI changes, run tests again, then compare
+    mix test
+    mix excessibility.compare   # Review diffs, choose good (baseline) or bad (new)
     ```
 
 ## Usage
@@ -106,7 +104,6 @@ use Excessibility
 
 html_snapshot(conn,
   name: "homepage.html",
-  prompt_on_diff: false,
   screenshot?: true
 )
 ```
@@ -124,30 +121,41 @@ It returns the source unchanged, so you can use it in pipelines.
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `:name` | `string` | auto-generated | Custom filename (e.g., `"login_form.html"`). Default is `ModuleName_LineNumber.html` |
-| `:prompt_on_diff` | `boolean` | `true` | Interactively choose which snapshot to keep when diff detected |
-| `:tag_on_diff` | `boolean` | `true` | Save diffs as `.bad.html` and `.good.html` files |
 | `:screenshot?` | `boolean` | `false` | Generate PNG screenshots (requires ChromicPDF) |
 | `:open_browser?` | `boolean` | `false` | Open the snapshot in your browser after writing |
 | `:cleanup?` | `boolean` | `false` | Delete existing snapshots for the current test module before writing |
 
-## Snapshot Diffing
+## Baseline Workflow
 
 Snapshots are saved to `test/excessibility/html_snapshots/` and baselines live in `test/excessibility/baseline/`.
 
-**When a snapshot differs from its baseline:**
+**Setting a baseline:**
 
-1. **Diff files are created:**
-   - `.good.html` — the current approved baseline
-   - `.bad.html` — the new snapshot from your test
+```bash
+mix excessibility.baseline
+```
 
-2. **You choose which to keep:**
-   - If `prompt_on_diff: true` (default), both files open in your browser and you're prompted to keep "good" (baseline) or "bad" (new)
-   - Choose "good" to reject the changes
-   - Choose "bad" to approve the changes as the new baseline
+This copies all current snapshots to the baseline directory. Run this when your snapshots represent a known-good, accessible state.
 
-3. **Baseline is updated** with your choice, and the `.good.html`/`.bad.html` files are cleaned up
+**Comparing against baseline:**
 
-**First run:** If no baseline exists yet, the snapshot is automatically saved as the baseline.
+```bash
+mix excessibility.compare
+```
+
+For each snapshot that differs from its baseline:
+
+1. **Diff files are created** — `.good.html` (baseline) and `.bad.html` (new)
+2. **Both open in your browser** for visual comparison
+3. **You choose which to keep** — "good" to reject changes, "bad" to accept as new baseline
+4. **Diff files are cleaned up** after resolution
+
+**Batch options:**
+
+```bash
+mix excessibility.compare --keep good   # Keep all baselines (reject all changes)
+mix excessibility.compare --keep bad    # Accept all new versions as baseline
+```
 
 ## Configuration
 
@@ -227,9 +235,10 @@ Screenshots are saved alongside HTML files with `.png` extension.
 |------|-------------|
 | `mix igniter.install excessibility` | Configure test helper, create pa11y.json, install Pa11y via npm |
 | `mix excessibility` | Run Pa11y against all generated snapshots |
-| `mix excessibility.approve` | Interactively approve pending diffs |
-| `mix excessibility.approve --keep good` | Keep all baseline (good) versions |
-| `mix excessibility.approve --keep bad` | Accept all new (bad) versions as baseline |
+| `mix excessibility.baseline` | Lock current snapshots as baseline |
+| `mix excessibility.compare` | Compare snapshots against baseline, resolve diffs interactively |
+| `mix excessibility.compare --keep good` | Keep all baseline versions (reject changes) |
+| `mix excessibility.compare --keep bad` | Accept all new versions as baseline |
 
 ## CI and Non-Interactive Environments
 
@@ -264,12 +273,12 @@ test/
 └── excessibility/
     ├── html_snapshots/          # Current test snapshots
     │   ├── MyApp_PageTest_42.html
-    │   ├── MyApp_PageTest_42.png
-    │   ├── MyApp_PageTest_42.bad.html
-    │   └── MyApp_PageTest_42.good.html
-    └── baseline/                # Approved baselines
+    │   └── MyApp_PageTest_42.png   # (if screenshot?: true)
+    └── baseline/                # Locked baselines (via mix excessibility.baseline)
         └── MyApp_PageTest_42.html
 ```
+
+During `mix excessibility.compare`, temporary `.good.html` and `.bad.html` files are created for diffing, then cleaned up after resolution.
 
 ## License
 
