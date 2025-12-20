@@ -29,7 +29,7 @@ defmodule Mix.Tasks.Excessibility do
 
   ## Prerequisites
 
-  Run `mix igniter.install excessibility` first to install Pa11y via npm.
+  Run `mix excessibility.install` first to install Pa11y via npm.
   """
   use Mix.Task
 

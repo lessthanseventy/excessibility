@@ -48,13 +48,13 @@ Fetch dependencies and run the installer:
 
 ```bash
 mix deps.get
-mix igniter.install excessibility
+mix excessibility.install
 ```
 
 **Apps with authentication:** If your app requires login to access most pages, specify a public route for extracting `<head>` content:
 
 ```bash
-mix igniter.install excessibility --head-render-path /login
+mix excessibility.install --head-render-path /login
 ```
 
 The installer will:
@@ -241,7 +241,7 @@ Screenshots are saved alongside HTML files with `.png` extension.
 
 | Task | Description |
 |------|-------------|
-| `mix igniter.install excessibility` | Configure config/test.exs, create pa11y.json, install Pa11y via npm |
+| `mix excessibility.install` | Configure config/test.exs, create pa11y.json, install Pa11y via npm |
 | `mix excessibility` | Run Pa11y against all generated snapshots |
 | `mix excessibility.baseline` | Lock current snapshots as baseline |
 | `mix excessibility.compare` | Compare snapshots against baseline, resolve diffs interactively |

@@ -26,7 +26,7 @@ defmodule Mix.Tasks.Excessibility.Install do
         skip_npm: :boolean
       ],
       defaults: [skip_npm: false, head_render_path: "/"],
-      example: "mix igniter.install excessibility --endpoint MyAppWeb.Endpoint --head-render-path /login"
+      example: "mix excessibility.install --endpoint MyAppWeb.Endpoint --head-render-path /login"
     }
   end
 
