@@ -42,9 +42,10 @@ defmodule Excessibility do
   """
 
   @doc """
-  Sets up the module for snapshot testing by requiring `Excessibility`.
+  Sets up the module for snapshot testing by importing `Excessibility`.
 
-  This makes the `html_snapshot/2` macro available in your test module.
+  This makes the `html_snapshot/1` and `html_snapshot/2` macros available
+  in your test module without needing to fully qualify them.
 
   ## Example
 
@@ -52,7 +53,7 @@ defmodule Excessibility do
   """
   defmacro __using__(_opts) do
     quote do
-      require Excessibility
+      import Excessibility, only: [html_snapshot: 1, html_snapshot: 2]
     end
   end
 
