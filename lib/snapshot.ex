@@ -1,31 +1,23 @@
 defmodule Excessibility.Snapshot do
   @moduledoc """
-  Core snapshot generation, diffing, and file management.
+  Core snapshot generation and file management.
 
   This module handles:
 
   - Converting test sources to HTML snapshots
   - Writing snapshots to the filesystem
-  - Comparing snapshots against baselines
-  - Interactive diff resolution
   - Screenshot generation via ChromicPDF
 
   ## File Locations
 
-  By default, files are stored in:
-
-  - `test/excessibility/html_snapshots/` - Current test snapshots
-  - `test/excessibility/baseline/` - Approved baseline snapshots
-
+  Snapshots are stored in `test/excessibility/html_snapshots/` by default.
   Configure with `:excessibility_output_path` to change the base directory.
 
-  ## Diff Workflow
+  ## Workflow
 
-  When a snapshot differs from its baseline:
-
-  1. `.good.html` (baseline) and `.bad.html` (new) files are created
-  2. If `prompt_on_diff: true`, both files open and you choose which to keep
-  3. The baseline is updated with your selection
+  1. Run tests to generate snapshots
+  2. Run `mix excessibility.baseline` to lock in a known-good state
+  3. Run `mix excessibility.compare` to diff against baseline after changes
 
   This module is typically used via the `Excessibility.html_snapshot/2` macro
   rather than called directly.
@@ -41,7 +33,6 @@ defmodule Excessibility.Snapshot do
                  "test/excessibility"
                )
   @snapshots_path Path.join(@output_path, "html_snapshots")
-  @baseline_path Path.join(@output_path, "baseline")
 
   @doc """
   Generates an HTML snapshot from a test source.
@@ -57,8 +48,6 @@ defmodule Excessibility.Snapshot do
   ## Options
 
   - `:name` - Custom filename (default: `ModuleName_LineNumber.html`)
-  - `:prompt_on_diff` - Interactively choose which snapshot to keep (default: `true`)
-  - `:tag_on_diff` - Save `.good.html` and `.bad.html` on diff (default: `true`)
   - `:screenshot?` - Generate PNG screenshots (default: `false`)
   - `:open_browser?` - Open snapshot in browser after writing (default: `false`)
   - `:cleanup?` - Delete existing snapshots for this module first (default: `false`)
@@ -69,7 +58,6 @@ defmodule Excessibility.Snapshot do
   """
   @spec html_snapshot(term(), Macro.Env.t(), module(), keyword()) :: term()
   def html_snapshot(source, env, module, opts \\ []) do
-    opts = Keyword.put_new(opts, :prompt_on_diff, true)
     if Keyword.get(opts, :cleanup?, false), do: cleanup_snapshots(module)
 
     html = Excessibility.Source.to_html(source)
@@ -79,7 +67,7 @@ defmodule Excessibility.Snapshot do
 
     html
     |> HTML.wrap()
-    |> maybe_diff_and_write(path, filename, opts)
+    |> write_snapshot(path, opts)
     |> maybe_open_browser(opts)
 
     source
@@ -90,88 +78,7 @@ defmodule Excessibility.Snapshot do
       "#{module |> to_string() |> String.replace(".", "_")}_#{env.line}.html"
   end
 
-  defp maybe_diff_and_write(new_html, path, filename, opts) do
-    baseline_path = Path.join([@baseline_path, filename])
-    File.mkdir_p!(@baseline_path)
-
-    case File.read(baseline_path) do
-      {:ok, old_html} when old_html != new_html ->
-        handle_snapshot_diff(old_html, new_html, path, filename, baseline_path, opts)
-
-      {:ok, _same_html} ->
-        :no_diff
-
-      {:error, _reason} ->
-        Logger.info("No baseline found for #{filename}, skipping diff")
-    end
-
-    write_snapshot_and_screenshot(new_html, path, opts)
-    path
-  end
-
-  defp handle_snapshot_diff(old_html, new_html, path, filename, baseline_path, opts) do
-    Logger.warning("Snapshot differs from baseline: #{filename}")
-
-    if Keyword.get(opts, :tag_on_diff, true) do
-      write_diff_files(path, old_html, new_html, opts)
-    end
-
-    if Keyword.get(opts, :prompt_on_diff, true) do
-      prompt_for_diff_choice(path, old_html, new_html, baseline_path, filename)
-    else
-      Logger.info("Skipping diff prompt; baseline unchanged")
-    end
-  end
-
-  defp write_diff_files(path, old_html, new_html, opts) do
-    bad_path = String.replace(path, ".html", ".bad.html")
-    good_path = String.replace(path, ".html", ".good.html")
-
-    File.write!(bad_path, new_html)
-    File.write!(good_path, old_html)
-
-    if Keyword.get(opts, :screenshot?, false) do
-      ensure_chromic_pdf_started()
-      screenshot(screenshot_path(bad_path), new_html)
-      screenshot(screenshot_path(good_path), old_html)
-    end
-  end
-
-  defp prompt_for_diff_choice(path, old_html, new_html, baseline_path, filename) do
-    Logger.warning("Prompting user to resolve diff")
-    system_mod = Application.get_env(:excessibility, :system_mod, Excessibility.System)
-
-    bad_path = String.replace(path, ".html", ".bad.html")
-    good_path = String.replace(path, ".html", ".good.html")
-
-    File.write!(bad_path, new_html)
-    File.write!(good_path, old_html)
-
-    system_mod.open_with_system_cmd(good_path)
-    system_mod.open_with_system_cmd(bad_path)
-
-    selected = prompt_user_choice(old_html, new_html, filename)
-    File.write!(baseline_path, selected)
-
-    result = if selected == old_html, do: "good", else: "bad"
-    Logger.info("Updated baseline with #{result} version")
-  end
-
-  defp prompt_user_choice(old_html, new_html, filename) do
-    IO.puts("\n[Excessibility] Snapshot differs from baseline: #{filename}")
-    IO.puts("Choose which version to keep:")
-    IO.puts("(g)ood (baseline) or (b)ad (new)?")
-
-    user_choice = ">> " |> IO.gets() |> String.trim()
-
-    case user_choice do
-      "g" -> old_html
-      "b" -> new_html
-      _ -> new_html
-    end
-  end
-
-  defp write_snapshot_and_screenshot(html, path, opts) do
+  defp write_snapshot(html, path, opts) do
     File.write!(path, html)
     Logger.info("Snapshot written to #{path}")
 
@@ -179,6 +86,8 @@ defmodule Excessibility.Snapshot do
       ensure_chromic_pdf_started()
       screenshot(screenshot_path(path), html)
     end
+
+    path
   end
 
   defp screenshot_path(path), do: String.replace(path, ".html", ".png")
