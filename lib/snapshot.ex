@@ -61,21 +61,106 @@ defmodule Excessibility.Snapshot do
     if Keyword.get(opts, :cleanup?, false), do: cleanup_snapshots(module)
 
     html = Excessibility.Source.to_html(source)
-    filename = get_filename(env, module, opts)
+
+    # Check if we're in auto-capture mode
+    metadata = get_capture_metadata(source, opts)
+
+    filename = get_filename(env, module, opts, metadata)
     path = Path.join([File.cwd!(), @snapshots_path, filename])
     File.mkdir_p!(@snapshots_path)
 
     html
     |> HTML.wrap()
+    |> add_metadata(metadata)
     |> write_snapshot(path, opts)
     |> maybe_open_browser(opts)
 
     source
   end
 
-  defp get_filename(env, module, opts) do
-    Keyword.get(opts, :name) ||
-      "#{module |> to_string() |> String.replace(".", "_")}_#{env.line}.html"
+  defp get_filename(env, module, opts, metadata) do
+    cond do
+      # Explicit name provided
+      opts[:name] ->
+        opts[:name]
+
+      # Auto-capture mode with metadata
+      metadata ->
+        "#{metadata.test_name}_#{metadata.sequence}_#{metadata.event_type}.html"
+
+      # Default: module_line.html
+      true ->
+        "#{module |> to_string() |> String.replace(".", "_")}_#{env.line}.html"
+    end
+  end
+
+  defp get_capture_metadata(source, opts) do
+    # Check if we're in auto-capture mode
+    case Excessibility.Capture.get_state() do
+      nil ->
+        nil
+
+      _state ->
+        # Extract event type from opts or generate sequential name
+        event_type = opts[:event_type] || generate_event_name(opts)
+
+        # Extract assigns from source if it's a LiveView
+        assigns = extract_assigns(source)
+
+        Excessibility.Capture.record_event(event_type, assigns)
+    end
+  end
+
+  defp generate_event_name(_opts) do
+    # Generate a simple sequential event name
+    state = Excessibility.Capture.get_state()
+
+    case state.sequence do
+      0 -> "initial"
+      n -> "event_#{n + 1}"
+    end
+  end
+
+  defp extract_assigns(%Phoenix.LiveViewTest.View{} = view) do
+    try do
+      # Access the LiveView module configured for this library
+      live_view_mod = Application.get_env(:excessibility, :live_view_mod, Excessibility.LiveView)
+
+      # Try to get assigns using the LiveView module
+      case live_view_mod.get_assigns(view) do
+        {:ok, assigns} when is_map(assigns) ->
+          # Filter out internal Phoenix assigns to keep output clean
+          assigns
+          |> Map.drop([:flash, :live_action, :__changed__])
+          |> Enum.reject(fn {k, _v} -> String.starts_with?(to_string(k), "_") end)
+          |> Map.new()
+
+        _ ->
+          %{}
+      end
+    rescue
+      _ -> %{}
+    end
+  end
+
+  defp extract_assigns(_), do: %{}
+
+  defp add_metadata(html, nil), do: html
+
+  defp add_metadata(html, metadata) do
+    comment = """
+    <!--
+    Excessibility Snapshot
+    Test: #{metadata.test_name}
+    Sequence: #{metadata.sequence}
+    Event: #{metadata.event_type}
+    Timestamp: #{metadata.timestamp}
+    Assigns: #{inspect(metadata.assigns)}
+    Previous: #{metadata.previous || "none"}
+    -->
+    """
+
+    comment <> "\n" <> html
   end
 
   defp write_snapshot(html, path, opts) do
