@@ -65,4 +65,24 @@ defmodule Excessibility.TelemetryCapture.Filter do
   end
 
   defp starts_with_underscore?(_), do: false
+
+  @doc """
+  Applies all filtering to assigns based on options.
+
+  ## Options
+
+  - `:filter_ecto` - Remove Ecto metadata (default: true)
+  - `:filter_phoenix` - Remove Phoenix internals (default: true)
+  """
+  def filter_assigns(assigns, opts \\ []) do
+    filter_ecto? = Keyword.get(opts, :filter_ecto, true)
+    filter_phoenix? = Keyword.get(opts, :filter_phoenix, true)
+
+    assigns
+    |> apply_if(filter_ecto?, &filter_ecto_metadata/1)
+    |> apply_if(filter_phoenix?, &filter_phoenix_internals/1)
+  end
+
+  defp apply_if(value, true, fun), do: fun.(value)
+  defp apply_if(value, false, _fun), do: value
 end

@@ -109,4 +109,61 @@ defmodule Excessibility.TelemetryCapture.FilterTest do
       assert result.public == "keep"
     end
   end
+
+  describe "filter_assigns/2" do
+    test "applies all filters by default" do
+      assigns = %{
+        user: %{
+          id: 123,
+          __meta__: "remove",
+          posts: %Ecto.Association.NotLoaded{}
+        },
+        flash: "remove",
+        _private: "remove",
+        data: "keep"
+      }
+
+      result = Filter.filter_assigns(assigns)
+
+      assert result == %{
+               user: %{id: 123},
+               data: "keep"
+             }
+    end
+
+    test "respects filter_ecto: false option" do
+      assigns = %{
+        user: %{id: 123, __meta__: "keep"},
+        flash: "remove"
+      }
+
+      result = Filter.filter_assigns(assigns, filter_ecto: false)
+
+      assert result.user.__meta__ == "keep"
+      refute Map.has_key?(result, :flash)
+    end
+
+    test "respects filter_phoenix: false option" do
+      assigns = %{
+        user: %{id: 123, __meta__: "remove"},
+        flash: "keep"
+      }
+
+      result = Filter.filter_assigns(assigns, filter_phoenix: false)
+
+      refute Map.has_key?(result.user, :__meta__)
+      assert result.flash == "keep"
+    end
+
+    test "disables all filtering with filter_ecto: false, filter_phoenix: false" do
+      assigns = %{
+        user: %{__meta__: "keep"},
+        flash: "keep"
+      }
+
+      result = Filter.filter_assigns(assigns, filter_ecto: false, filter_phoenix: false)
+
+      assert result == assigns
+    end
+  end
 end
