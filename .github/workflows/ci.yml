@@ -18,7 +18,7 @@ jobs:
             otp: '24'
           - elixir: '1.15'
             otp: '26'
-          - elixir: '1.17'
+          - elixir: '1.19'
             otp: '27'
 
     steps:
@@ -55,11 +55,11 @@ jobs:
         run: mix deps.compile
 
       - name: Check for unused dependencies
-        if: matrix.elixir == '1.17'
+        if: matrix.elixir == '1.19'
         run: mix deps.unlock --check-unused
 
       - name: Check code formatting
-        if: matrix.elixir == '1.17'
+        if: matrix.elixir == '1.19'
         run: mix format --check-formatted
 
       - name: Compile with warnings as errors
@@ -68,12 +68,12 @@ jobs:
           MIX_ENV: test
 
       - name: Run Credo
-        if: matrix.elixir == '1.17'
+        if: matrix.elixir == '1.19'
         run: mix credo --strict
 
       - name: Run tests
         run: mix test
 
       - name: Build documentation
-        if: matrix.elixir == '1.17'
+        if: matrix.elixir == '1.19'
         run: mix docs
