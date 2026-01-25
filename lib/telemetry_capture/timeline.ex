@@ -6,6 +6,9 @@ defmodule Excessibility.TelemetryCapture.Timeline do
   for human and AI consumption.
   """
 
+  alias Excessibility.TelemetryCapture.Diff
+  alias Excessibility.TelemetryCapture.Filter
+
   @default_highlight_fields [:current_user, :live_action, :errors, :form]
   @small_value_threshold 100
 
@@ -48,4 +51,73 @@ defmodule Excessibility.TelemetryCapture.Timeline do
   end
 
   defp small_value?(_), do: false
+
+  @doc """
+  Builds a complete timeline from snapshots.
+
+  Returns a map with:
+  - :test - test name
+  - :duration_ms - total test duration
+  - :timeline - list of timeline entries
+  """
+  def build_timeline([], test_name) do
+    %{
+      test: test_name,
+      timeline: [],
+      duration_ms: 0
+    }
+  end
+
+  def build_timeline(snapshots, test_name, opts \\ []) do
+    first_timestamp = List.first(snapshots).timestamp
+    last_timestamp = List.last(snapshots).timestamp
+    duration_ms = DateTime.diff(last_timestamp, first_timestamp, :millisecond)
+
+    timeline =
+      snapshots
+      |> Enum.with_index(1)
+      |> Enum.map(fn {snapshot, index} ->
+        previous = if index > 1, do: Enum.at(snapshots, index - 2)
+        build_timeline_entry(snapshot, previous, index, opts)
+      end)
+
+    %{
+      test: test_name,
+      duration_ms: duration_ms,
+      timeline: timeline
+    }
+  end
+
+  @doc """
+  Builds a single timeline entry from a snapshot and its predecessor.
+  """
+  def build_timeline_entry(snapshot, previous, sequence, opts \\ []) do
+    filtered_assigns = Filter.filter_assigns(snapshot.assigns, opts)
+
+    key_state =
+      extract_key_state(filtered_assigns, opts[:highlight_fields] || @default_highlight_fields)
+
+    previous_assigns =
+      if previous do
+        Filter.filter_assigns(previous.assigns, opts)
+      end
+
+    diff = Diff.compute_diff(filtered_assigns, previous_assigns)
+    changes = Diff.extract_changes(diff)
+
+    duration_since_previous =
+      if previous do
+        DateTime.diff(snapshot.timestamp, previous.timestamp, :millisecond)
+      end
+
+    %{
+      sequence: sequence,
+      event: snapshot.event_type,
+      timestamp: snapshot.timestamp,
+      view_module: snapshot.view_module,
+      key_state: key_state,
+      changes: changes,
+      duration_since_previous_ms: duration_since_previous
+    }
+  end
 end
