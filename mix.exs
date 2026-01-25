@@ -70,6 +70,7 @@ defmodule Excessibility.MixProject do
     [
       {:chromic_pdf, ">= 1.14.0"},
       {:credo, "~> 1.5", only: [:dev, :test], runtime: false},
+      {:ecto, "~> 3.0", only: :test},
       {:ex_doc, "~> 0.18", only: :dev, runtime: false},
       {:floki, ">= 0.30.0"},
       {:igniter, ">= 0.7.0", runtime: false},
