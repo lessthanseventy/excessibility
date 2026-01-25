@@ -8,7 +8,18 @@ defmodule Mix.Tasks.Excessibility.Debug do
 
       mix excessibility.debug test/my_test.exs
       mix excessibility.debug test/my_test.exs --format=json
-      mix excessibility.debug test/my_test.exs --format=package
+      mix excessibility.debug test/my_test.exs --full
+      mix excessibility.debug test/my_test.exs --minimal
+      mix excessibility.debug test/my_test.exs --highlight=current_user,cart_items
+
+  ## Flags
+
+  - `--format=markdown|json|package` - Output format (default: markdown)
+  - `--full` - Disable all filtering, show complete assigns
+  - `--minimal` - Timeline only, no detailed snapshots
+  - `--no-filter-ecto` - Keep Ecto metadata (__meta__, NotLoaded)
+  - `--no-filter-phoenix` - Keep Phoenix internals (flash, __changed__)
+  - `--highlight=field1,field2` - Custom fields to highlight in timeline
 
   ## Formats
 
@@ -21,20 +32,39 @@ defmodule Mix.Tasks.Excessibility.Debug do
   The command outputs the report to stdout and also saves it to:
   - Markdown: `test/excessibility/latest_debug.md`
   - JSON: `test/excessibility/latest_debug.json`
+  - Timeline: `test/excessibility/timeline.json` (always generated)
   - Package: `test/excessibility/debug_packages/[test_name]_[timestamp]/`
   """
 
   use Mix.Task
 
+  alias Excessibility.TelemetryCapture.Formatter
+
   @impl Mix.Task
   def run(args) do
     {opts, test_paths, _} =
       OptionParser.parse(args,
-        strict: [format: :string],
+        strict: [
+          format: :string,
+          full: :boolean,
+          minimal: :boolean,
+          no_filter_ecto: :boolean,
+          no_filter_phoenix: :boolean,
+          highlight: :string
+        ],
         aliases: [f: :format]
       )
 
     format = Keyword.get(opts, :format, "markdown")
+    minimal_mode = Keyword.get(opts, :minimal, false)
+    filter_opts = build_filter_opts(opts)
+
+    # Store opts in process dictionary for use during formatting
+    Process.put(:excessibility_debug_opts, %{
+      format: format,
+      minimal: minimal_mode,
+      filter_opts: filter_opts
+    })
 
     if test_paths == [] do
       Mix.shell().error("Usage: mix excessibility.debug test/path_test.exs")
@@ -72,6 +102,30 @@ defmodule Mix.Tasks.Excessibility.Debug do
 
       _ ->
         output_markdown(report_data)
+    end
+  end
+
+  defp build_filter_opts(opts) do
+    full_mode = Keyword.get(opts, :full, false)
+
+    filter_opts =
+      if full_mode do
+        [filter_ecto: false, filter_phoenix: false]
+      else
+        [
+          filter_ecto: !Keyword.get(opts, :no_filter_ecto, false),
+          filter_phoenix: !Keyword.get(opts, :no_filter_phoenix, false)
+        ]
+      end
+
+    # Parse highlight fields if provided
+    case Keyword.get(opts, :highlight) do
+      nil ->
+        filter_opts
+
+      fields_str ->
+        highlight_fields = fields_str |> String.split(",") |> Enum.map(&String.to_atom/1)
+        Keyword.put(filter_opts, :highlight_fields, highlight_fields)
     end
   end
 
@@ -154,12 +208,6 @@ defmodule Mix.Tasks.Excessibility.Debug do
   end
 
   defp output_markdown(report_data) do
-    markdown = build_markdown_report(report_data)
-
-    # Output to stdout
-    Mix.shell().info(markdown)
-
-    # Save to file
     output_path =
       Application.get_env(
         :excessibility,
@@ -167,6 +215,20 @@ defmodule Mix.Tasks.Excessibility.Debug do
         "test/excessibility"
       )
 
+    timeline_path = Path.join(output_path, "timeline.json")
+
+    markdown =
+      if File.exists?(timeline_path) do
+        timeline = timeline_path |> File.read!() |> Jason.decode!(keys: :atoms)
+        Formatter.format_markdown(timeline, report_data.snapshots)
+      else
+        build_markdown_report(report_data)
+      end
+
+    # Output to stdout
+    Mix.shell().info(markdown)
+
+    # Save to file
     latest_path = Path.join(output_path, "latest_debug.md")
     File.mkdir_p!(output_path)
     File.write!(latest_path, markdown)
