@@ -34,78 +34,109 @@ Excessibility helps you test your Phoenix apps for accessibility (WCAG complianc
 
 ## LLM Development Features
 
-Excessibility includes powerful features for debugging Phoenix apps with AI assistance (Claude, Cursor, etc.):
+Excessibility includes powerful features for debugging Phoenix apps with AI assistance (Claude, Cursor, etc.).
 
-### Auto-Capture Snapshots
+### Telemetry-Based Auto-Capture (Zero Code Changes!)
 
-Automatically capture DOM snapshots at every LiveView state change:
+Debug **any existing LiveView test** with automatic snapshot capture - no test changes required:
 
 ```elixir
-@tag capture_snapshots: true
-test "modal interaction", %{conn: conn} do
+# Your test - completely vanilla, zero Excessibility code
+test "user interaction flow", %{conn: conn} do
   {:ok, view, _html} = live(conn, "/dashboard")
-  # Snapshot 1: initial render (automatic)
-
-  view |> element("#open-modal") |> render_click()
-  # Snapshot 2: after click (automatic)
-
-  view |> element("#submit") |> render_submit()
-  # Snapshot 3: after submit (automatic)
+  view |> element("#button") |> render_click()
+  view |> element("#form") |> render_submit(%{name: "Alice"})
+  assert render(view) =~ "Welcome Alice"
 end
 ```
 
-### Debug Command
-
-Get complete test context with one command:
+Debug it:
 
 ```bash
 mix excessibility.debug test/my_test.exs
 ```
 
-Outputs a comprehensive report with:
+**Automatically captures:**
+- LiveView mount events
+- All handle_event calls (clicks, submits, etc.)
+- Real LiveView assigns at each step
+- Complete state timeline
+
+**Example captured snapshot:**
+
+```html
+<!--
+Excessibility Telemetry Snapshot
+Test: test user interaction flow
+Sequence: 2
+Event: handle_event:submit_form
+Timestamp: 2026-01-25T10:30:12.345Z
+View Module: MyAppWeb.DashboardLive
+Assigns: %{
+  current_user: %User{name: "Alice"},
+  form_data: %{name: "Alice"},
+  submitted: true
+}
+-->
+```
+
+### Debug Command
+
+The debug command outputs a comprehensive markdown report with:
 - Test results and error output
 - All captured snapshots with inline HTML
 - Event timeline showing state changes
-- Metadata (assigns, timestamps, event sequence)
+- Real LiveView assigns at each snapshot
+- Metadata (timestamps, event sequence, view modules)
 
-The report is both human-readable and AI-parseable, making it perfect for pasting into Claude or other LLMs.
+The report is both human-readable and AI-parseable, perfect for pasting into Claude.
 
-**Other formats:**
+**Available formats:**
 
 ```bash
-mix excessibility.debug test/my_test.exs --format=json      # JSON output
+mix excessibility.debug test/my_test.exs                    # Markdown report (default)
+mix excessibility.debug test/my_test.exs --format=json      # Structured JSON
 mix excessibility.debug test/my_test.exs --format=package   # Directory with MANIFEST
 mix excessibility.latest                                    # Re-display last report
 mix excessibility.package test/my_test.exs                  # Shortcut for package format
 ```
 
-### Metadata in Snapshots
+### How It Works
 
-Every auto-captured snapshot includes embedded metadata:
+Excessibility hooks into Phoenix LiveView's built-in telemetry events:
+- `[:phoenix, :live_view, :mount, :stop]`
+- `[:phoenix, :live_view, :handle_event, :stop]`
+- `[:phoenix, :live_view, :handle_params, :stop]`
 
-```html
-<!--
-Excessibility Snapshot
-Test: modal_flow
-Sequence: 2
-Event: click_open_modal
-Timestamp: 2026-01-25T10:30:12Z
-Assigns: %{show_modal: true, user: %User{name: "Bob"}}
-Previous: modal_flow_1_initial.html
--->
+When you run `mix excessibility.debug`, it:
+1. Sets `EXCESSIBILITY_TELEMETRY_CAPTURE=true`
+2. Attaches telemetry handlers
+3. Runs your test
+4. Captures snapshots with real assigns from the LiveView process
+5. Generates a complete debug report
 
-<html>...</html>
+No test changes needed - it works with vanilla Phoenix LiveView tests!
+
+### Manual Capture Mode
+
+For fine-grained control, you can also manually capture snapshots:
+
+```elixir
+use Excessibility
+
+@tag capture_snapshots: true
+test "manual capture", %{conn: conn} do
+  {:ok, view, _} = live(conn, "/")
+  html_snapshot(view)  # Manual snapshot with auto-tracked metadata
+
+  view |> element("#btn") |> render_click()
+  html_snapshot(view)  # Another snapshot
+end
 ```
-
-This makes snapshots self-documenting and gives LLMs complete context about:
-- What test generated the snapshot
-- Where it falls in the event sequence
-- What LiveView assigns existed at that moment
-- What happened before and after
 
 ### Claude Documentation
 
-Run the installer or setup command to create `.claude_docs/excessibility.md`, teaching Claude how to use these debugging features:
+Create `.claude_docs/excessibility.md` to teach Claude how to use these debugging features:
 
 ```bash
 mix excessibility.setup_claude_docs
