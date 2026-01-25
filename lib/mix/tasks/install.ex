@@ -87,11 +87,12 @@ defmodule Mix.Tasks.Excessibility.Install do
         source
       else
         # Append before ExUnit.start() if present, otherwise at end
-        updated_content = if String.contains?(content, "ExUnit.start()") do
-          String.replace(content, "ExUnit.start()", telemetry_code <> "\nExUnit.start()")
-        else
-          content <> "\n\n" <> telemetry_code
-        end
+        updated_content =
+          if String.contains?(content, "ExUnit.start()") do
+            String.replace(content, "ExUnit.start()", telemetry_code <> "\nExUnit.start()")
+          else
+            content <> "\n\n" <> telemetry_code
+          end
 
         Rewrite.Source.update(source, :content, updated_content)
       end
