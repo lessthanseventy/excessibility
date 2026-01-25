@@ -3,6 +3,17 @@ defmodule Excessibility.TelemetryCapture.FilterTest do
 
   alias Excessibility.TelemetryCapture.Filter
 
+  # Test structs for nested function filtering
+  defmodule TestStruct do
+    @moduledoc false
+    defstruct [:id, :name, :callback, :nested]
+  end
+
+  defmodule NestedStruct do
+    @moduledoc false
+    defstruct [:value, :handler]
+  end
+
   describe "filter_ecto_metadata/1" do
     test "removes __meta__ fields from maps" do
       assigns = %{
@@ -173,20 +184,45 @@ defmodule Excessibility.TelemetryCapture.FilterTest do
       refute Map.has_key?(Enum.at(result.items, 1), :handler)
     end
 
-    test "preserves structs (doesn't recurse into them)" do
-      # Structs might have functions as implementation details
-      # We skip them entirely, only filtering regular maps
-      date = ~D[2024-01-01]
+    test "filters functions nested inside structs to prevent JSON encoding errors" do
+      # Real-world scenario: Phoenix forms with changesets containing functions
+      # Form → Changeset → function causes Jason.encode! to crash
+      callback = fn -> :ok end
+      handler = fn x -> x + 1 end
 
       assigns = %{
-        created_at: date,
-        callback: fn -> :ok end
+        form: %__MODULE__.TestStruct{
+          id: 1,
+          name: "test",
+          callback: callback,
+          nested: %__MODULE__.NestedStruct{
+            value: 42,
+            handler: handler
+          }
+        },
+        user_id: 123
       }
 
       result = Filter.filter_functions(assigns)
 
-      assert result.created_at == date
-      refute Map.has_key?(result, :callback)
+      # Structs should be converted to maps during filtering
+      assert is_map(result.form)
+      refute is_struct(result.form)
+      assert is_map(result.form.nested)
+      refute is_struct(result.form.nested)
+
+      # Should preserve non-function fields
+      assert result.form.id == 1
+      assert result.form.name == "test"
+      assert result.form.nested.value == 42
+      assert result.user_id == 123
+
+      # Should remove functions from inside structs
+      refute Map.has_key?(result.form, :callback)
+      refute Map.has_key?(result.form.nested, :handler)
+
+      # Should be JSON encodable (doesn't crash)
+      assert {:ok, _json} = Jason.encode(result)
     end
 
     test "preserves non-function data unchanged" do
