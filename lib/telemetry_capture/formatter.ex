@@ -14,4 +14,78 @@ defmodule Excessibility.TelemetryCapture.Formatter do
   def format_json(timeline) do
     Jason.encode!(timeline, pretty: true)
   end
+
+  @doc """
+  Formats timeline as markdown report.
+
+  Includes:
+  - Summary header
+  - Timeline table
+  - Detailed change sections
+  - Optional full snapshots (if snapshots provided)
+  """
+  def format_markdown(timeline, _snapshots) do
+    """
+    # Test Debug Report: #{timeline.test}
+
+    **Duration:** #{timeline.duration_ms}ms
+
+    ## Event Timeline
+
+    #{build_timeline_table(timeline.timeline)}
+
+    ## Detailed Changes
+
+    #{build_detailed_changes(timeline.timeline)}
+    """
+  end
+
+  defp build_timeline_table(entries) do
+    header = "| # | Time | Event | Key Changes |\n|---|------|-------|-------------|"
+
+    rows =
+      Enum.map_join(entries, "\n", fn entry ->
+        time = "+#{entry.duration_since_previous_ms || 0}ms"
+        changes = format_key_changes(entry.changes)
+        "| #{entry.sequence} | #{time} | #{entry.event} | #{changes} |"
+      end)
+
+    header <> "\n" <> rows
+  end
+
+  defp format_key_changes(nil), do: ""
+
+  defp format_key_changes(changes) when map_size(changes) == 0, do: ""
+
+  defp format_key_changes(changes) do
+    changes
+    |> Enum.take(3)
+    |> Enum.map_join(", ", fn {field, {old, new}} ->
+      "#{field}: #{inspect(old)}→#{inspect(new)}"
+    end)
+  end
+
+  defp build_detailed_changes(entries) do
+    entries
+    |> Enum.filter(fn entry -> entry.changes != nil and map_size(entry.changes) > 0 end)
+    |> Enum.map_join("\n\n---\n\n", &format_detailed_change/1)
+  end
+
+  defp format_detailed_change(entry) do
+    """
+    ### Event #{entry.sequence}: #{entry.event} (+#{entry.duration_since_previous_ms || 0}ms)
+
+    **State Changes:**
+    #{format_change_list(entry.changes)}
+
+    **Key State:**
+    ```elixir
+    #{inspect(entry.key_state, pretty: true)}
+    ```
+    """
+  end
+
+  defp format_change_list(changes) do
+    Enum.map_join(changes, "\n", fn {field, {old, new}} -> "- `#{field}`: #{inspect(old)} → #{inspect(new)}" end)
+  end
 end
