@@ -225,6 +225,50 @@ defmodule Excessibility.TelemetryCapture.FilterTest do
       assert {:ok, _json} = Jason.encode(result)
     end
 
+    test "filters lists of structs without crashing (regression test for #50)" do
+      # Bug: filter_functions crashed with Protocol.UndefinedError when processing
+      # lists of structs because it tried to enumerate structs directly
+      #
+      # Real-world scenario: LiveView assigns with Ecto query results
+      # assigns = %{customers: [%Customer{...}, %Customer{...}]}
+
+      callback = fn -> :ok end
+
+      assigns = %{
+        customers: [
+          %__MODULE__.TestStruct{id: 1, name: "Customer 1", callback: callback},
+          %__MODULE__.TestStruct{id: 2, name: "Customer 2", callback: callback},
+          %__MODULE__.TestStruct{id: 3, name: "Customer 3", callback: callback}
+        ],
+        user_id: 123
+      }
+
+      # Should not crash with Enumerable protocol error
+      result = Filter.filter_functions(assigns)
+
+      # List should be preserved
+      assert length(result.customers) == 3
+
+      # Each struct should be converted to a map
+      Enum.each(result.customers, fn customer ->
+        assert is_map(customer)
+        refute is_struct(customer)
+        refute Map.has_key?(customer, :callback)
+      end)
+
+      # Data should be preserved
+      assert Enum.at(result.customers, 0).id == 1
+      assert Enum.at(result.customers, 0).name == "Customer 1"
+      assert Enum.at(result.customers, 1).id == 2
+      assert Enum.at(result.customers, 1).name == "Customer 2"
+      assert Enum.at(result.customers, 2).id == 3
+      assert Enum.at(result.customers, 2).name == "Customer 3"
+      assert result.user_id == 123
+
+      # Should be JSON encodable
+      assert {:ok, _json} = Jason.encode(result)
+    end
+
     test "preserves non-function data unchanged" do
       assigns = %{
         simple: "value",
