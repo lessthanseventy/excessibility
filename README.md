@@ -32,6 +32,85 @@ Excessibility helps you test your Phoenix apps for accessibility (WCAG complianc
 - Mockable system/browser calls for CI
 - Pa11y configuration with sensible LiveView defaults
 
+## LLM Development Features
+
+Excessibility includes powerful features for debugging Phoenix apps with AI assistance (Claude, Cursor, etc.):
+
+### Auto-Capture Snapshots
+
+Automatically capture DOM snapshots at every LiveView state change:
+
+```elixir
+@tag capture_snapshots: true
+test "modal interaction", %{conn: conn} do
+  {:ok, view, _html} = live(conn, "/dashboard")
+  # Snapshot 1: initial render (automatic)
+
+  view |> element("#open-modal") |> render_click()
+  # Snapshot 2: after click (automatic)
+
+  view |> element("#submit") |> render_submit()
+  # Snapshot 3: after submit (automatic)
+end
+```
+
+### Debug Command
+
+Get complete test context with one command:
+
+```bash
+mix excessibility.debug test/my_test.exs
+```
+
+Outputs a comprehensive report with:
+- Test results and error output
+- All captured snapshots with inline HTML
+- Event timeline showing state changes
+- Metadata (assigns, timestamps, event sequence)
+
+The report is both human-readable and AI-parseable, making it perfect for pasting into Claude or other LLMs.
+
+**Other formats:**
+
+```bash
+mix excessibility.debug test/my_test.exs --format=json      # JSON output
+mix excessibility.debug test/my_test.exs --format=package   # Directory with MANIFEST
+mix excessibility.latest                                    # Re-display last report
+mix excessibility.package test/my_test.exs                  # Shortcut for package format
+```
+
+### Metadata in Snapshots
+
+Every auto-captured snapshot includes embedded metadata:
+
+```html
+<!--
+Excessibility Snapshot
+Test: modal_flow
+Sequence: 2
+Event: click_open_modal
+Timestamp: 2026-01-25T10:30:12Z
+Assigns: %{show_modal: true, user: %User{name: "Bob"}}
+Previous: modal_flow_1_initial.html
+-->
+
+<html>...</html>
+```
+
+This makes snapshots self-documenting and gives LLMs complete context about:
+- What test generated the snapshot
+- Where it falls in the event sequence
+- What LiveView assigns existed at that moment
+- What happened before and after
+
+### Claude Documentation
+
+Run the installer or setup command to create `.claude_docs/excessibility.md`, teaching Claude how to use these debugging features:
+
+```bash
+mix excessibility.setup_claude_docs
+```
+
 ## Installation
 
 Add to `mix.exs`:
@@ -247,6 +326,12 @@ Screenshots are saved alongside HTML files with `.png` extension.
 | `mix excessibility.compare` | Compare snapshots against baseline, resolve diffs interactively |
 | `mix excessibility.compare --keep good` | Keep all baseline versions (reject changes) |
 | `mix excessibility.compare --keep bad` | Accept all new versions as baseline |
+| `mix excessibility.debug [test]` | Run test and generate comprehensive debug report |
+| `mix excessibility.debug [test] --format=json` | Output debug report as JSON |
+| `mix excessibility.debug [test] --format=package` | Create debug package directory |
+| `mix excessibility.latest` | Display most recent debug report |
+| `mix excessibility.package [test]` | Create debug package (alias for --format=package) |
+| `mix excessibility.setup_claude_docs` | Create/update .claude_docs/excessibility.md |
 
 ## CI and Non-Interactive Environments
 

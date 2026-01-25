@@ -43,6 +43,7 @@ defmodule Mix.Tasks.Excessibility.Install do
     |> ensure_test_config(endpoint, head_render_path)
     |> ensure_pa11y_config()
     |> maybe_install_pa11y(assets_dir, skip_npm?)
+    |> maybe_create_claude_docs()
   end
 
   defp fallback_endpoint(nil, igniter) do
@@ -125,5 +126,128 @@ defmodule Mix.Tasks.Excessibility.Install do
   defp default_assets_dir do
     dep_path = Mix.Project.deps_paths()[:excessibility] || File.cwd!()
     Path.join(dep_path, "assets")
+  end
+
+  defp maybe_create_claude_docs(igniter) do
+    claude_docs_path = ".claude_docs/excessibility.md"
+
+    if File.exists?(claude_docs_path) do
+      # Ask if they want to update
+      Igniter.add_notice(
+        igniter,
+        """
+        Found existing #{claude_docs_path}
+
+        To update with latest Excessibility features, run:
+        mix excessibility.setup_claude_docs
+        """
+      )
+    else
+      if File.exists?(".claude_docs") do
+        # .claude_docs exists, create the file
+        Igniter.create_or_update_file(igniter, claude_docs_path, claude_docs_content(), fn source ->
+          # File exists, don't overwrite
+          source
+        end)
+      else
+        # Suggest creating .claude_docs
+        Igniter.add_notice(
+          igniter,
+          """
+          💡 Using Excessibility with Claude?
+
+          Create .claude_docs/excessibility.md to teach Claude how to:
+          - Use mix excessibility.debug for instant context
+          - Automatically capture LiveView state changes
+          - Analyze snapshots without manual file management
+
+          Run: mix excessibility.setup_claude_docs
+          """
+        )
+      end
+    end
+  end
+
+  defp claude_docs_content do
+    """
+    # Excessibility - LLM Development Workflow
+
+    Excessibility helps debug Phoenix apps by capturing HTML snapshots during tests.
+
+    ## Quick Commands
+
+    ### Debug a test
+    ```bash
+    mix excessibility.debug test/my_test.exs
+    ```
+    Runs test, captures snapshots, outputs complete debug report with inline HTML.
+
+    ### Show latest debug session
+    ```bash
+    mix excessibility.latest
+    ```
+    Re-displays most recent debug without re-running test.
+
+    ### Create shareable package
+    ```bash
+    mix excessibility.package test/my_test.exs
+    ```
+    Creates directory with MANIFEST, timeline, and all snapshots.
+
+    ## In Tests
+
+    ### Auto-capture snapshots
+    ```elixir
+    @tag capture_snapshots: true
+    test "user flow", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/dashboard")
+      view |> element("#button") |> render_click()
+      # Snapshots captured automatically at each step
+    end
+    ```
+
+    ### Granular control
+    ```elixir
+    @tag capture: :clicks           # Only clicks
+    @tag capture: [:initial, :final] # Just first and last
+    @tag capture: :on_change        # Only when DOM changes
+    ```
+
+    ## Snapshot Metadata
+
+    Every snapshot includes metadata as HTML comment:
+    - Test name
+    - Event sequence number
+    - Event type (click, change, submit, etc.)
+    - LiveView assigns at that moment
+    - Timestamp
+    - Previous/next snapshot references
+
+    ## Typical Workflow
+
+    1. User reports failing test
+    2. You run: `mix excessibility.debug test/failing_test.exs`
+    3. Paste the output here (or tell me to read latest_debug.md)
+    4. I analyze snapshots and identify the issue
+    5. I suggest fixes
+
+    ## Why This Helps
+
+    LLMs can't:
+    - Run your Phoenix app
+    - Attach debuggers
+    - Use IEx.pry()
+    - See what actually renders
+
+    Snapshots give me the actual DOM output so I can reason about real
+    behavior instead of guessing from documentation.
+
+    ## Tips
+
+    - Use descriptive test names - they become snapshot filenames
+    - Enable `generate_timeline: true` for complex flows
+    - The timeline.json shows state changes clearly
+    - Metadata in snapshots shows LiveView assigns at each step
+    """
   end
 end

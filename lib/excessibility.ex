@@ -50,10 +50,51 @@ defmodule Excessibility do
   ## Example
 
       use Excessibility
+
+  ## Auto-Capture
+
+  Use `@tag capture_snapshots: true` to automatically capture snapshots:
+
+      @tag capture_snapshots: true
+      test "user flow", %{conn: conn} do
+        {:ok, view, _html} = live(conn, "/dashboard")
+        # Snapshots captured automatically
+      end
   """
   defmacro __using__(_opts) do
     quote do
       import Excessibility, only: [html_snapshot: 1, html_snapshot: 2]
+
+      setup context do
+        # Store test name for telemetry capture
+        if System.get_env("EXCESSIBILITY_TELEMETRY_CAPTURE") == "true" do
+          test_name = context[:test]
+          Process.put(:excessibility_test_name, test_name)
+          Excessibility.TelemetryCapture.clear_snapshots(test_name)
+        end
+
+        if context[:capture_snapshots] || context[:capture] do
+          test_name = context[:test]
+          Excessibility.Capture.init_capture(test_name, context)
+        end
+
+        on_exit(fn ->
+          # Write telemetry snapshots to files if captured
+          if System.get_env("EXCESSIBILITY_TELEMETRY_CAPTURE") == "true" do
+            Excessibility.TelemetryCapture.write_snapshots(context[:test])
+            Excessibility.TelemetryCapture.clear_snapshots()
+          end
+
+          # Save timeline if requested
+          if context[:generate_timeline] do
+            Excessibility.Capture.save_timeline()
+          end
+
+          Excessibility.Capture.clear_state()
+        end)
+
+        :ok
+      end
     end
   end
 
