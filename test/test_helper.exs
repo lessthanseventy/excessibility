@@ -12,7 +12,15 @@ Code.require_file("test/support/test_endpoint.ex", File.cwd!())
 
 ExUnit.start()
 
-{:ok, _} = ChromicPDF.start_link(name: ChromicPDF)
+# Start ChromicPDF if Chrome is available, otherwise skip screenshot tests
+case ChromicPDF.start_link(name: ChromicPDF) do
+  {:ok, _} ->
+    ExUnit.configure(exclude: [])
+
+  {:error, reason} ->
+    IO.warn("ChromicPDF failed to start: #{inspect(reason)}. Skipping screenshot tests.")
+    ExUnit.configure(exclude: [screenshot: true])
+end
 
 Mox.defmock(Excessibility.LiveViewMock, for: Excessibility.LiveView.Behaviour)
 Mox.defmock(Excessibility.BrowserMock, for: Excessibility.BrowserBehaviour)

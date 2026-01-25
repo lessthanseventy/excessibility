@@ -68,6 +68,7 @@ end
 defmodule Excessibility.ScreenshotTest do
   use ExUnit.Case, async: false
 
+  @tag :screenshot
   test "generates screenshots when screenshot? option is true" do
     filename = "screenshot_test.html"
     snapshot_path = Path.join(["test/excessibility/html_snapshots", filename])
