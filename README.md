@@ -4,6 +4,7 @@
 [![Hex Docs](https://img.shields.io/badge/hex-docs-lightgrey.svg)](https://hexdocs.pm/excessibility)
 [![CI](https://github.com/lessthanseventy/excessibility/actions/workflows/ci.yml/badge.svg)](https://github.com/lessthanseventy/excessibility/actions)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.md)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/lessthanseventy/excessibility)
 
 **Accessibility Snapshot Testing for Elixir + Phoenix**
 
@@ -149,7 +150,7 @@ Add to `mix.exs`:
 ```elixir
 def deps do
   [
-    {:excessibility, "~> 0.5", only: [:dev, :test]}
+    {:excessibility, "~> 0.6", only: [:dev, :test]}
   ]
 end
 ```
