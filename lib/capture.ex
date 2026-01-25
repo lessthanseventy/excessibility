@@ -42,6 +42,7 @@ defmodule Excessibility.Capture do
 
       state ->
         sequence = state.sequence + 1
+
         event = %{
           sequence: sequence,
           type: event_type,
@@ -76,13 +77,16 @@ defmodule Excessibility.Capture do
   """
   def get_timeline do
     case get_state() do
-      nil -> nil
-      state -> %{
-        test_name: state.test_name,
-        start_time: state.start_time,
-        events: state.events,
-        total_events: length(state.events)
-      }
+      nil ->
+        nil
+
+      state ->
+        %{
+          test_name: state.test_name,
+          start_time: state.start_time,
+          events: state.events,
+          total_events: length(state.events)
+        }
     end
   end
 
@@ -95,11 +99,12 @@ defmodule Excessibility.Capture do
         :ok
 
       timeline ->
-        output_path = Application.get_env(
-          :excessibility,
-          :excessibility_output_path,
-          "test/excessibility"
-        )
+        output_path =
+          Application.get_env(
+            :excessibility,
+            :excessibility_output_path,
+            "test/excessibility"
+          )
 
         timelines_path = Path.join(output_path, "timelines")
         File.mkdir_p!(timelines_path)
@@ -122,6 +127,7 @@ defmodule Excessibility.Capture do
   end
 
   defp get_previous_snapshot_name(%{sequence: 0}), do: nil
+
   defp get_previous_snapshot_name(%{test_name: test_name, sequence: seq}) do
     "#{test_name}_#{seq}.html"
   end

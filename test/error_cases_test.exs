@@ -3,13 +3,12 @@ defmodule Excessibility.ErrorCasesTest do
 
   describe "Snapshot screenshot failures" do
     test "handles ChromicPDF not started gracefully" do
+      import ExUnit.CaptureLog
       # Stop ChromicPDF if it's running
       case Process.whereis(ChromicPDF) do
         nil -> :ok
         pid -> GenServer.stop(pid)
       end
-
-      import ExUnit.CaptureLog
 
       conn =
         :get

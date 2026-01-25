@@ -1,4 +1,6 @@
 defmodule Mix.Tasks.Excessibility.SetupClaudeDocs do
+  @shortdoc "Create .claude_docs/excessibility.md"
+
   @moduledoc """
   Create or update .claude_docs/excessibility.md
 
@@ -15,8 +17,6 @@ defmodule Mix.Tasks.Excessibility.SetupClaudeDocs do
   """
 
   use Mix.Task
-
-  @shortdoc "Create .claude_docs/excessibility.md"
 
   @impl Mix.Task
   def run(_args) do

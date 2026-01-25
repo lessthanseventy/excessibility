@@ -1,4 +1,6 @@
 defmodule Mix.Tasks.Excessibility.Latest do
+  @shortdoc "Display the most recent debug report"
+
   @moduledoc """
   Display the most recent debug report without re-running tests.
 
@@ -23,27 +25,28 @@ defmodule Mix.Tasks.Excessibility.Latest do
 
   use Mix.Task
 
-  @shortdoc "Display the most recent debug report"
-
   @impl Mix.Task
   def run(args) do
-    {opts, _, _} = OptionParser.parse(args,
-      strict: [format: :string],
-      aliases: [f: :format]
-    )
+    {opts, _, _} =
+      OptionParser.parse(args,
+        strict: [format: :string],
+        aliases: [f: :format]
+      )
 
     format = Keyword.get(opts, :format, "markdown")
 
-    output_path = Application.get_env(
-      :excessibility,
-      :excessibility_output_path,
-      "test/excessibility"
-    )
+    output_path =
+      Application.get_env(
+        :excessibility,
+        :excessibility_output_path,
+        "test/excessibility"
+      )
 
-    file_path = case format do
-      "json" -> Path.join(output_path, "latest_debug.json")
-      _ -> Path.join(output_path, "latest_debug.md")
-    end
+    file_path =
+      case format do
+        "json" -> Path.join(output_path, "latest_debug.json")
+        _ -> Path.join(output_path, "latest_debug.md")
+      end
 
     if File.exists?(file_path) do
       content = File.read!(file_path)

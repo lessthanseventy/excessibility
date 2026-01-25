@@ -139,8 +139,12 @@ defmodule Mix.Tasks.Excessibility.Compare do
       str -> String.trim(String.downcase(str))
     end
     |> case do
-      choice when choice in ["g", "good"] -> :good
-      choice when choice in ["b", "bad"] -> :bad
+      choice when choice in ["g", "good"] ->
+        :good
+
+      choice when choice in ["b", "bad"] ->
+        :bad
+
       _ ->
         Mix.shell().info("Unrecognized response, defaulting to bad (new version).")
         :bad

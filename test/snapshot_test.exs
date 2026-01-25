@@ -25,9 +25,7 @@ defmodule Excessibility.SnapshotTest do
       :ok
     end)
 
-    Excessibility.Snapshot.html_snapshot(conn, %{line: 0}, __MODULE__,
-      open_browser?: true
-    )
+    Excessibility.Snapshot.html_snapshot(conn, %{line: 0}, __MODULE__, open_browser?: true)
 
     assert File.exists?(full_path)
     File.rm(full_path)
@@ -50,9 +48,7 @@ defmodule Excessibility.SnapshotTest do
       |> Plug.Conn.put_resp_content_type("text/html")
       |> Plug.Conn.send_resp(200, "<html><body>New</body></html>")
 
-    Excessibility.Snapshot.html_snapshot(conn, %{line: 50}, __MODULE__,
-      cleanup?: true
-    )
+    Excessibility.Snapshot.html_snapshot(conn, %{line: 50}, __MODULE__, cleanup?: true)
 
     # Old snapshots for this module should be deleted
     refute File.exists?(Path.join(snapshot_dir, "Elixir_Excessibility_SnapshotTest_10.html"))

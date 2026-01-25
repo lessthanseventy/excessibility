@@ -1,4 +1,6 @@
 defmodule Mix.Tasks.Excessibility.Package do
+  @shortdoc "Create a shareable debug package"
+
   @moduledoc """
   Create a debug package for a test.
 
@@ -20,8 +22,6 @@ defmodule Mix.Tasks.Excessibility.Package do
   """
 
   use Mix.Task
-
-  @shortdoc "Create a shareable debug package"
 
   @impl Mix.Task
   def run(args) do
