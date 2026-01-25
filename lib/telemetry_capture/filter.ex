@@ -76,16 +76,33 @@ defmodule Excessibility.TelemetryCapture.Filter do
   - Function values (callbacks, event handlers, socket refs)
 
   Recursively processes:
+  - Structs (converted to maps)
   - Maps (non-struct)
   - Lists
   """
   def filter_functions(assigns) when is_map(assigns) do
     Enum.reduce(assigns, %{}, fn {key, value}, acc ->
       cond do
-        is_function(value) -> acc
-        is_map(value) and not is_struct(value) -> Map.put(acc, key, filter_functions(value))
-        is_list(value) -> Map.put(acc, key, Enum.map(value, &filter_functions/1))
-        true -> Map.put(acc, key, value)
+        is_function(value) ->
+          acc
+
+        is_struct(value) ->
+          # Convert struct to map and filter recursively
+          filtered =
+            value
+            |> Map.from_struct()
+            |> filter_functions()
+
+          Map.put(acc, key, filtered)
+
+        is_map(value) ->
+          Map.put(acc, key, filter_functions(value))
+
+        is_list(value) ->
+          Map.put(acc, key, Enum.map(value, &filter_functions/1))
+
+        true ->
+          Map.put(acc, key, value)
       end
     end)
   end
