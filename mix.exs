@@ -8,7 +8,7 @@ defmodule Excessibility.MixProject do
     [
       app: :excessibility,
       version: @version,
-      elixir: "~> 1.13",
+      elixir: "~> 1.14",
       start_permanent: false,
       name: "Excessibility",
       description: description(),
