@@ -50,6 +50,47 @@ defmodule Excessibility.TelemetryCapture.FormatterTest do
       # Tuple {old, new} becomes list [old, new] in JSON
       assert first_event["changes"]["status"] == ["pending", "complete"]
     end
+
+    test "converts Ecto structs to maps for JSON encoding" do
+      # Simulate an Ecto schema User struct
+      user = %{
+        __struct__: User,
+        __meta__: %{state: :loaded, source: "users"},
+        id: 42,
+        email: "test@example.com",
+        name: "Test User"
+      }
+
+      timeline = %{
+        test: "test_with_ecto",
+        duration_ms: 200,
+        timeline: [
+          %{
+            sequence: 1,
+            event: "mount",
+            timestamp: ~U[2026-01-25 10:00:00Z],
+            key_state: %{current_user: user},
+            changes: nil
+          }
+        ]
+      }
+
+      result = Formatter.format_json(timeline)
+
+      # Should successfully encode without crashing
+      assert is_binary(result)
+      decoded = Jason.decode!(result)
+
+      # Struct should be converted to map
+      first_event = List.first(decoded["timeline"])
+      user_data = first_event["key_state"]["current_user"]
+
+      # Should have user fields but not __meta__
+      assert user_data["id"] == 42
+      assert user_data["email"] == "test@example.com"
+      assert user_data["name"] == "Test User"
+      refute Map.has_key?(user_data, "__meta__")
+    end
   end
 
   describe "format_markdown/2" do
