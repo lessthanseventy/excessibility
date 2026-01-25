@@ -65,4 +65,48 @@ defmodule Excessibility.TelemetryCapture.FilterTest do
       assert result == assigns
     end
   end
+
+  describe "filter_phoenix_internals/1" do
+    test "removes flash" do
+      assigns = %{
+        flash: %{"info" => "Success"},
+        user_id: 123
+      }
+
+      result = Filter.filter_phoenix_internals(assigns)
+
+      refute Map.has_key?(result, :flash)
+      assert result.user_id == 123
+    end
+
+    test "removes __changed__ and __temp__" do
+      assigns = %{
+        __changed__: %{user: true},
+        __temp__: %{},
+        data: "keep"
+      }
+
+      result = Filter.filter_phoenix_internals(assigns)
+
+      refute Map.has_key?(result, :__changed__)
+      refute Map.has_key?(result, :__temp__)
+      assert result.data == "keep"
+    end
+
+    test "removes private assigns starting with underscore" do
+      assigns = %{
+        _private: "remove",
+        _internal_state: "remove",
+        public: "keep",
+        __special__: "remove"
+      }
+
+      result = Filter.filter_phoenix_internals(assigns)
+
+      refute Map.has_key?(result, :_private)
+      refute Map.has_key?(result, :_internal_state)
+      refute Map.has_key?(result, :__special__)
+      assert result.public == "keep"
+    end
+  end
 end
