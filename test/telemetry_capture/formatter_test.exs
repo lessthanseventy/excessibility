@@ -194,5 +194,43 @@ defmodule Excessibility.TelemetryCapture.FormatterTest do
       assert result =~ "**State Changes:**"
       assert result =~ "- `status`: :pending → :complete"
     end
+
+    test "handles list format from JSON deserialization (regression test for #54)" do
+      # Reproduces the bug: timeline.json has lists, not tuples
+      # This simulates what happens when we read timeline.json from disk
+      timeline = %{
+        test: "test_from_json",
+        duration_ms: 200,
+        timeline: [
+          %{
+            sequence: 1,
+            event: "mount",
+            timestamp: ~U[2026-01-25 10:00:00Z],
+            key_state: %{user_id: 123},
+            changes: nil,
+            duration_since_previous_ms: nil
+          },
+          %{
+            sequence: 2,
+            event: "handle_event:click",
+            timestamp: ~U[2026-01-25 10:00:00.200Z],
+            key_state: %{user_id: 123, clicked: true},
+            # Lists instead of tuples (as they come from JSON)
+            changes: %{"clicked" => [false, true], "status" => ["pending", "done"]},
+            duration_since_previous_ms: 200
+          }
+        ]
+      }
+
+      # Should not crash with FunctionClauseError
+      result = Formatter.format_markdown(timeline, [])
+
+      # Verify markdown is generated correctly
+      assert result =~ "# Test Debug Report: test_from_json"
+      assert result =~ "| 2 | +200ms | handle_event:click | clicked: false→true, status: \"pending\"→\"done\" |"
+      assert result =~ "### Event 2: handle_event:click (+200ms)"
+      assert result =~ "- `clicked`: false → true"
+      assert result =~ "- `status`: \"pending\" → \"done\""
+    end
   end
 end

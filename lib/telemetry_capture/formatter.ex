@@ -97,7 +97,8 @@ defmodule Excessibility.TelemetryCapture.Formatter do
   defp format_key_changes(changes) do
     changes
     |> Enum.take(3)
-    |> Enum.map_join(", ", fn {field, {old, new}} ->
+    |> Enum.map_join(", ", fn {field, value} ->
+      {old, new} = normalize_change_value(value)
       "#{field}: #{inspect(old)}→#{inspect(new)}"
     end)
   end
@@ -123,6 +124,13 @@ defmodule Excessibility.TelemetryCapture.Formatter do
   end
 
   defp format_change_list(changes) do
-    Enum.map_join(changes, "\n", fn {field, {old, new}} -> "- `#{field}`: #{inspect(old)} → #{inspect(new)}" end)
+    Enum.map_join(changes, "\n", fn {field, value} ->
+      {old, new} = normalize_change_value(value)
+      "- `#{field}`: #{inspect(old)} → #{inspect(new)}"
+    end)
   end
+
+  # Handle both tuple format (in-memory) and list format (from JSON)
+  defp normalize_change_value({old, new}), do: {old, new}
+  defp normalize_change_value([old, new]), do: {old, new}
 end
