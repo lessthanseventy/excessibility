@@ -11,7 +11,8 @@ defmodule Excessibility.TelemetryCapture.Formatter do
   @doc """
   Formats timeline as JSON.
 
-  Converts tuples to lists for JSON compatibility.
+  Converts tuples to lists and structs to maps for JSON compatibility.
+  Removes Ecto `__meta__` fields from converted structs.
   """
   def format_json(timeline) do
     timeline
@@ -29,8 +30,13 @@ defmodule Excessibility.TelemetryCapture.Formatter do
     Enum.map(data, &prepare_for_json/1)
   end
 
-  # Handle structs (let Jason encode them as-is)
-  defp prepare_for_json(%{__struct__: _} = data), do: data
+  # Handle structs (convert to maps for JSON encoding)
+  defp prepare_for_json(%{__struct__: _} = struct) do
+    struct
+    |> Map.from_struct()
+    |> Map.drop([:__meta__])
+    |> prepare_for_json()
+  end
 
   # Handle regular maps
   defp prepare_for_json(data) when is_map(data) do
