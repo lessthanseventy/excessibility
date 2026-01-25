@@ -27,6 +27,29 @@ defmodule Excessibility.TelemetryCapture.FormatterTest do
       assert decoded["duration_ms"] == 500
       assert length(decoded["timeline"]) == 1
     end
+
+    test "converts tuples to lists for JSON compatibility" do
+      timeline = %{
+        test: "test",
+        duration_ms: 100,
+        timeline: [
+          %{
+            sequence: 1,
+            event: "mount",
+            timestamp: ~U[2026-01-25 10:00:00Z],
+            key_state: %{status: :pending},
+            changes: %{"status" => {:pending, :complete}}
+          }
+        ]
+      }
+
+      result = Formatter.format_json(timeline)
+
+      decoded = Jason.decode!(result)
+      first_event = List.first(decoded["timeline"])
+      # Tuple {old, new} becomes list [old, new] in JSON
+      assert first_event["changes"]["status"] == ["pending", "complete"]
+    end
   end
 
   describe "format_markdown/2" do
