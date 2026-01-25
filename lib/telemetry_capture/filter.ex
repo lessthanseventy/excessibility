@@ -80,6 +80,12 @@ defmodule Excessibility.TelemetryCapture.Filter do
   - Maps (non-struct)
   - Lists
   """
+  def filter_functions(struct) when is_struct(struct) do
+    struct
+    |> Map.from_struct()
+    |> filter_functions()
+  end
+
   def filter_functions(assigns) when is_map(assigns) do
     Enum.reduce(assigns, %{}, fn {key, value}, acc ->
       cond do
