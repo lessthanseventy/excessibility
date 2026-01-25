@@ -11,6 +11,7 @@ defmodule Mix.Tasks.Excessibility.Install do
   """
   use Igniter.Mix.Task
 
+  alias Igniter.Libs.Phoenix
   alias Igniter.Mix.Task.Info
   alias Igniter.Project.Config
   alias Igniter.Project.Module, as: ProjectModule
@@ -49,7 +50,7 @@ defmodule Mix.Tasks.Excessibility.Install do
 
   defp fallback_endpoint(nil, igniter) do
     igniter
-    |> Igniter.Libs.Phoenix.web_module()
+    |> Phoenix.web_module()
     |> Module.concat("Endpoint")
   rescue
     _ -> "MyAppWeb.Endpoint"
@@ -82,21 +83,21 @@ defmodule Mix.Tasks.Excessibility.Install do
     Igniter.update_file(igniter, test_helper_path, fn source ->
       content = Rewrite.Source.get(source, :content)
 
-      # Check if already present to avoid duplicates
       if String.contains?(content, "Excessibility.TelemetryCapture.attach") do
         source
       else
-        # Append before ExUnit.start() if present, otherwise at end
-        updated_content =
-          if String.contains?(content, "ExUnit.start()") do
-            String.replace(content, "ExUnit.start()", telemetry_code <> "\nExUnit.start()")
-          else
-            content <> "\n\n" <> telemetry_code
-          end
-
+        updated_content = inject_telemetry_code(content, telemetry_code)
         Rewrite.Source.update(source, :content, updated_content)
       end
     end)
+  end
+
+  defp inject_telemetry_code(content, telemetry_code) do
+    if String.contains?(content, "ExUnit.start()") do
+      String.replace(content, "ExUnit.start()", telemetry_code <> "\nExUnit.start()")
+    else
+      content <> "\n\n" <> telemetry_code
+    end
   end
 
   defp ensure_pa11y_config(igniter) do
@@ -163,26 +164,24 @@ defmodule Mix.Tasks.Excessibility.Install do
   defp maybe_create_claude_docs(igniter) do
     claude_docs_path = ".claude_docs/excessibility.md"
 
-    if File.exists?(claude_docs_path) do
-      # Ask if they want to update
-      Igniter.add_notice(
-        igniter,
-        """
-        Found existing #{claude_docs_path}
+    cond do
+      File.exists?(claude_docs_path) ->
+        Igniter.add_notice(
+          igniter,
+          """
+          Found existing #{claude_docs_path}
 
-        To update with latest Excessibility features, run:
-        mix excessibility.setup_claude_docs
-        """
-      )
-    else
-      if File.exists?(".claude_docs") do
-        # .claude_docs exists, create the file
+          To update with latest Excessibility features, run:
+          mix excessibility.setup_claude_docs
+          """
+        )
+
+      File.exists?(".claude_docs") ->
         Igniter.create_or_update_file(igniter, claude_docs_path, claude_docs_content(), fn source ->
-          # File exists, don't overwrite
           source
         end)
-      else
-        # Suggest creating .claude_docs
+
+      true ->
         Igniter.add_notice(
           igniter,
           """
@@ -196,7 +195,6 @@ defmodule Mix.Tasks.Excessibility.Install do
           Run: mix excessibility.setup_claude_docs
           """
         )
-      end
     end
   end
 

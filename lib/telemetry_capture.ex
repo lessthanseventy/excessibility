@@ -65,51 +65,55 @@ defmodule Excessibility.TelemetryCapture do
     socket = metadata[:socket]
 
     if socket do
-      # Extract assigns - handle both struct and map
-      assigns =
-        cond do
-          is_struct(socket.assigns) -> Map.from_struct(socket.assigns)
-          is_map(socket.assigns) -> socket.assigns
-          true -> %{}
-        end
+      clean_assigns = extract_clean_assigns(socket)
+      view_module = extract_view_module(socket, metadata)
 
-      # Filter out internal Phoenix assigns
-      clean_assigns =
-        assigns
-        |> Map.drop([:flash, :__changed__, :__temp__])
-        |> Enum.filter(fn {k, _v} -> !String.starts_with?(to_string(k), "_") end)
-        |> Map.new()
-
-      # Get view module
-      view_module =
-        cond do
-          is_struct(socket) && Map.has_key?(socket, :view) -> socket.view
-          is_map(metadata) && Map.has_key?(metadata, :view) -> metadata[:view]
-          true -> :unknown
-        end
-
-      # Store in ETS for cross-process access
-      # Use current timestamp as a unique key
-      key = {DateTime.utc_now(), :erlang.unique_integer([:monotonic])}
-
-      snapshot = %{
-        event_type: event_type,
-        assigns: clean_assigns,
-        timestamp: DateTime.utc_now(),
-        view_module: view_module,
-        metadata_keys: Map.keys(metadata)
-      }
-
-      :ets.insert(:excessibility_snapshots, {key, snapshot})
-
-      IO.puts("✅ Captured telemetry snapshot for #{event_type}")
-      Logger.debug("Excessibility: Captured snapshot for #{event_type} with assigns: #{inspect(Map.keys(clean_assigns))}")
+      store_snapshot(event_type, clean_assigns, view_module, metadata)
     else
       Logger.debug("Excessibility: No socket in metadata for #{event_type}")
     end
   rescue
     error ->
       Logger.warning("Excessibility: Failed to capture snapshot for #{event_type}: #{inspect(error)}")
+  end
+
+  defp extract_clean_assigns(socket) do
+    assigns =
+      cond do
+        is_struct(socket.assigns) -> Map.from_struct(socket.assigns)
+        is_map(socket.assigns) -> socket.assigns
+        true -> %{}
+      end
+
+    assigns
+    |> Map.drop([:flash, :__changed__, :__temp__])
+    |> Enum.filter(fn {k, _v} -> !String.starts_with?(to_string(k), "_") end)
+    |> Map.new()
+  end
+
+  defp extract_view_module(socket, metadata) do
+    cond do
+      is_struct(socket) && Map.has_key?(socket, :view) -> socket.view
+      is_map(metadata) && Map.has_key?(metadata, :view) -> metadata[:view]
+      true -> :unknown
+    end
+  end
+
+  defp store_snapshot(event_type, clean_assigns, view_module, metadata) do
+    key = {DateTime.utc_now(), :erlang.unique_integer([:monotonic])}
+
+    snapshot = %{
+      event_type: event_type,
+      assigns: clean_assigns,
+      timestamp: DateTime.utc_now(),
+      view_module: view_module,
+      metadata_keys: Map.keys(metadata)
+    }
+
+    :ets.insert(:excessibility_snapshots, {key, snapshot})
+
+    IO.puts("✅ Captured telemetry snapshot for #{event_type}")
+    Logger.debug("Excessibility: Captured snapshot for #{event_type} with assigns: #{inspect(Map.keys(clean_assigns))}")
   end
 
   @doc """
