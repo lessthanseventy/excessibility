@@ -59,6 +59,42 @@ mix excessibility.approve --keep good
 mix excessibility.approve --keep bad
 ```
 
+### Timeline Analysis
+
+The telemetry capture automatically generates `timeline.json` for each test run:
+
+```bash
+# Run test with telemetry capture
+mix test test/my_live_view_test.exs
+
+# View timeline
+cat test/excessibility/timeline.json
+
+# Generate debug report with filtering options
+mix excessibility.debug test/my_live_view_test.exs
+mix excessibility.debug test/my_live_view_test.exs --full
+mix excessibility.debug test/my_live_view_test.exs --highlight=current_user,cart
+```
+
+Timeline JSON structure:
+- `test` - Test name
+- `duration_ms` - Total test duration
+- `timeline[]` - Array of events with:
+  - `sequence` - Event number
+  - `event` - Event type (mount, handle_event:name, etc.)
+  - `timestamp` - ISO8601 timestamp
+  - `key_state` - Extracted important state
+  - `changes` - Diff from previous event
+
+**Filtering Options:**
+
+By default, telemetry snapshots filter out noise:
+- Ecto `__meta__` fields and `NotLoaded` associations
+- Phoenix internals (`flash`, `__changed__`, `__temp__`)
+- Private assigns (starting with `_`)
+
+Use `--full` to disable filtering and see complete assigns.
+
 ### Installation (for testing installer)
 ```bash
 # Run the installer task
