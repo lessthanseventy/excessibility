@@ -45,9 +45,11 @@ jobs:
         run: mix deps.get
 
       - name: Check for unused dependencies
+        if: matrix.elixir == '1.17'
         run: mix deps.unlock --check-unused
 
       - name: Check code formatting
+        if: matrix.elixir == '1.17'
         run: mix format --check-formatted
 
       - name: Compile with warnings as errors
@@ -56,10 +58,12 @@ jobs:
           MIX_ENV: test
 
       - name: Run Credo
+        if: matrix.elixir == '1.17'
         run: mix credo --strict
 
       - name: Run tests
         run: mix test
 
       - name: Build documentation
+        if: matrix.elixir == '1.17'
         run: mix docs
