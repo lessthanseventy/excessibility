@@ -41,6 +41,7 @@ defmodule Mix.Tasks.Excessibility.Install do
 
     igniter
     |> ensure_test_config(endpoint, head_render_path)
+    |> ensure_test_helper()
     |> ensure_pa11y_config()
     |> maybe_install_pa11y(assets_dir, skip_npm?)
     |> maybe_create_claude_docs()
@@ -65,6 +66,32 @@ defmodule Mix.Tasks.Excessibility.Install do
     |> Config.configure("test.exs", :excessibility, [:browser_mod], Wallaby.Browser)
     |> Config.configure("test.exs", :excessibility, [:live_view_mod], Excessibility.LiveView)
     |> Config.configure("test.exs", :excessibility, [:system_mod], Excessibility.System)
+  end
+
+  defp ensure_test_helper(igniter) do
+    test_helper_path = "test/test_helper.exs"
+
+    telemetry_code = """
+    # Enable Excessibility telemetry-based auto-capture for debugging
+    # This is automatically enabled when running: mix excessibility.debug
+    if System.get_env("EXCESSIBILITY_TELEMETRY_CAPTURE") == "true" do
+      Excessibility.TelemetryCapture.attach()
+    end
+    """
+
+    Igniter.create_or_update_file(igniter, test_helper_path, telemetry_code, fn existing ->
+      # Check if already present to avoid duplicates
+      if String.contains?(existing, "Excessibility.TelemetryCapture.attach") do
+        existing
+      else
+        # Append before ExUnit.start() if present, otherwise at end
+        if String.contains?(existing, "ExUnit.start()") do
+          String.replace(existing, "ExUnit.start()", telemetry_code <> "\nExUnit.start()")
+        else
+          existing <> "\n\n" <> telemetry_code
+        end
+      end
+    end)
   end
 
   defp ensure_pa11y_config(igniter) do
