@@ -150,7 +150,7 @@ Add to `mix.exs`:
 ```elixir
 def deps do
   [
-    {:excessibility, "~> 0.6", only: [:dev, :test]}
+    {:excessibility, "~> 0.7", only: [:dev, :test]}
   ]
 end
 ```
