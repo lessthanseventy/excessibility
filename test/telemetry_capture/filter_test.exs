@@ -269,6 +269,46 @@ defmodule Excessibility.TelemetryCapture.FilterTest do
       assert {:ok, _json} = Jason.encode(result)
     end
 
+    test "filters functions inside tuples (regression test for #52)" do
+      # Bug: Functions inside tuples (e.g., Ecto.Type internals) slip through
+      # filter_functions and crash Jason.encode with "not implemented for Function"
+      #
+      # Real-world scenario: Ecto types contain function references in tuples
+      # e.g., &Ecto.Type.empty_trimmed_string?/1
+      func_ref = &String.length/1
+      callback = fn -> :ok end
+
+      assigns = %{
+        user_id: 123,
+        # Function in a tuple (common in Ecto internal structures)
+        validation: {:string, func_ref, []},
+        # Function in nested tuple
+        nested_tuple: {:ok, {:validator, callback}},
+        # Function in list of tuples
+        validators: [
+          {:required, func_ref},
+          {:length, callback}
+        ]
+      }
+
+      result = Filter.filter_functions(assigns)
+
+      # Tuples should be converted to lists
+      assert is_list(result.validation)
+      assert is_list(result.nested_tuple)
+
+      # Functions should be removed
+      assert result.validation == [:string, []]
+      assert result.nested_tuple == [:ok, [:validator]]
+      assert result.validators == [[:required], [:length]]
+
+      # Non-function data should be preserved
+      assert result.user_id == 123
+
+      # Should be JSON encodable (doesn't crash)
+      assert {:ok, _json} = Jason.encode(result)
+    end
+
     test "preserves non-function data unchanged" do
       assigns = %{
         simple: "value",

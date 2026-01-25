@@ -43,6 +43,12 @@ defmodule Excessibility.TelemetryCapture.Formatter do
     Map.new(data, fn {k, v} -> {k, prepare_for_json(v)} end)
   end
 
+  # Handle functions - convert to string representation (defense-in-depth)
+  defp prepare_for_json(data) when is_function(data) do
+    info = Function.info(data)
+    "#Function<#{info[:name]}/#{info[:arity]}>"
+  end
+
   # Handle primitives
   defp prepare_for_json(data), do: data
 

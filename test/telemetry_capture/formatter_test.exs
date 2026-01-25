@@ -51,6 +51,42 @@ defmodule Excessibility.TelemetryCapture.FormatterTest do
       assert first_event["changes"]["status"] == ["pending", "complete"]
     end
 
+    test "converts functions to string representation (defense-in-depth for #52)" do
+      # Defense-in-depth: Even if filter misses a function, formatter shouldn't crash
+      # Functions are converted to readable string representations like "#Function<name/arity>"
+      func_ref = &String.length/1
+
+      timeline = %{
+        test: "test_with_function",
+        duration_ms: 100,
+        timeline: [
+          %{
+            sequence: 1,
+            event: "mount",
+            timestamp: ~U[2026-01-25 10:00:00Z],
+            key_state: %{callback: func_ref, user_id: 123},
+            changes: nil
+          }
+        ]
+      }
+
+      result = Formatter.format_json(timeline)
+
+      # Should successfully encode without crashing
+      assert is_binary(result)
+      decoded = Jason.decode!(result)
+
+      # Function should be converted to string
+      first_event = List.first(decoded["timeline"])
+      callback_value = first_event["key_state"]["callback"]
+
+      # Should be a string representation, not crash
+      assert is_binary(callback_value)
+      assert callback_value =~ "#Function<"
+      # arity
+      assert callback_value =~ "/1>"
+    end
+
     test "converts Ecto structs to maps for JSON encoding" do
       # Simulate an Ecto schema User struct
       user = %{
