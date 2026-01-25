@@ -1,3 +1,13 @@
+defmodule Excessibility.LiveView.Behaviour do
+  @moduledoc """
+  Behaviour for LiveView HTML rendering.
+
+  Implement this behaviour to provide custom LiveView rendering logic,
+  useful for testing or alternative rendering strategies.
+  """
+  @callback render_tree(any()) :: String.t()
+end
+
 defmodule Excessibility.LiveView do
   @moduledoc """
   LiveView HTML extraction for snapshot testing.
@@ -86,14 +96,4 @@ defmodule Excessibility.LiveView do
   def proxy_pid(%{proxy: {_ref, _topic, pid}}), do: pid
   @doc false
   def proxy_topic(%{proxy: {_ref, topic, _pid}}), do: topic
-end
-
-defmodule Excessibility.LiveView.Behaviour do
-  @moduledoc """
-  Behaviour for LiveView HTML rendering.
-
-  Implement this behaviour to provide custom LiveView rendering logic,
-  useful for testing or alternative rendering strategies.
-  """
-  @callback render_tree(any()) :: String.t()
 end
