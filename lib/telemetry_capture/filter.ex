@@ -80,6 +80,12 @@ defmodule Excessibility.TelemetryCapture.Filter do
   - Maps (non-struct)
   - Lists
   """
+  def filter_functions(tuple) when is_tuple(tuple) do
+    tuple
+    |> Tuple.to_list()
+    |> filter_functions()
+  end
+
   def filter_functions(struct) when is_struct(struct) do
     struct
     |> Map.from_struct()
@@ -104,8 +110,11 @@ defmodule Excessibility.TelemetryCapture.Filter do
         is_map(value) ->
           Map.put(acc, key, filter_functions(value))
 
+        is_tuple(value) ->
+          Map.put(acc, key, filter_functions(value))
+
         is_list(value) ->
-          Map.put(acc, key, Enum.map(value, &filter_functions/1))
+          Map.put(acc, key, filter_functions(value))
 
         true ->
           Map.put(acc, key, value)
@@ -114,7 +123,13 @@ defmodule Excessibility.TelemetryCapture.Filter do
   end
 
   def filter_functions(value) when is_list(value) do
-    Enum.map(value, &filter_functions/1)
+    Enum.flat_map(value, fn item ->
+      if is_function(item) do
+        []
+      else
+        [filter_functions(item)]
+      end
+    end)
   end
 
   def filter_functions(value), do: value
