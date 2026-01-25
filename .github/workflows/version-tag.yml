@@ -1,0 +1,81 @@
+name: Version Tag
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  version-check-and-tag:
+    name: Check version consistency and create tag
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read VERSION file
+        id: version
+        run: |
+          VERSION=$(cat VERSION | tr -d '\n')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version from VERSION file: $VERSION"
+
+          # Extract major.minor for README check (e.g., 0.6.1 -> 0.6)
+          MAJOR_MINOR=$(echo $VERSION | cut -d. -f1,2)
+          echo "major_minor=$MAJOR_MINOR" >> $GITHUB_OUTPUT
+          echo "Major.Minor for README: $MAJOR_MINOR"
+
+      - name: Check mix.exs version
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if ! grep -q "@version \"$VERSION\"" mix.exs; then
+            echo "ERROR: mix.exs version does not match VERSION file"
+            echo "Expected: @version \"$VERSION\""
+            echo "Found in mix.exs:"
+            grep "@version" mix.exs || echo "(no @version found)"
+            exit 1
+          fi
+          echo "✓ mix.exs version matches: $VERSION"
+
+      - name: Check README version
+        run: |
+          MAJOR_MINOR="${{ steps.version.outputs.major_minor }}"
+          if ! grep -q "{:excessibility, \"~> $MAJOR_MINOR\"" README.md; then
+            echo "ERROR: README.md version does not match VERSION file"
+            echo "Expected: {:excessibility, \"~> $MAJOR_MINOR\""
+            echo "Found in README.md:"
+            grep "{:excessibility," README.md || echo "(no excessibility dependency found)"
+            exit 1
+          fi
+          echo "✓ README.md version matches: ~> $MAJOR_MINOR"
+
+      - name: Check if tag already exists
+        id: tag_check
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "Tag v$VERSION already exists, skipping tag creation"
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Tag v$VERSION does not exist, will create"
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create and push tag
+        if: steps.tag_check.outputs.exists == 'false'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "v$VERSION" -m "Release v$VERSION"
+          git push origin "v$VERSION"
+          echo "✓ Created and pushed tag: v$VERSION"
+
+      - name: Tag already exists
+        if: steps.tag_check.outputs.exists == 'true'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          echo "ℹ Tag v$VERSION already exists, no action taken"
