@@ -54,17 +54,15 @@ defmodule Excessibility.LiveView do
   Returns `{:ok, assigns}` if successful, `{:error, reason}` otherwise.
   """
   def get_assigns(%View{} = view) do
-    try do
-      # Call the LiveView process to get assigns
-      assigns = call(view, :get_state)
+    # Call the LiveView process to get assigns
+    assigns = call(view, :get_state)
 
-      case assigns do
-        %{assigns: a} when is_map(a) -> {:ok, a}
-        _ -> {:error, :no_assigns}
-      end
-    rescue
-      error -> {:error, error}
+    case assigns do
+      %{assigns: a} when is_map(a) -> {:ok, a}
+      _ -> {:error, :no_assigns}
     end
+  rescue
+    error -> {:error, error}
   end
 
   def get_assigns(_), do: {:error, :invalid_view}

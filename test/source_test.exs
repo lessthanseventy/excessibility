@@ -42,6 +42,7 @@ defmodule Excessibility.SourceTest do
 
     # Create a GenServer that responds to LiveView protocol
     defmodule TestProxy do
+      @moduledoc false
       use GenServer
 
       def start_link(response) do

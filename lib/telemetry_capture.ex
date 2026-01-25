@@ -62,56 +62,54 @@ defmodule Excessibility.TelemetryCapture do
   end
 
   defp capture_snapshot(event_type, _measurements, metadata) do
-    try do
-      socket = metadata[:socket]
+    socket = metadata[:socket]
 
-      if socket do
-        # Extract assigns - handle both struct and map
-        assigns =
-          cond do
-            is_struct(socket.assigns) -> Map.from_struct(socket.assigns)
-            is_map(socket.assigns) -> socket.assigns
-            true -> %{}
-          end
+    if socket do
+      # Extract assigns - handle both struct and map
+      assigns =
+        cond do
+          is_struct(socket.assigns) -> Map.from_struct(socket.assigns)
+          is_map(socket.assigns) -> socket.assigns
+          true -> %{}
+        end
 
-        # Filter out internal Phoenix assigns
-        clean_assigns =
-          assigns
-          |> Map.drop([:flash, :__changed__, :__temp__])
-          |> Enum.filter(fn {k, _v} -> !String.starts_with?(to_string(k), "_") end)
-          |> Map.new()
+      # Filter out internal Phoenix assigns
+      clean_assigns =
+        assigns
+        |> Map.drop([:flash, :__changed__, :__temp__])
+        |> Enum.filter(fn {k, _v} -> !String.starts_with?(to_string(k), "_") end)
+        |> Map.new()
 
-        # Get view module
-        view_module =
-          cond do
-            is_struct(socket) && Map.has_key?(socket, :view) -> socket.view
-            is_map(metadata) && Map.has_key?(metadata, :view) -> metadata[:view]
-            true -> :unknown
-          end
+      # Get view module
+      view_module =
+        cond do
+          is_struct(socket) && Map.has_key?(socket, :view) -> socket.view
+          is_map(metadata) && Map.has_key?(metadata, :view) -> metadata[:view]
+          true -> :unknown
+        end
 
-        # Store in ETS for cross-process access
-        # Use current timestamp as a unique key
-        key = {DateTime.utc_now(), :erlang.unique_integer([:monotonic])}
+      # Store in ETS for cross-process access
+      # Use current timestamp as a unique key
+      key = {DateTime.utc_now(), :erlang.unique_integer([:monotonic])}
 
-        snapshot = %{
-          event_type: event_type,
-          assigns: clean_assigns,
-          timestamp: DateTime.utc_now(),
-          view_module: view_module,
-          metadata_keys: Map.keys(metadata)
-        }
+      snapshot = %{
+        event_type: event_type,
+        assigns: clean_assigns,
+        timestamp: DateTime.utc_now(),
+        view_module: view_module,
+        metadata_keys: Map.keys(metadata)
+      }
 
-        :ets.insert(:excessibility_snapshots, {key, snapshot})
+      :ets.insert(:excessibility_snapshots, {key, snapshot})
 
-        IO.puts("✅ Captured telemetry snapshot for #{event_type}")
-        Logger.debug("Excessibility: Captured snapshot for #{event_type} with assigns: #{inspect(Map.keys(clean_assigns))}")
-      else
-        Logger.debug("Excessibility: No socket in metadata for #{event_type}")
-      end
-    rescue
-      error ->
-        Logger.warning("Excessibility: Failed to capture snapshot for #{event_type}: #{inspect(error)}")
+      IO.puts("✅ Captured telemetry snapshot for #{event_type}")
+      Logger.debug("Excessibility: Captured snapshot for #{event_type} with assigns: #{inspect(Map.keys(clean_assigns))}")
+    else
+      Logger.debug("Excessibility: No socket in metadata for #{event_type}")
     end
+  rescue
+    error ->
+      Logger.warning("Excessibility: Failed to capture snapshot for #{event_type}: #{inspect(error)}")
   end
 
   @doc """
@@ -124,7 +122,8 @@ defmodule Excessibility.TelemetryCapture do
 
       _table ->
         snapshots =
-          :ets.tab2list(:excessibility_snapshots)
+          :excessibility_snapshots
+          |> :ets.tab2list()
           |> Enum.map(fn {_key, snapshot} -> snapshot end)
           |> Enum.sort_by(& &1.timestamp, DateTime)
 
@@ -153,11 +152,12 @@ defmodule Excessibility.TelemetryCapture do
     IO.puts("💾 Excessibility: Writing #{length(snapshots)} telemetry snapshots for test #{inspect(test_name)}")
 
     if snapshots != [] do
-      output_path = Application.get_env(
-        :excessibility,
-        :excessibility_output_path,
-        "test/excessibility"
-      )
+      output_path =
+        Application.get_env(
+          :excessibility,
+          :excessibility_output_path,
+          "test/excessibility"
+        )
 
       snapshots_path = Path.join(output_path, "html_snapshots")
       File.mkdir_p!(snapshots_path)

@@ -122,25 +122,23 @@ defmodule Excessibility.Snapshot do
   end
 
   defp extract_assigns(%Phoenix.LiveViewTest.View{} = view) do
-    try do
-      # Access the LiveView module configured for this library
-      live_view_mod = Application.get_env(:excessibility, :live_view_mod, Excessibility.LiveView)
+    # Access the LiveView module configured for this library
+    live_view_mod = Application.get_env(:excessibility, :live_view_mod, Excessibility.LiveView)
 
-      # Try to get assigns using the LiveView module
-      case live_view_mod.get_assigns(view) do
-        {:ok, assigns} when is_map(assigns) ->
-          # Filter out internal Phoenix assigns to keep output clean
-          assigns
-          |> Map.drop([:flash, :live_action, :__changed__])
-          |> Enum.reject(fn {k, _v} -> String.starts_with?(to_string(k), "_") end)
-          |> Map.new()
+    # Try to get assigns using the LiveView module
+    case live_view_mod.get_assigns(view) do
+      {:ok, assigns} when is_map(assigns) ->
+        # Filter out internal Phoenix assigns to keep output clean
+        assigns
+        |> Map.drop([:flash, :live_action, :__changed__])
+        |> Enum.reject(fn {k, _v} -> String.starts_with?(to_string(k), "_") end)
+        |> Map.new()
 
-        _ ->
-          %{}
-      end
-    rescue
-      _ -> %{}
+      _ ->
+        %{}
     end
+  rescue
+    _ -> %{}
   end
 
   defp extract_assigns(_), do: %{}

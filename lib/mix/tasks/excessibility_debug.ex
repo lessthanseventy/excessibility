@@ -1,4 +1,6 @@
 defmodule Mix.Tasks.Excessibility.Debug do
+  @shortdoc "Debug a test with comprehensive snapshot analysis"
+
   @moduledoc """
   Run a test and generate a comprehensive debug report with all snapshots.
 
@@ -24,14 +26,13 @@ defmodule Mix.Tasks.Excessibility.Debug do
 
   use Mix.Task
 
-  @shortdoc "Debug a test with comprehensive snapshot analysis"
-
   @impl Mix.Task
   def run(args) do
-    {opts, test_paths, _} = OptionParser.parse(args,
-      strict: [format: :string],
-      aliases: [f: :format]
-    )
+    {opts, test_paths, _} =
+      OptionParser.parse(args,
+        strict: [format: :string],
+        aliases: [f: :format]
+      )
 
     format = Keyword.get(opts, :format, "markdown")
 
@@ -79,23 +80,25 @@ defmodule Mix.Tasks.Excessibility.Debug do
     System.put_env("EXCESSIBILITY_TELEMETRY_CAPTURE", "true")
 
     # Run the test and capture stdout/stderr
-    result = System.cmd("mix", ["test", test_path],
-      stderr_to_stdout: true,
-      env: [
-        {"MIX_ENV", "test"},
-        {"EXCESSIBILITY_TELEMETRY_CAPTURE", "true"}
-      ]
-    )
+    result =
+      System.cmd("mix", ["test", test_path],
+        stderr_to_stdout: true,
+        env: [
+          {"MIX_ENV", "test"},
+          {"EXCESSIBILITY_TELEMETRY_CAPTURE", "true"}
+        ]
+      )
 
     result
   end
 
   defp gather_snapshots do
-    output_path = Application.get_env(
-      :excessibility,
-      :excessibility_output_path,
-      "test/excessibility"
-    )
+    output_path =
+      Application.get_env(
+        :excessibility,
+        :excessibility_output_path,
+        "test/excessibility"
+      )
 
     snapshots_path = Path.join(output_path, "html_snapshots")
 
@@ -157,11 +160,12 @@ defmodule Mix.Tasks.Excessibility.Debug do
     Mix.shell().info(markdown)
 
     # Save to file
-    output_path = Application.get_env(
-      :excessibility,
-      :excessibility_output_path,
-      "test/excessibility"
-    )
+    output_path =
+      Application.get_env(
+        :excessibility,
+        :excessibility_output_path,
+        "test/excessibility"
+      )
 
     latest_path = Path.join(output_path, "latest_debug.md")
     File.mkdir_p!(output_path)
@@ -222,25 +226,21 @@ defmodule Mix.Tasks.Excessibility.Debug do
   end
 
   defp format_metadata(metadata) do
-    metadata
-    |> Enum.map(fn {key, value} ->
+    Enum.map_join(metadata, "\n", fn {key, value} ->
       "- #{String.capitalize(String.replace(to_string(key), "_", " "))}: #{value}"
     end)
-    |> Enum.join("\n")
   end
 
   defp build_timeline_section([]), do: "No snapshots captured."
 
   defp build_timeline_section(snapshots) do
-    snapshots
-    |> Enum.map(fn snapshot ->
+    Enum.map_join(snapshots, "\n", fn snapshot ->
       sequence = Map.get(snapshot.metadata, "sequence", "?")
       event = Map.get(snapshot.metadata, "event", "unknown")
       assigns = Map.get(snapshot.metadata, "assigns", "")
 
       "#{sequence}. #{event} → #{assigns}"
     end)
-    |> Enum.join("\n")
   end
 
   defp build_summary_section(report_data) do
@@ -257,11 +257,12 @@ defmodule Mix.Tasks.Excessibility.Debug do
     Mix.shell().info(json)
 
     # Save to file
-    output_path = Application.get_env(
-      :excessibility,
-      :excessibility_output_path,
-      "test/excessibility"
-    )
+    output_path =
+      Application.get_env(
+        :excessibility,
+        :excessibility_output_path,
+        "test/excessibility"
+      )
 
     latest_path = Path.join(output_path, "latest_debug.json")
     File.mkdir_p!(output_path)
@@ -269,20 +270,23 @@ defmodule Mix.Tasks.Excessibility.Debug do
   end
 
   defp output_package(report_data) do
-    test_name = report_data.test_path
-                |> Path.basename(".exs")
-                |> String.replace("_test", "")
+    test_name =
+      report_data.test_path
+      |> Path.basename(".exs")
+      |> String.replace("_test", "")
 
-    timestamp = report_data.timestamp
-                |> DateTime.to_iso8601()
-                |> String.replace(~r/[:\-]/, "")
-                |> String.slice(0, 15)
+    timestamp =
+      report_data.timestamp
+      |> DateTime.to_iso8601()
+      |> String.replace(~r/[:\-]/, "")
+      |> String.slice(0, 15)
 
-    output_path = Application.get_env(
-      :excessibility,
-      :excessibility_output_path,
-      "test/excessibility"
-    )
+    output_path =
+      Application.get_env(
+        :excessibility,
+        :excessibility_output_path,
+        "test/excessibility"
+      )
 
     package_dir = Path.join([output_path, "debug_packages", "#{test_name}_#{timestamp}"])
     File.mkdir_p!(package_dir)
@@ -303,9 +307,10 @@ defmodule Mix.Tasks.Excessibility.Debug do
       test_path: report_data.test_path,
       status: report_data.status,
       timestamp: report_data.timestamp,
-      snapshots: Enum.map(report_data.snapshots, fn s ->
-        Map.take(s, [:filename, :metadata])
-      end)
+      snapshots:
+        Enum.map(report_data.snapshots, fn s ->
+          Map.take(s, [:filename, :metadata])
+        end)
     }
 
     timeline_path = Path.join(package_dir, "timeline.json")
