@@ -79,17 +79,21 @@ defmodule Mix.Tasks.Excessibility.Install do
     end
     """
 
-    Igniter.create_or_update_file(igniter, test_helper_path, telemetry_code, fn existing ->
+    Igniter.update_file(igniter, test_helper_path, fn source ->
+      content = Rewrite.Source.get(source, :content)
+
       # Check if already present to avoid duplicates
-      if String.contains?(existing, "Excessibility.TelemetryCapture.attach") do
-        existing
+      if String.contains?(content, "Excessibility.TelemetryCapture.attach") do
+        source
       else
         # Append before ExUnit.start() if present, otherwise at end
-        if String.contains?(existing, "ExUnit.start()") do
-          String.replace(existing, "ExUnit.start()", telemetry_code <> "\nExUnit.start()")
+        updated_content = if String.contains?(content, "ExUnit.start()") do
+          String.replace(content, "ExUnit.start()", telemetry_code <> "\nExUnit.start()")
         else
-          existing <> "\n\n" <> telemetry_code
+          content <> "\n\n" <> telemetry_code
         end
+
+        Rewrite.Source.update(source, :content, updated_content)
       end
     end)
   end
