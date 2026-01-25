@@ -57,4 +57,48 @@ defmodule Excessibility.TelemetryCapture.TimelineTest do
       assert result.live_action == :edit
     end
   end
+
+  describe "build_timeline/2" do
+    test "builds timeline from snapshots" do
+      snapshots = [
+        %{
+          event_type: "mount",
+          assigns: %{user_id: 123, products_count: 0},
+          timestamp: ~U[2026-01-25 10:00:00Z],
+          view_module: MyApp.Live
+        },
+        %{
+          event_type: "handle_event:add",
+          assigns: %{user_id: 123, products_count: 1},
+          timestamp: ~U[2026-01-25 10:00:01Z],
+          view_module: MyApp.Live
+        }
+      ]
+
+      result = Timeline.build_timeline(snapshots, "test_name")
+
+      assert result.test == "test_name"
+      assert result.duration_ms == 1000
+      assert length(result.timeline) == 2
+
+      first = Enum.at(result.timeline, 0)
+      assert first.sequence == 1
+      assert first.event == "mount"
+      assert first.changes == nil
+
+      second = Enum.at(result.timeline, 1)
+      assert second.sequence == 2
+      assert second.event == "handle_event:add"
+      assert second.changes == %{"products_count" => {0, 1}}
+      assert second.duration_since_previous_ms == 1000
+    end
+
+    test "handles empty snapshots" do
+      result = Timeline.build_timeline([], "empty_test")
+
+      assert result.test == "empty_test"
+      assert result.timeline == []
+      assert result.duration_ms == 0
+    end
+  end
 end
