@@ -10,10 +10,35 @@ defmodule Excessibility.TelemetryCapture.Formatter do
 
   @doc """
   Formats timeline as JSON.
+
+  Converts tuples to lists for JSON compatibility.
   """
   def format_json(timeline) do
-    Jason.encode!(timeline, pretty: true)
+    timeline
+    |> prepare_for_json()
+    |> Jason.encode!(pretty: true)
   end
+
+  # Handle tuples first (convert to lists for JSON)
+  defp prepare_for_json(data) when is_tuple(data) do
+    data |> Tuple.to_list() |> prepare_for_json()
+  end
+
+  # Handle lists
+  defp prepare_for_json(data) when is_list(data) do
+    Enum.map(data, &prepare_for_json/1)
+  end
+
+  # Handle structs (let Jason encode them as-is)
+  defp prepare_for_json(%{__struct__: _} = data), do: data
+
+  # Handle regular maps
+  defp prepare_for_json(data) when is_map(data) do
+    Map.new(data, fn {k, v} -> {k, prepare_for_json(v)} end)
+  end
+
+  # Handle primitives
+  defp prepare_for_json(data), do: data
 
   @doc """
   Formats timeline as markdown report.

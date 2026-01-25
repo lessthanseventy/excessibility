@@ -6,6 +6,9 @@ defmodule Excessibility.TelemetryCapture do
   snapshots when LiveView events occur, with no test code changes required.
   """
 
+  alias Excessibility.TelemetryCapture.Formatter
+  alias Excessibility.TelemetryCapture.Timeline
+
   require Logger
 
   @doc """
@@ -177,6 +180,14 @@ defmodule Excessibility.TelemetryCapture do
 
         Logger.info("Wrote telemetry snapshot: #{filename}")
       end)
+
+      # Generate and write timeline.json
+      timeline = Timeline.build_timeline(snapshots, test_name)
+      timeline_json = Formatter.format_json(timeline)
+      timeline_path = Path.join(output_path, "timeline.json")
+      File.write!(timeline_path, timeline_json)
+
+      IO.puts("📊 Excessibility: Wrote timeline.json")
     end
   end
 
