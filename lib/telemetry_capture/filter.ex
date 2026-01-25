@@ -2,8 +2,8 @@ defmodule Excessibility.TelemetryCapture.Filter do
   @moduledoc """
   Filters noise from telemetry snapshot assigns.
 
-  Removes Ecto metadata, Phoenix internals, and other noise
-  to improve signal-to-noise ratio for debugging.
+  Removes Ecto metadata, Phoenix internals, function references,
+  and other noise to improve signal-to-noise ratio for debugging.
   """
 
   @doc """
@@ -67,20 +67,53 @@ defmodule Excessibility.TelemetryCapture.Filter do
   defp starts_with_underscore?(_), do: false
 
   @doc """
+  Removes function references from assigns.
+
+  Functions can't be meaningfully serialized to JSON, and are typically
+  internal implementation details not useful for debugging.
+
+  Filters out:
+  - Function values (callbacks, event handlers, socket refs)
+
+  Recursively processes:
+  - Maps (non-struct)
+  - Lists
+  """
+  def filter_functions(assigns) when is_map(assigns) do
+    Enum.reduce(assigns, %{}, fn {key, value}, acc ->
+      cond do
+        is_function(value) -> acc
+        is_map(value) and not is_struct(value) -> Map.put(acc, key, filter_functions(value))
+        is_list(value) -> Map.put(acc, key, Enum.map(value, &filter_functions/1))
+        true -> Map.put(acc, key, value)
+      end
+    end)
+  end
+
+  def filter_functions(value) when is_list(value) do
+    Enum.map(value, &filter_functions/1)
+  end
+
+  def filter_functions(value), do: value
+
+  @doc """
   Applies all filtering to assigns based on options.
 
   ## Options
 
   - `:filter_ecto` - Remove Ecto metadata (default: true)
   - `:filter_phoenix` - Remove Phoenix internals (default: true)
+  - `:filter_functions` - Remove function references (default: true)
   """
   def filter_assigns(assigns, opts \\ []) do
     filter_ecto? = Keyword.get(opts, :filter_ecto, true)
     filter_phoenix? = Keyword.get(opts, :filter_phoenix, true)
+    filter_functions? = Keyword.get(opts, :filter_functions, true)
 
     assigns
     |> apply_if(filter_ecto?, &filter_ecto_metadata/1)
     |> apply_if(filter_phoenix?, &filter_phoenix_internals/1)
+    |> apply_if(filter_functions?, &filter_functions/1)
   end
 
   defp apply_if(value, true, fun), do: fun.(value)

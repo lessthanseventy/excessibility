@@ -14,6 +14,58 @@ defmodule Excessibility.TelemetryCaptureIntegrationTest do
     :ok
   end
 
+  test "write_snapshots handles functions in assigns" do
+    # Attach telemetry
+    TelemetryCapture.attach()
+
+    # Simulate capturing snapshots with functions in assigns
+    callback = fn -> :ok end
+    handler = fn x -> x + 1 end
+
+    TelemetryCapture.handle_event(
+      [:phoenix, :live_view, :mount, :stop],
+      %{duration: 100},
+      %{
+        socket: %{
+          assigns: %{
+            user_id: 123,
+            on_click: callback,
+            transform: handler,
+            nested: %{
+              data: "value",
+              handler: callback
+            }
+          },
+          view: MyApp.Live
+        }
+      },
+      nil
+    )
+
+    # Write snapshots - should not raise on function encoding
+    TelemetryCapture.write_snapshots("function_test")
+
+    # Verify timeline.json exists and is valid JSON
+    timeline_path = "test/excessibility/timeline.json"
+    assert File.exists?(timeline_path)
+
+    timeline = timeline_path |> File.read!() |> Jason.decode!()
+    assert timeline["test"] == "function_test"
+
+    # Verify functions were filtered out
+    first_event = Enum.at(timeline["timeline"], 0)
+    key_state = first_event["key_state"]
+
+    # Should have user_id but not the function fields
+    assert key_state["user_id"] == 123
+    refute Map.has_key?(key_state, "on_click")
+    refute Map.has_key?(key_state, "transform")
+
+    # Cleanup
+    TelemetryCapture.detach()
+    File.rm_rf!("test/excessibility")
+  end
+
   test "write_snapshots generates timeline.json" do
     # Attach telemetry
     TelemetryCapture.attach()
