@@ -52,10 +52,7 @@ defmodule Excessibility.CaptureTest do
         |> Plug.Conn.put_resp_content_type("text/html")
         |> Plug.Conn.send_resp(200, "<html><body>Test</body></html>")
 
-      # Record an event first to get metadata
-      Excessibility.Capture.record_event("test_event", %{test: "value"})
-
-      # Capture snapshot
+      # Capture snapshot (html_snapshot will automatically call record_event)
       html_snapshot(conn, event_type: "test_event", name: "capture_test.html")
 
       # Read the snapshot and check metadata
