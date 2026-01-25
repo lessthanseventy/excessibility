@@ -102,6 +102,21 @@ mix excessibility.latest                                    # Re-display last re
 mix excessibility.package test/my_test.exs                  # Shortcut for package format
 ```
 
+### 🔍 Telemetry Timeline Analysis
+
+Automatically captures LiveView state throughout test execution and generates scannable timeline reports:
+
+- **Smart Filtering** - Removes Ecto metadata, Phoenix internals, and other noise
+- **Diff Detection** - Shows what changed between events
+- **Multiple Formats** - JSON for automation, Markdown for humans/AI
+- **CLI Control** - Override filtering with flags for deep debugging
+
+```bash
+mix excessibility.debug test/my_test.exs
+```
+
+See [CLAUDE.md](CLAUDE.md) for detailed usage.
+
 ### How It Works
 
 Excessibility hooks into Phoenix LiveView's built-in telemetry events:
