@@ -40,4 +40,29 @@ defmodule Excessibility.TelemetryCapture.Filter do
   end
 
   def filter_ecto_metadata(value), do: value
+
+  @phoenix_internal_keys [:flash, :__changed__, :__temp__]
+
+  @doc """
+  Removes Phoenix LiveView internal assigns.
+
+  Filters out:
+  - `:flash`, `:__changed__`, `:__temp__`
+  - Keys starting with underscore (private assigns)
+  """
+  def filter_phoenix_internals(assigns) when is_map(assigns) do
+    assigns
+    |> Enum.reject(fn {key, _value} ->
+      key in @phoenix_internal_keys or starts_with_underscore?(key)
+    end)
+    |> Map.new()
+  end
+
+  defp starts_with_underscore?(key) when is_atom(key) do
+    key
+    |> to_string()
+    |> String.starts_with?("_")
+  end
+
+  defp starts_with_underscore?(_), do: false
 end
