@@ -21,6 +21,13 @@ defmodule Mix.Tasks.Excessibility.Debug do
   - `--no-filter-phoenix` - Keep Phoenix internals (flash, __changed__)
   - `--highlight=field1,field2` - Custom fields to highlight in timeline
 
+  ## Analysis Options
+
+  - `--analyze=NAMES` - Run specific analyzers (comma-separated). Available: memory. Default: memory
+  - `--analyze=all` - Run all available analyzers
+  - `--no-analyze` - Skip analysis, show timeline only
+  - `--verbose` - Show detailed stats even when no issues found
+
   ## Formats
 
   - `markdown` (default) - Human and AI-readable report with inline HTML
@@ -39,6 +46,7 @@ defmodule Mix.Tasks.Excessibility.Debug do
   use Mix.Task
 
   alias Excessibility.TelemetryCapture.Formatter
+  alias Excessibility.TelemetryCapture.Registry
 
   @impl Mix.Task
   def run(args) do
@@ -50,7 +58,10 @@ defmodule Mix.Tasks.Excessibility.Debug do
           minimal: :boolean,
           no_filter_ecto: :boolean,
           no_filter_phoenix: :boolean,
-          highlight: :string
+          highlight: :string,
+          analyze: :string,
+          no_analyze: :boolean,
+          verbose: :boolean
         ],
         aliases: [f: :format]
       )
@@ -217,12 +228,33 @@ defmodule Mix.Tasks.Excessibility.Debug do
 
     timeline_path = Path.join(output_path, "timeline.json")
 
-    markdown =
+    # Get opts from process dictionary
+    debug_opts = Process.get(:excessibility_debug_opts, %{})
+    opts = Map.get(debug_opts, :filter_opts, [])
+
+    # NEW: Run analyzers if timeline exists
+    {markdown, _analysis_results} =
       if File.exists?(timeline_path) do
         timeline = timeline_path |> File.read!() |> Jason.decode!(keys: :atoms)
-        Formatter.format_markdown(timeline, report_data.snapshots)
+
+        # Run analyzers
+        analyzer_names = parse_analyzer_selection(opts)
+        analysis_results = run_analyzers(timeline, analyzer_names, opts)
+
+        # Build markdown with analysis
+        base_markdown = Formatter.format_markdown(timeline, report_data.snapshots)
+        analysis_markdown = Formatter.format_analysis_results(analysis_results, opts)
+
+        combined =
+          if analysis_markdown != "" do
+            base_markdown <> "\n\n---\n\n# Analysis Results\n\n" <> analysis_markdown
+          else
+            base_markdown
+          end
+
+        {combined, analysis_results}
       else
-        build_markdown_report(report_data)
+        {build_markdown_report(report_data), %{}}
       end
 
     # Output to stdout
@@ -415,5 +447,36 @@ defmodule Mix.Tasks.Excessibility.Debug do
     2. Review snapshots in order
     3. Look for unexpected state changes or missing updates
     """
+  end
+
+  defp parse_analyzer_selection(opts) do
+    cond do
+      Keyword.get(opts, :no_analyze) ->
+        []
+
+      analyze = Keyword.get(opts, :analyze) ->
+        case analyze do
+          "all" ->
+            Registry.get_all_analyzers() |> Enum.map(& &1.name())
+
+          names_str ->
+            names_str
+            |> String.split(",")
+            |> Enum.map(&String.to_atom/1)
+        end
+
+      true ->
+        Registry.get_default_analyzers() |> Enum.map(& &1.name())
+    end
+  end
+
+  defp run_analyzers(timeline, analyzer_names, opts) do
+    analyzer_names
+    |> Enum.map(&Registry.get_analyzer/1)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.map(fn analyzer ->
+      {analyzer.name(), analyzer.analyze(timeline, opts)}
+    end)
+    |> Map.new()
   end
 end
