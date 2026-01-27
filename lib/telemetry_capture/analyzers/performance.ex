@@ -128,7 +128,8 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Performance do
     if is_nil(duration) do
       []
     else
-      multiplier = if stats.avg_duration > 0, do: duration / stats.avg_duration, else: 0
+      # Ensure multiplier is always a float to avoid Float.round/2 errors
+      multiplier = if stats.avg_duration > 0, do: duration / stats.avg_duration, else: 0.0
 
       cond do
         duration > 1000 or duration > threshold_critical ->
@@ -137,7 +138,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Performance do
               severity: :critical,
               message: "Very slow event (#{duration}ms, #{format_multiplier(multiplier)}x average)",
               events: [event.sequence],
-              metadata: %{duration_ms: duration, multiplier: Float.round(multiplier, 1)}
+              metadata: %{duration_ms: duration, multiplier: round_float(multiplier, 1)}
             }
           ]
 
@@ -147,7 +148,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Performance do
               severity: :warning,
               message: "Slow event (#{duration}ms, #{format_multiplier(multiplier)}x average)",
               events: [event.sequence],
-              metadata: %{duration_ms: duration, multiplier: Float.round(multiplier, 1)}
+              metadata: %{duration_ms: duration, multiplier: round_float(multiplier, 1)}
             }
           ]
 
@@ -180,6 +181,10 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Performance do
     end)
   end
 
-  defp format_multiplier(mult) when mult >= 1, do: Float.round(mult, 1)
-  defp format_multiplier(mult), do: Float.round(mult, 2)
+  defp format_multiplier(mult) when mult >= 1, do: round_float(mult, 1)
+  defp format_multiplier(mult), do: round_float(mult, 2)
+
+  # Safely round numbers to floats, handling both integer and float inputs
+  defp round_float(num, _precision) when is_integer(num), do: num * 1.0
+  defp round_float(num, precision) when is_float(num), do: Float.round(num, precision)
 end
