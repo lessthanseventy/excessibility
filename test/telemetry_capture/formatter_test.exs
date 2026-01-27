@@ -233,4 +233,85 @@ defmodule Excessibility.TelemetryCapture.FormatterTest do
       assert result =~ "- `status`: \"pending\" → \"done\""
     end
   end
+
+  describe "format_analysis_results/2" do
+    test "formats empty results" do
+      result = Formatter.format_analysis_results(%{}, [])
+      assert result == ""
+    end
+
+    test "formats healthy analyzer result" do
+      results = %{
+        memory: %{
+          findings: [],
+          stats: %{min: 1000, max: 5000, avg: 3000}
+        }
+      }
+
+      output = Formatter.format_analysis_results(results, [])
+
+      assert output =~ "## Memory Analysis ✅"
+      assert output =~ "1000 B"
+      assert output =~ "4.9 KB"
+    end
+
+    test "formats analyzer with findings" do
+      results = %{
+        memory: %{
+          findings: [
+            %{
+              severity: :warning,
+              message: "Memory grew 5x",
+              events: [1, 2],
+              metadata: %{}
+            }
+          ],
+          stats: %{min: 1000, max: 10_000}
+        }
+      }
+
+      output = Formatter.format_analysis_results(results, [])
+
+      assert output =~ "## Memory Analysis"
+      refute output =~ "✅"
+      assert output =~ "⚠️"
+      assert output =~ "Memory grew 5x"
+    end
+
+    test "formats critical findings" do
+      results = %{
+        memory: %{
+          findings: [
+            %{
+              severity: :critical,
+              message: "Memory leak detected",
+              events: [1, 2, 3],
+              metadata: %{}
+            }
+          ],
+          stats: %{}
+        }
+      }
+
+      output = Formatter.format_analysis_results(results, [])
+
+      assert output =~ "🔴"
+      assert output =~ "Memory leak detected"
+    end
+
+    test "verbose mode shows detailed stats" do
+      results = %{
+        memory: %{
+          findings: [],
+          stats: %{min: 1000, max: 5000, avg: 3000, median: 2500}
+        }
+      }
+
+      brief = Formatter.format_analysis_results(results, verbose: false)
+      verbose = Formatter.format_analysis_results(results, verbose: true)
+
+      assert String.length(verbose) > String.length(brief)
+      assert verbose =~ "Median"
+    end
+  end
 end
