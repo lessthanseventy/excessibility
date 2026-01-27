@@ -184,5 +184,67 @@ defmodule Excessibility.TelemetryCapture.Analyzers.PerformanceTest do
       assert 4 in slow_events
       assert length(result.findings) >= 2
     end
+
+    test "handles zero duration without FunctionClauseError" do
+      # Reproduces GitHub issue #60
+      timeline = %{
+        timeline: [
+          %{sequence: 1, event: "mount", event_duration_ms: 0},
+          %{sequence: 2, event: "handle_event", event_duration_ms: 0},
+          %{sequence: 3, event: "handle_event", event_duration_ms: 10}
+        ]
+      }
+
+      # Should not crash with FunctionClauseError from Float.round/2
+      result = Performance.analyze(timeline, [])
+
+      # Stats should still be calculated
+      assert is_map(result.stats)
+      assert result.stats.min_duration == 0
+      assert result.stats.max_duration == 10
+    end
+
+    test "handles all zero durations without FunctionClauseError" do
+      # Edge case: all events have 0ms duration (very fast)
+      timeline = %{
+        timeline: [
+          %{sequence: 1, event: "mount", event_duration_ms: 0},
+          %{sequence: 2, event: "handle_event", event_duration_ms: 0},
+          %{sequence: 3, event: "handle_event", event_duration_ms: 0}
+        ]
+      }
+
+      # Should not crash
+      result = Performance.analyze(timeline, [])
+
+      # No slow events should be detected
+      assert result.findings == []
+      assert result.stats.avg_duration == 0
+    end
+
+    test "handles slow event when avg_duration is zero" do
+      # Reproduces actual issue: slow event detected when average is 0
+      # This causes multiplier to be integer 0, triggering Float.round/2 error
+      timeline = %{
+        timeline: [
+          %{sequence: 1, event: "mount", event_duration_ms: 0},
+          %{sequence: 2, event: "handle_event", event_duration_ms: 0},
+          %{sequence: 3, event: "handle_event", event_duration_ms: 2000}
+        ]
+      }
+
+      # Should not crash with FunctionClauseError
+      result = Performance.analyze(timeline, [])
+
+      # Event 3 should be detected as critical (>1000ms)
+      assert length(result.findings) > 0
+      critical = Enum.find(result.findings, &(&1.severity == :critical))
+      assert critical
+      assert 3 in critical.events
+
+      # Multiplier should be present in metadata and should be a number
+      assert Map.has_key?(critical.metadata, :multiplier)
+      assert is_number(critical.metadata.multiplier)
+    end
   end
 end
