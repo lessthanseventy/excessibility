@@ -101,7 +101,11 @@ Timeline events are automatically enriched with:
 - `mount` - LiveView mount
 - `handle_params` - URL parameter handling
 - `handle_event:name` - User interactions (click, submit, etc.)
-- `render` - Render cycles (triggered by render_change, render_click, render_submit)
+- **`render`** - Render cycles (triggered by render_change, render_click, render_submit)
+  - **Most frequent event type** - provides richest timeline data
+  - Enables memory leak detection, performance analysis, and event pattern detection
+  - Automatically enabled when running `mix excessibility.debug`
+  - See README for dramatic before/after comparison of event counts
 
 Timeline JSON structure:
 - `test` - Test name

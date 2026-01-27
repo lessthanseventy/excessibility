@@ -229,8 +229,9 @@ defmodule Mix.Tasks.Excessibility.Install do
     **Automatically captures:**
     - LiveView mount events
     - All handle_event calls (clicks, submits, etc.)
+    - **All render cycles** (form updates, state changes triggered by `render_change`, `render_click`, `render_submit`)
     - Real LiveView assigns at each step
-    - Complete state timeline
+    - Complete state timeline with memory tracking and performance metrics
 
     ## What Gets Captured
 
@@ -287,6 +288,7 @@ defmodule Mix.Tasks.Excessibility.Install do
     - `[:phoenix, :live_view, :mount, :stop]`
     - `[:phoenix, :live_view, :handle_event, :stop]`
     - `[:phoenix, :live_view, :handle_params, :stop]`
+    - `[:phoenix, :live_view, :render, :stop]` - **Captures all render cycles** (form updates, state changes)
 
     When you run `mix excessibility.debug`:
     1. Sets environment variable to enable telemetry capture

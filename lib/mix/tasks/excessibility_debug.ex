@@ -4,6 +4,17 @@ defmodule Mix.Tasks.Excessibility.Debug do
   @moduledoc """
   Run a test and generate a comprehensive debug report with all snapshots.
 
+  This command automatically enables telemetry capture by setting
+  `EXCESSIBILITY_TELEMETRY_CAPTURE=true`, which captures:
+  - Mount events
+  - handle_event calls (clicks, submits)
+  - handle_params calls (navigation)
+  - **All render cycles** (form updates, state changes)
+
+  Render event capture dramatically increases timeline visibility (often 10-20x more events),
+  enabling powerful analyzer insights like memory leak detection, performance bottlenecks,
+  and event pattern analysis.
+
   ## Usage
 
       mix excessibility.debug test/my_test.exs

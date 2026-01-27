@@ -57,11 +57,31 @@ Debug it:
 mix excessibility.debug test/my_test.exs
 ```
 
+> **🚀 Rich Timeline Capture**
+>
+> `mix excessibility.debug` automatically enables telemetry capture, dramatically increasing event visibility:
+>
+> - **Without telemetry:** ~4 events (mount, handle_params only)
+> - **With telemetry:** 10-20x more events including **all render cycles**
+>
+> **Example from real test:**
+> - Basic test: 4 events → **11 events** (added 7 render events)
+> - Complex test: Limited snapshots → **236 timeline events** with rich analyzer insights
+>
+> Render events enable powerful pattern detection:
+> - 🔴 Memory leak detected (2.3x growth over render cycles)
+> - ⚠️ 7 consecutive renders without user interaction
+> - 🔴 Performance bottleneck (15ms render blocking)
+> - ⚠️ Rapid state changes (potential infinite loop)
+>
+> This happens automatically - no test changes needed!
+
 **Automatically captures:**
 - LiveView mount events
 - All handle_event calls (clicks, submits, etc.)
+- **All render cycles** (form updates, state changes triggered by `render_change`, `render_click`, `render_submit`)
 - Real LiveView assigns at each step
-- Complete state timeline
+- Complete state timeline with memory tracking and performance metrics
 
 **Example captured snapshot:**
 
@@ -123,6 +143,7 @@ Excessibility hooks into Phoenix LiveView's built-in telemetry events:
 - `[:phoenix, :live_view, :mount, :stop]`
 - `[:phoenix, :live_view, :handle_event, :stop]`
 - `[:phoenix, :live_view, :handle_params, :stop]`
+- `[:phoenix, :live_view, :render, :stop]` - **Captures all render cycles** (form updates, state changes)
 
 When you run `mix excessibility.debug`, it:
 1. Sets `EXCESSIBILITY_TELEMETRY_CAPTURE=true`
