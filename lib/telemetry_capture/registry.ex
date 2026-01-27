@@ -23,7 +23,9 @@ defmodule Excessibility.TelemetryCapture.Registry do
     Excessibility.TelemetryCapture.Enrichers.Memory
   ]
 
-  @analyzers []
+  @analyzers [
+    Excessibility.TelemetryCapture.Analyzers.Memory
+  ]
 
   @doc """
   Returns all registered enrichers.
