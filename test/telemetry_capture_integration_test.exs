@@ -118,6 +118,15 @@ defmodule Excessibility.TelemetryCaptureIntegrationTest do
     assert second_event["event"] == "handle_event:add_product"
     assert second_event["changes"] != nil
 
+    # Verify enrichments are present (memory_size from Memory enricher)
+    assert Map.has_key?(first_event, "memory_size")
+    assert is_integer(first_event["memory_size"])
+    assert first_event["memory_size"] > 0
+
+    assert Map.has_key?(second_event, "memory_size")
+    assert is_integer(second_event["memory_size"])
+    assert second_event["memory_size"] > 0
+
     # Cleanup
     TelemetryCapture.detach()
     File.rm_rf!("test/excessibility")
