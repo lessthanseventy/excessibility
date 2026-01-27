@@ -133,4 +133,118 @@ defmodule Excessibility.TelemetryCapture.Formatter do
   # Handle both tuple format (in-memory) and list format (from JSON)
   defp normalize_change_value({old, new}), do: {old, new}
   defp normalize_change_value([old, new]), do: {old, new}
+
+  @doc """
+  Formats analysis results as markdown.
+
+  Takes map of analyzer_name => %{findings: [...], stats: %{...}}
+  and produces formatted markdown sections.
+
+  ## Options
+
+  - `:verbose` - Include detailed stats even when no issues found (default: false)
+  """
+  def format_analysis_results(analysis_results, opts \\ [])
+
+  def format_analysis_results(analysis_results, _opts) when map_size(analysis_results) == 0 do
+    ""
+  end
+
+  def format_analysis_results(analysis_results, opts) do
+    verbose? = Keyword.get(opts, :verbose, false)
+
+    analysis_results
+    |> Enum.map(fn {name, result} ->
+      format_analyzer_section(name, result, verbose?)
+    end)
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.join("\n\n")
+  end
+
+  defp format_analyzer_section(name, %{findings: findings, stats: stats}, verbose?) do
+    title = name |> to_string() |> String.capitalize()
+
+    if Enum.empty?(findings) do
+      format_healthy_section(title, stats, verbose?)
+    else
+      format_findings_section(title, findings, stats)
+    end
+  end
+
+  defp format_healthy_section(title, stats, verbose?) do
+    summary = format_summary_stats(stats)
+
+    basic = "## #{title} Analysis ✅\n#{summary}"
+
+    if verbose? and map_size(stats) > 0 do
+      basic <> "\n\n" <> format_detailed_stats(stats)
+    else
+      basic
+    end
+  end
+
+  defp format_findings_section(title, findings, stats) do
+    findings_text = format_findings(findings)
+    summary = if map_size(stats) > 0, do: "\n\n#{format_summary_stats(stats)}", else: ""
+
+    "## #{title} Analysis\n#{findings_text}#{summary}"
+  end
+
+  defp format_findings(findings) do
+    Enum.map_join(findings, "\n", fn finding ->
+      emoji =
+        case finding.severity do
+          :critical -> "🔴"
+          :warning -> "⚠️"
+          :info -> "ℹ️"
+        end
+
+      "#{emoji} #{finding.message}"
+    end)
+  end
+
+  defp format_summary_stats(stats) when map_size(stats) == 0, do: ""
+
+  defp format_summary_stats(stats) do
+    parts = []
+
+    parts =
+      if stats[:min] && stats[:max] do
+        ["Memory range: #{format_bytes(stats.min)} → #{format_bytes(stats.max)}" | parts]
+      else
+        parts
+      end
+
+    parts =
+      if stats[:avg] do
+        last = List.first(parts, "")
+        updated = last <> " (avg: #{format_bytes(stats.avg)})"
+        [updated | List.delete(parts, last)]
+      else
+        parts
+      end
+
+    Enum.join(parts, "\n")
+  end
+
+  defp format_detailed_stats(stats) do
+    [
+      "**Detailed Statistics:**",
+      "- Min: #{format_bytes(stats[:min] || 0)}",
+      "- Max: #{format_bytes(stats[:max] || 0)}",
+      "- Average: #{format_bytes(stats[:avg] || 0)}",
+      if(stats[:median], do: "- Median: #{format_bytes(stats.median)}", else: nil),
+      if(stats[:std_dev], do: "- Std Dev: #{format_bytes(stats.std_dev)}", else: nil),
+      if(stats[:median_delta],
+        do: "- Median Delta: #{format_bytes(stats.median_delta)}",
+        else: nil
+      )
+    ]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.join("\n")
+  end
+
+  defp format_bytes(bytes) when bytes < 1024, do: "#{bytes} B"
+  defp format_bytes(bytes) when bytes < 1024 * 1024, do: "#{Float.round(bytes / 1024, 1)} KB"
+  defp format_bytes(bytes), do: "#{Float.round(bytes / 1024 / 1024, 1)} MB"
 end
