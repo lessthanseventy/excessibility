@@ -2,7 +2,7 @@ defmodule Excessibility.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/lessthanseventy/excessibility"
-  @version "0.8.6"
+  @version "0.9.0"
 
   def project do
     [
