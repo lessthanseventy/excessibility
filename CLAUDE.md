@@ -70,11 +70,31 @@ mix test test/my_live_view_test.exs
 # View timeline
 cat test/excessibility/timeline.json
 
-# Generate debug report with filtering options
+# Generate debug report with analysis
 mix excessibility.debug test/my_live_view_test.exs
+
+# Run specific analyzers
+mix excessibility.debug test/my_live_view_test.exs --analyze=memory
+
+# Skip analysis
+mix excessibility.debug test/my_live_view_test.exs --no-analyze
+
+# Verbose output (detailed stats)
+mix excessibility.debug test/my_live_view_test.exs --verbose
+
+# Filtering options
 mix excessibility.debug test/my_live_view_test.exs --full
 mix excessibility.debug test/my_live_view_test.exs --highlight=current_user,cart
 ```
+
+**Available Analyzers:**
+
+- `memory` - Detects memory bloat and leaks using adaptive thresholds (enabled by default)
+
+**Timeline Enrichments:**
+
+Timeline events are automatically enriched with:
+- `memory_size` - Byte size of assigns at each event
 
 Timeline JSON structure:
 - `test` - Test name
@@ -83,6 +103,7 @@ Timeline JSON structure:
   - `sequence` - Event number
   - `event` - Event type (mount, handle_event:name, etc.)
   - `timestamp` - ISO8601 timestamp
+  - `memory_size` - Byte size of assigns (added by enricher)
   - `key_state` - Extracted important state
   - `changes` - Diff from previous event
 
@@ -94,6 +115,52 @@ By default, telemetry snapshots filter out noise:
 - Private assigns (starting with `_`)
 
 Use `--full` to disable filtering and see complete assigns.
+
+**Creating Custom Enrichers:**
+
+```elixir
+defmodule MyApp.CustomEnricher do
+  @behaviour Excessibility.TelemetryCapture.Enricher
+
+  def name, do: :custom
+
+  def enrich(assigns, _opts) do
+    %{custom_field: compute_value(assigns)}
+  end
+end
+
+# Register in Registry
+# lib/telemetry_capture/registry.ex
+@enrichers [
+  Excessibility.TelemetryCapture.Enrichers.Memory,
+  MyApp.CustomEnricher
+]
+```
+
+**Creating Custom Analyzers:**
+
+```elixir
+defmodule MyApp.CustomAnalyzer do
+  @behaviour Excessibility.TelemetryCapture.Analyzer
+
+  def name, do: :custom
+  def default_enabled?, do: false
+
+  def analyze(timeline, _opts) do
+    %{
+      findings: [...],
+      stats: %{...}
+    }
+  end
+end
+
+# Register in Registry
+# lib/telemetry_capture/registry.ex
+@analyzers [
+  Excessibility.TelemetryCapture.Analyzers.Memory,
+  MyApp.CustomAnalyzer
+]
+```
 
 ### Installation (for testing installer)
 ```bash
@@ -253,6 +320,28 @@ For LiveView tests, you may need to create a GenServer proxy (see `test/live_vie
 ### Test Support Files
 
 The project has `test/support/test_endpoint.ex` which provides a minimal Phoenix endpoint for testing HTML attribute extraction. ChromicPDF is started in `test_helper.exs` for screenshot testing.
+
+## Coding Conventions
+
+**Boolean Variables:**
+- All boolean variables and local bindings should end with `?` (e.g., `verbose?`, `enabled?`)
+- Boolean function names should end with `?` (e.g., `default_enabled?()`, `is_valid?()`)
+- CLI option keys don't need `?` as they're just atoms (e.g., `:verbose`, `:no_analyze`)
+
+**Example:**
+```elixir
+# Good
+def format_section(data, opts) do
+  verbose? = Keyword.get(opts, :verbose, false)
+  if verbose?, do: detailed_output(data), else: brief_output(data)
+end
+
+# Bad
+def format_section(data, opts) do
+  verbose = Keyword.get(opts, :verbose, false)
+  if verbose, do: detailed_output(data), else: brief_output(data)
+end
+```
 
 ## Dependencies
 

@@ -457,7 +457,7 @@ defmodule Mix.Tasks.Excessibility.Debug do
       analyze = Keyword.get(opts, :analyze) ->
         case analyze do
           "all" ->
-            Registry.get_all_analyzers() |> Enum.map(& &1.name())
+            Enum.map(Registry.get_all_analyzers(), & &1.name())
 
           names_str ->
             names_str
@@ -466,7 +466,7 @@ defmodule Mix.Tasks.Excessibility.Debug do
         end
 
       true ->
-        Registry.get_default_analyzers() |> Enum.map(& &1.name())
+        Enum.map(Registry.get_default_analyzers(), & &1.name())
     end
   end
 
@@ -474,9 +474,6 @@ defmodule Mix.Tasks.Excessibility.Debug do
     analyzer_names
     |> Enum.map(&Registry.get_analyzer/1)
     |> Enum.reject(&is_nil/1)
-    |> Enum.map(fn analyzer ->
-      {analyzer.name(), analyzer.analyze(timeline, opts)}
-    end)
-    |> Map.new()
+    |> Map.new(fn analyzer -> {analyzer.name(), analyzer.analyze(timeline, opts)} end)
   end
 end

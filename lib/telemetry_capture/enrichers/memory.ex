@@ -1,6 +1,4 @@
 defmodule Excessibility.TelemetryCapture.Enrichers.Memory do
-  @behaviour Excessibility.TelemetryCapture.Enricher
-
   @moduledoc """
   Enriches timeline events with memory size information.
 
@@ -21,6 +19,8 @@ defmodule Excessibility.TelemetryCapture.Enrichers.Memory do
         key_state: %{...}
       }
   """
+
+  @behaviour Excessibility.TelemetryCapture.Enricher
 
   @doc """
   Returns the enricher name.

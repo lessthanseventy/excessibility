@@ -1,8 +1,9 @@
 defmodule Integration.TelemetryAnalysisTest do
   use ExUnit.Case
 
-  alias Excessibility.TelemetryCapture.{Timeline, Registry}
   alias Excessibility.TelemetryCapture.Formatter
+  alias Excessibility.TelemetryCapture.Registry
+  alias Excessibility.TelemetryCapture.Timeline
 
   describe "end-to-end telemetry analysis flow" do
     test "enrichers add data to timeline events" do
@@ -81,11 +82,7 @@ defmodule Integration.TelemetryAnalysisTest do
       analyzers = Registry.get_default_analyzers()
 
       analysis_results =
-        analyzers
-        |> Enum.map(fn analyzer ->
-          {analyzer.name(), analyzer.analyze(timeline, [])}
-        end)
-        |> Map.new()
+        Map.new(analyzers, fn analyzer -> {analyzer.name(), analyzer.analyze(timeline, [])} end)
 
       # Format results
       markdown = Formatter.format_analysis_results(analysis_results, [])

@@ -45,8 +45,7 @@ defmodule Excessibility.TelemetryCapture.Registry do
   These run unless explicitly disabled via --no-analyze flag.
   """
   def get_default_analyzers do
-    @analyzers
-    |> Enum.filter(& &1.default_enabled?())
+    Enum.filter(@analyzers, & &1.default_enabled?())
   end
 
   @doc """

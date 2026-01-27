@@ -3,6 +3,7 @@ defmodule Excessibility.TelemetryCapture.EnricherTest do
 
   # Test implementation of enricher
   defmodule TestEnricher do
+    @moduledoc false
     @behaviour Excessibility.TelemetryCapture.Enricher
 
     def name, do: :test

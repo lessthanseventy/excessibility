@@ -3,6 +3,7 @@ defmodule Excessibility.TelemetryCapture.AnalyzerTest do
 
   # Test implementation of analyzer
   defmodule TestAnalyzer do
+    @moduledoc false
     @behaviour Excessibility.TelemetryCapture.Analyzer
 
     def name, do: :test
@@ -12,14 +13,18 @@ defmodule Excessibility.TelemetryCapture.AnalyzerTest do
       event_count = length(timeline.timeline)
 
       %{
-        findings: if(event_count > 5, do: [
-          %{
-            severity: :warning,
-            message: "Many events detected",
-            events: [1, 2, 3],
-            metadata: %{count: event_count}
-          }
-        ], else: []),
+        findings:
+          if(event_count > 5,
+            do: [
+              %{
+                severity: :warning,
+                message: "Many events detected",
+                events: [1, 2, 3],
+                metadata: %{count: event_count}
+              }
+            ],
+            else: []
+          ),
         stats: %{event_count: event_count}
       }
     end

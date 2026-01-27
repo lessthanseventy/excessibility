@@ -233,11 +233,10 @@ defmodule Excessibility.TelemetryCapture.Formatter do
       "- Min: #{format_bytes(stats[:min] || 0)}",
       "- Max: #{format_bytes(stats[:max] || 0)}",
       "- Average: #{format_bytes(stats[:avg] || 0)}",
-      if(stats[:median], do: "- Median: #{format_bytes(stats.median)}", else: nil),
-      if(stats[:std_dev], do: "- Std Dev: #{format_bytes(stats.std_dev)}", else: nil),
+      if(stats[:median], do: "- Median: #{format_bytes(stats.median)}"),
+      if(stats[:std_dev], do: "- Std Dev: #{format_bytes(stats.std_dev)}"),
       if(stats[:median_delta],
-        do: "- Median Delta: #{format_bytes(stats.median_delta)}",
-        else: nil
+        do: "- Median Delta: #{format_bytes(stats.median_delta)}"
       )
     ]
     |> Enum.reject(&is_nil/1)
