@@ -95,6 +95,13 @@ mix excessibility.debug test/my_live_view_test.exs --highlight=current_user,cart
 
 Timeline events are automatically enriched with:
 - `memory_size` - Byte size of assigns at each event
+- `event_duration_ms` - Event duration from telemetry
+
+**Captured Events:**
+- `mount` - LiveView mount
+- `handle_params` - URL parameter handling
+- `handle_event:name` - User interactions (click, submit, etc.)
+- `render` - Render cycles (triggered by render_change, render_click, render_submit)
 
 Timeline JSON structure:
 - `test` - Test name
