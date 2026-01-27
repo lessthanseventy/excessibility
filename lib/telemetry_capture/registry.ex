@@ -21,7 +21,8 @@ defmodule Excessibility.TelemetryCapture.Registry do
   # Future: Could use compile-time discovery via @behaviour inspection
   @enrichers [
     Excessibility.TelemetryCapture.Enrichers.Memory,
-    Excessibility.TelemetryCapture.Enrichers.Query
+    Excessibility.TelemetryCapture.Enrichers.Query,
+    Excessibility.TelemetryCapture.Enrichers.State
   ]
 
   @analyzers [
