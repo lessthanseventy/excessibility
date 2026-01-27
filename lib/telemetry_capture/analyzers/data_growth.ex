@@ -94,50 +94,71 @@ defmodule Excessibility.TelemetryCapture.Analyzers.DataGrowth do
     first_size = List.first(sizes)
     last_size = List.last(sizes)
 
-    # Skip if list is shrinking
+    # Skip if list is shrinking or not growing
     if last_size <= first_size do
       []
     else
-      growth_multiplier = last_size / first_size
+      growth_multiplier = calculate_growth_multiplier(first_size, last_size)
       max_single_step_growth = calculate_max_step_growth(sizes)
-
       sequences = get_sequences_for_path(timeline, path)
 
-      cond do
-        # Critical: 10x in single step or list > 100 with 3x+ growth
-        max_single_step_growth >= 10 or (last_size > 100 and growth_multiplier >= 3) ->
-          [
-            %{
-              severity: :critical,
-              message: build_growth_message(path, sizes, growth_multiplier, last_size > 100),
-              events: sequences,
-              metadata: %{
-                list_name: path,
-                sizes: sizes,
-                growth_multiplier: Float.round(growth_multiplier, 1),
-                suggest_pagination?: last_size > 100
-              }
-            }
-          ]
+      maybe_build_finding(path, sizes, growth_multiplier, max_single_step_growth, last_size, sequences)
+    end
+  end
 
-        # Warning: 3x+ overall growth
-        growth_multiplier >= 3 ->
-          [
-            %{
-              severity: :warning,
-              message: build_growth_message(path, sizes, growth_multiplier, false),
-              events: sequences,
-              metadata: %{
-                list_name: path,
-                sizes: sizes,
-                growth_multiplier: Float.round(growth_multiplier, 1)
-              }
-            }
-          ]
+  defp calculate_growth_multiplier(first_size, last_size) when first_size > 0 do
+    last_size / first_size
+  end
 
-        true ->
-          []
-      end
+  defp calculate_growth_multiplier(_first_size, _last_size) do
+    # When starting from 0, treat any growth as significant
+    :infinity
+  end
+
+  defp maybe_build_finding(path, sizes, growth_multiplier, max_step_growth, last_size, sequences) do
+    cond do
+      critical_growth?(growth_multiplier, max_step_growth, last_size) ->
+        [build_finding(:critical, path, sizes, growth_multiplier, last_size, sequences)]
+
+      warning_growth?(growth_multiplier) ->
+        [build_finding(:warning, path, sizes, growth_multiplier, last_size, sequences)]
+
+      true ->
+        []
+    end
+  end
+
+  defp critical_growth?(growth_multiplier, max_step_growth, last_size) do
+    max_step_growth >= 10 or
+      (last_size > 100 and (growth_multiplier == :infinity or growth_multiplier >= 3))
+  end
+
+  defp warning_growth?(growth_multiplier) do
+    growth_multiplier == :infinity or growth_multiplier >= 3
+  end
+
+  defp build_finding(severity, path, sizes, growth_multiplier, last_size, sequences) do
+    suggest_pagination? = severity == :critical and last_size > 100
+
+    %{
+      severity: severity,
+      message: build_growth_message(path, sizes, growth_multiplier, suggest_pagination?),
+      events: sequences,
+      metadata: build_metadata(path, sizes, growth_multiplier, suggest_pagination?)
+    }
+  end
+
+  defp build_metadata(path, sizes, growth_multiplier, suggest_pagination?) do
+    base = %{
+      list_name: path,
+      sizes: sizes,
+      growth_multiplier: format_growth_multiplier(growth_multiplier)
+    }
+
+    if suggest_pagination? do
+      Map.put(base, :suggest_pagination?, true)
+    else
+      base
     end
   end
 
@@ -162,10 +183,16 @@ defmodule Excessibility.TelemetryCapture.Analyzers.DataGrowth do
     |> Enum.map(& &1.sequence)
   end
 
+  defp format_growth_multiplier(:infinity), do: "∞"
+
+  defp format_growth_multiplier(multiplier) when is_number(multiplier) do
+    Float.round(multiplier, 1)
+  end
+
   defp build_growth_message(path, sizes, multiplier, suggest_pagination?) do
     path_str = to_string(path)
     sizes_str = Enum.map_join(sizes, " → ", &to_string/1)
-    multiplier_str = Float.round(multiplier, 1)
+    multiplier_str = format_growth_multiplier(multiplier)
 
     base = "List '#{path_str}' growing: #{sizes_str} (#{multiplier_str}x)"
 
