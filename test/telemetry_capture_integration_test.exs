@@ -131,4 +131,123 @@ defmodule Excessibility.TelemetryCaptureIntegrationTest do
     TelemetryCapture.detach()
     File.rm_rf!("test/excessibility")
   end
+
+  test "write_snapshots captures render events from render_change" do
+    # Attach telemetry
+    TelemetryCapture.attach()
+
+    # Simulate mount
+    TelemetryCapture.handle_event(
+      [:phoenix, :live_view, :mount, :stop],
+      %{duration: 100},
+      %{
+        socket: %{
+          assigns: %{products: [], quantity: 0},
+          view: MyApp.ShopLive
+        }
+      },
+      nil
+    )
+
+    :timer.sleep(10)
+
+    # Simulate first render_change (quantity update)
+    TelemetryCapture.handle_event(
+      [:phoenix, :live_view, :render, :stop],
+      %{duration: 25},
+      %{
+        socket: %{
+          assigns: %{products: [], quantity: 1},
+          view: MyApp.ShopLive
+        },
+        force?: false,
+        changed?: true
+      },
+      nil
+    )
+
+    :timer.sleep(10)
+
+    # Simulate second render_change (quantity update)
+    TelemetryCapture.handle_event(
+      [:phoenix, :live_view, :render, :stop],
+      %{duration: 30},
+      %{
+        socket: %{
+          assigns: %{products: [], quantity: 2},
+          view: MyApp.ShopLive
+        },
+        force?: false,
+        changed?: true
+      },
+      nil
+    )
+
+    :timer.sleep(10)
+
+    # Simulate third render_change (quantity update)
+    TelemetryCapture.handle_event(
+      [:phoenix, :live_view, :render, :stop],
+      %{duration: 28},
+      %{
+        socket: %{
+          assigns: %{products: [], quantity: 3},
+          view: MyApp.ShopLive
+        },
+        force?: false,
+        changed?: true
+      },
+      nil
+    )
+
+    # Write snapshots
+    TelemetryCapture.write_snapshots("render_change_test")
+
+    # Verify timeline.json exists
+    timeline_path = "test/excessibility/timeline.json"
+    assert File.exists?(timeline_path)
+
+    # Verify timeline content
+    timeline = timeline_path |> File.read!() |> Jason.decode!()
+    assert timeline["test"] == "render_change_test"
+    assert length(timeline["timeline"]) == 4
+
+    # Verify mount event
+    mount_event = Enum.at(timeline["timeline"], 0)
+    assert mount_event["event"] == "mount"
+    assert mount_event["sequence"] == 1
+    assert mount_event["key_state"]["quantity"] == 0
+
+    # Verify render events
+    render1 = Enum.at(timeline["timeline"], 1)
+    assert render1["event"] == "render"
+    assert render1["sequence"] == 2
+    assert render1["key_state"]["quantity"] == 1
+    assert render1["changes"] != nil
+    # Verify changes detected quantity update
+    assert Map.has_key?(render1["changes"], "quantity")
+
+    render2 = Enum.at(timeline["timeline"], 2)
+    assert render2["event"] == "render"
+    assert render2["sequence"] == 3
+    assert render2["key_state"]["quantity"] == 2
+
+    render3 = Enum.at(timeline["timeline"], 3)
+    assert render3["event"] == "render"
+    assert render3["sequence"] == 4
+    assert render3["key_state"]["quantity"] == 3
+
+    # Verify enrichments work on render events (memory_size from Memory enricher)
+    assert Map.has_key?(render1, "memory_size")
+    assert is_integer(render1["memory_size"])
+    assert render1["memory_size"] > 0
+
+    # Verify duration enrichment (from Duration enricher)
+    assert Map.has_key?(render1, "event_duration_ms")
+    assert is_integer(render1["event_duration_ms"])
+
+    # Cleanup
+    TelemetryCapture.detach()
+    File.rm_rf!("test/excessibility")
+  end
 end

@@ -27,7 +27,8 @@ defmodule Excessibility.TelemetryCapture do
       [
         [:phoenix, :live_view, :mount, :stop],
         [:phoenix, :live_view, :handle_event, :stop],
-        [:phoenix, :live_view, :handle_params, :stop]
+        [:phoenix, :live_view, :handle_params, :stop],
+        [:phoenix, :live_view, :render, :stop]
       ],
       &handle_event/4,
       nil
@@ -62,6 +63,10 @@ defmodule Excessibility.TelemetryCapture do
 
   def handle_event([:phoenix, :live_view, :handle_params, :stop], measurements, metadata, _config) do
     capture_snapshot("handle_params", measurements, metadata)
+  end
+
+  def handle_event([:phoenix, :live_view, :render, :stop], measurements, metadata, _config) do
+    capture_snapshot("render", measurements, metadata)
   end
 
   defp capture_snapshot(event_type, measurements, metadata) do
