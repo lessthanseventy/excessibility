@@ -54,7 +54,7 @@ defmodule Excessibility.TelemetryCapture.Enrichers.State do
     |> Kernel.+(1)
   end
 
-  defp calculate_max_depth(value) when is_list(value) and length(value) == 0, do: 0
+  defp calculate_max_depth(value) when is_list(value) and value == [], do: 0
 
   defp calculate_max_depth(value) when is_list(value) do
     value
