@@ -101,4 +101,41 @@ defmodule Excessibility.TelemetryCapture.TimelineTest do
       assert result.duration_ms == 0
     end
   end
+
+  describe "enricher integration" do
+    test "build_timeline_entry includes enriched data" do
+      snapshot = %{
+        event_type: "mount",
+        assigns: %{user: "test", count: 5},
+        timestamp: ~U[2024-01-01 00:00:00Z],
+        view_module: TestModule
+      }
+
+      entry = Timeline.build_timeline_entry(snapshot, nil, 1, [])
+
+      # Should have memory_size from Memory enricher
+      assert Map.has_key?(entry, :memory_size)
+      assert is_integer(entry.memory_size)
+      assert entry.memory_size > 0
+    end
+
+    test "enrichments are merged with timeline entry" do
+      snapshot = %{
+        event_type: "handle_event:click",
+        assigns: %{data: "value"},
+        timestamp: ~U[2024-01-01 00:00:01Z],
+        view_module: TestModule
+      }
+
+      entry = Timeline.build_timeline_entry(snapshot, nil, 2, [])
+
+      # Original fields still present
+      assert entry.sequence == 2
+      assert entry.event == "handle_event:click"
+      assert entry.view_module == TestModule
+
+      # Enriched field added
+      assert Map.has_key?(entry, :memory_size)
+    end
+  end
 end
