@@ -26,7 +26,8 @@ defmodule Excessibility.TelemetryCapture.Registry do
   ]
 
   @analyzers [
-    Excessibility.TelemetryCapture.Analyzers.Memory
+    Excessibility.TelemetryCapture.Analyzers.Memory,
+    Excessibility.TelemetryCapture.Analyzers.NPlusOne
   ]
 
   @doc """
