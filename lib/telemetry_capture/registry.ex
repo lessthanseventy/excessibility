@@ -30,6 +30,7 @@ defmodule Excessibility.TelemetryCapture.Registry do
   @analyzers [
     Excessibility.TelemetryCapture.Analyzers.Memory,
     Excessibility.TelemetryCapture.Analyzers.NPlusOne,
+    Excessibility.TelemetryCapture.Analyzers.Performance,
     Excessibility.TelemetryCapture.Analyzers.StateMachine
   ]
 
