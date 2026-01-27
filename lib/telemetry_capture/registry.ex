@@ -29,6 +29,7 @@ defmodule Excessibility.TelemetryCapture.Registry do
 
   @analyzers [
     Excessibility.TelemetryCapture.Analyzers.DataGrowth,
+    Excessibility.TelemetryCapture.Analyzers.EventPattern,
     Excessibility.TelemetryCapture.Analyzers.Memory,
     Excessibility.TelemetryCapture.Analyzers.NPlusOne,
     Excessibility.TelemetryCapture.Analyzers.Performance,
