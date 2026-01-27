@@ -72,8 +72,8 @@ defmodule Excessibility.TelemetryCapture.Analyzers.StateMachine do
       prev_keys = MapSet.new(Map.get(prev, :state_keys, []))
       curr_keys = MapSet.new(Map.get(curr, :state_keys, []))
 
-      added = MapSet.difference(curr_keys, prev_keys) |> MapSet.to_list()
-      removed = MapSet.difference(prev_keys, curr_keys) |> MapSet.to_list()
+      added = curr_keys |> MapSet.difference(prev_keys) |> MapSet.to_list()
+      removed = prev_keys |> MapSet.difference(curr_keys) |> MapSet.to_list()
 
       %{
         from_sequence: prev.sequence,
@@ -139,8 +139,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.StateMachine do
       [
         %{
           severity: :warning,
-          message:
-            "Rapid state changes detected: #{transitions_with_changes} transitions with changes",
+          message: "Rapid state changes detected: #{transitions_with_changes} transitions with changes",
           events: sequences,
           metadata: %{transition_count: transitions_with_changes}
         }
@@ -170,8 +169,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.StateMachine do
       [
         %{
           severity: :warning,
-          message:
-            "Unstable state detected: #{MapSet.size(unstable_keys)} keys were added and then removed",
+          message: "Unstable state detected: #{MapSet.size(unstable_keys)} keys were added and then removed",
           events: sequences,
           metadata: %{
             unstable_keys: MapSet.to_list(unstable_keys)

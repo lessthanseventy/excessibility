@@ -114,8 +114,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Performance do
     threshold_warning = stats.avg_duration + 2 * stats.std_dev
     threshold_critical = stats.avg_duration + 3 * stats.std_dev
 
-    timeline
-    |> Enum.flat_map(fn event ->
+    Enum.flat_map(timeline, fn event ->
       duration = Map.get(event, :event_duration_ms)
 
       if is_nil(duration) do
@@ -124,19 +123,16 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Performance do
         multiplier = if stats.avg_duration > 0, do: duration / stats.avg_duration, else: 0
 
         cond do
-          # Critical: >1000ms OR > mean + 3σ
           duration > 1000 or duration > threshold_critical ->
             [
               %{
                 severity: :critical,
-                message:
-                  "Very slow event (#{duration}ms, #{format_multiplier(multiplier)}x average)",
+                message: "Very slow event (#{duration}ms, #{format_multiplier(multiplier)}x average)",
                 events: [event.sequence],
                 metadata: %{duration_ms: duration, multiplier: Float.round(multiplier, 1)}
               }
             ]
 
-          # Warning: > mean + 2σ
           duration > threshold_warning ->
             [
               %{
@@ -152,13 +148,16 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Performance do
         end
       end
     end)
+
+    # Critical: >1000ms OR > mean + 3σ
+
+    # Warning: > mean + 2σ
   end
 
   defp detect_bottlenecks(timeline, stats) do
     threshold = stats.total_duration * 0.5
 
-    timeline
-    |> Enum.flat_map(fn event ->
+    Enum.flat_map(timeline, fn event ->
       duration = Map.get(event, :event_duration_ms)
 
       if is_nil(duration) or duration <= threshold do
@@ -169,8 +168,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Performance do
         [
           %{
             severity: :critical,
-            message:
-              "Performance bottleneck: event took #{duration}ms (#{percentage}% of total time)",
+            message: "Performance bottleneck: event took #{duration}ms (#{percentage}% of total time)",
             events: [event.sequence],
             metadata: %{duration_ms: duration, percentage: percentage}
           }
