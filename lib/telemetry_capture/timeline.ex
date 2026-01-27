@@ -8,6 +8,7 @@ defmodule Excessibility.TelemetryCapture.Timeline do
 
   alias Excessibility.TelemetryCapture.Diff
   alias Excessibility.TelemetryCapture.Filter
+  alias Excessibility.TelemetryCapture.Registry
 
   @default_highlight_fields [:current_user, :live_action, :errors, :form]
   @small_value_threshold 100
@@ -110,6 +111,9 @@ defmodule Excessibility.TelemetryCapture.Timeline do
         DateTime.diff(snapshot.timestamp, previous.timestamp, :millisecond)
       end
 
+    # NEW: Run enrichers
+    enrichments = run_enrichers(filtered_assigns, opts)
+
     %{
       sequence: sequence,
       event: snapshot.event_type,
@@ -119,5 +123,16 @@ defmodule Excessibility.TelemetryCapture.Timeline do
       changes: changes,
       duration_since_previous_ms: duration_since_previous
     }
+    |> Map.merge(enrichments)
+  end
+
+  # NEW: Add helper function
+  defp run_enrichers(assigns, opts) do
+    enrichers = Registry.discover_enrichers()
+
+    Enum.reduce(enrichers, %{}, fn enricher, acc ->
+      enrichment = enricher.enrich(assigns, opts)
+      Map.merge(acc, enrichment)
+    end)
   end
 end
