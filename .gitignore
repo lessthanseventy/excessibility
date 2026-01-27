@@ -30,3 +30,6 @@ pally_test-*.tar
 
 # Test snapshots and baselines
 /test/excessibility/
+
+# Git worktrees
+/.worktrees/
