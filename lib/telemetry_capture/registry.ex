@@ -20,6 +20,7 @@ defmodule Excessibility.TelemetryCapture.Registry do
   # Hard-coded for initial implementation
   # Future: Could use compile-time discovery via @behaviour inspection
   @enrichers [
+    Excessibility.TelemetryCapture.Enrichers.Duration,
     Excessibility.TelemetryCapture.Enrichers.Memory,
     Excessibility.TelemetryCapture.Enrichers.Query,
     Excessibility.TelemetryCapture.Enrichers.State
