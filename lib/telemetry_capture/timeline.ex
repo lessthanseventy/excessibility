@@ -112,7 +112,7 @@ defmodule Excessibility.TelemetryCapture.Timeline do
       end
 
     # NEW: Run enrichers
-    enrichments = run_enrichers(filtered_assigns, opts)
+    enrichments = run_enrichers(filtered_assigns, snapshot, opts)
 
     Map.merge(
       %{
@@ -129,11 +129,15 @@ defmodule Excessibility.TelemetryCapture.Timeline do
   end
 
   # NEW: Add helper function
-  defp run_enrichers(assigns, opts) do
+  defp run_enrichers(assigns, snapshot, opts) do
     enrichers = Registry.discover_enrichers()
 
+    # Pass measurements through opts for enrichers that need them
+    measurements = Map.get(snapshot, :measurements, %{})
+    enricher_opts = Keyword.put(opts, :measurements, measurements)
+
     Enum.reduce(enrichers, %{}, fn enricher, acc ->
-      enrichment = enricher.enrich(assigns, opts)
+      enrichment = enricher.enrich(assigns, enricher_opts)
       Map.merge(acc, enrichment)
     end)
   end

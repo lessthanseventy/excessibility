@@ -64,14 +64,14 @@ defmodule Excessibility.TelemetryCapture do
     capture_snapshot("handle_params", measurements, metadata)
   end
 
-  defp capture_snapshot(event_type, _measurements, metadata) do
+  defp capture_snapshot(event_type, measurements, metadata) do
     socket = metadata[:socket]
 
     if socket do
       clean_assigns = extract_clean_assigns(socket)
       view_module = extract_view_module(socket, metadata)
 
-      store_snapshot(event_type, clean_assigns, view_module, metadata)
+      store_snapshot(event_type, clean_assigns, view_module, metadata, measurements)
     else
       Logger.debug("Excessibility: No socket in metadata for #{event_type}")
     end
@@ -102,7 +102,7 @@ defmodule Excessibility.TelemetryCapture do
     end
   end
 
-  defp store_snapshot(event_type, clean_assigns, view_module, metadata) do
+  defp store_snapshot(event_type, clean_assigns, view_module, metadata, measurements) do
     key = {DateTime.utc_now(), :erlang.unique_integer([:monotonic])}
 
     snapshot = %{
@@ -110,7 +110,8 @@ defmodule Excessibility.TelemetryCapture do
       assigns: clean_assigns,
       timestamp: DateTime.utc_now(),
       view_module: view_module,
-      metadata_keys: Map.keys(metadata)
+      metadata_keys: Map.keys(metadata),
+      measurements: measurements
     }
 
     :ets.insert(:excessibility_snapshots, {key, snapshot})
