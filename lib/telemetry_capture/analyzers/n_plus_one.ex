@@ -58,24 +58,26 @@ defmodule Excessibility.TelemetryCapture.Analyzers.NPlusOne do
   end
 
   defp detect_not_loaded(timeline) do
-    Enum.flat_map(timeline, fn event ->
-      not_loaded_count = Map.get(event, :query_not_loaded_count, 0)
+    Enum.flat_map(timeline, &check_not_loaded/1)
+  end
 
-      if not_loaded_count > 0 do
-        severity = if not_loaded_count >= 10, do: :critical, else: :warning
+  defp check_not_loaded(event) do
+    not_loaded_count = Map.get(event, :query_not_loaded_count, 0)
 
-        [
-          %{
-            severity: severity,
-            message: "Found #{not_loaded_count} NotLoaded associations in event #{event.sequence}",
-            events: [event.sequence],
-            metadata: %{not_loaded_count: not_loaded_count}
-          }
-        ]
-      else
-        []
-      end
-    end)
+    if not_loaded_count > 0 do
+      severity = if not_loaded_count >= 10, do: :critical, else: :warning
+
+      [
+        %{
+          severity: severity,
+          message: "Found #{not_loaded_count} NotLoaded associations in event #{event.sequence}",
+          events: [event.sequence],
+          metadata: %{not_loaded_count: not_loaded_count}
+        }
+      ]
+    else
+      []
+    end
   end
 
   defp calculate_stats(timeline) do

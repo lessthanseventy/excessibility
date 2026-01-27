@@ -115,43 +115,46 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Performance do
     threshold_critical = stats.avg_duration + 3 * stats.std_dev
 
     Enum.flat_map(timeline, fn event ->
-      duration = Map.get(event, :event_duration_ms)
-
-      if is_nil(duration) do
-        []
-      else
-        multiplier = if stats.avg_duration > 0, do: duration / stats.avg_duration, else: 0
-
-        cond do
-          duration > 1000 or duration > threshold_critical ->
-            [
-              %{
-                severity: :critical,
-                message: "Very slow event (#{duration}ms, #{format_multiplier(multiplier)}x average)",
-                events: [event.sequence],
-                metadata: %{duration_ms: duration, multiplier: Float.round(multiplier, 1)}
-              }
-            ]
-
-          duration > threshold_warning ->
-            [
-              %{
-                severity: :warning,
-                message: "Slow event (#{duration}ms, #{format_multiplier(multiplier)}x average)",
-                events: [event.sequence],
-                metadata: %{duration_ms: duration, multiplier: Float.round(multiplier, 1)}
-              }
-            ]
-
-          true ->
-            []
-        end
-      end
+      check_event_duration(event, stats, threshold_warning, threshold_critical)
     end)
 
     # Critical: >1000ms OR > mean + 3σ
-
     # Warning: > mean + 2σ
+  end
+
+  defp check_event_duration(event, stats, threshold_warning, threshold_critical) do
+    duration = Map.get(event, :event_duration_ms)
+
+    if is_nil(duration) do
+      []
+    else
+      multiplier = if stats.avg_duration > 0, do: duration / stats.avg_duration, else: 0
+
+      cond do
+        duration > 1000 or duration > threshold_critical ->
+          [
+            %{
+              severity: :critical,
+              message: "Very slow event (#{duration}ms, #{format_multiplier(multiplier)}x average)",
+              events: [event.sequence],
+              metadata: %{duration_ms: duration, multiplier: Float.round(multiplier, 1)}
+            }
+          ]
+
+        duration > threshold_warning ->
+          [
+            %{
+              severity: :warning,
+              message: "Slow event (#{duration}ms, #{format_multiplier(multiplier)}x average)",
+              events: [event.sequence],
+              metadata: %{duration_ms: duration, multiplier: Float.round(multiplier, 1)}
+            }
+          ]
+
+        true ->
+          []
+      end
+    end
   end
 
   defp detect_bottlenecks(timeline, stats) do
