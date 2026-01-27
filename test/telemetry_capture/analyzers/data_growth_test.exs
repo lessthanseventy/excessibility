@@ -194,5 +194,27 @@ defmodule Excessibility.TelemetryCapture.Analyzers.DataGrowthTest do
       assert Map.has_key?(finding.metadata, :growth_multiplier)
       assert finding.metadata.growth_multiplier == 5.0
     end
+
+    test "handles list growing from zero without ArithmeticError" do
+      # Reproduces GitHub issue #58
+      timeline = %{
+        timeline: [
+          %{sequence: 1, event: "mount", list_sizes: %{products: 0}},
+          %{sequence: 2, event: "handle_event", list_sizes: %{products: 10}},
+          %{sequence: 3, event: "handle_event", list_sizes: %{products: 50}}
+        ]
+      }
+
+      # Should not crash with ArithmeticError
+      result = DataGrowth.analyze(timeline, [])
+
+      # Should detect the growth
+      assert length(result.findings) > 0
+      finding = List.first(result.findings)
+      assert finding.message =~ "products"
+      # When starting from 0, we can't calculate a meaningful multiplier
+      # so the message should still be informative
+      assert finding.message =~ ~r/\d+/
+    end
   end
 end
