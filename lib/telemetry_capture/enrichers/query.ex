@@ -1,6 +1,4 @@
 defmodule Excessibility.TelemetryCapture.Enrichers.Query do
-  @behaviour Excessibility.TelemetryCapture.Enricher
-
   @moduledoc """
   Enriches timeline events with query/database information.
 
@@ -22,6 +20,8 @@ defmodule Excessibility.TelemetryCapture.Enrichers.Query do
         query_not_loaded_count: 12
       }
   """
+
+  @behaviour Excessibility.TelemetryCapture.Enricher
 
   def name, do: :query
 
@@ -45,7 +45,7 @@ defmodule Excessibility.TelemetryCapture.Enrichers.Query do
         {records, not_loaded + 1}
 
       # It's an Ecto struct - count it and recurse into its fields
-      is_ecto_struct?(value) ->
+      ecto_struct?(value) ->
         value
         |> Map.from_struct()
         |> count_queries_recursive({records + 1, not_loaded})
@@ -74,9 +74,9 @@ defmodule Excessibility.TelemetryCapture.Enrichers.Query do
 
   # Check if a struct is an Ecto schema
   # Ecto schemas have __meta__ field or are database-backed
-  defp is_ecto_struct?(struct) do
+  defp ecto_struct?(struct) do
     Map.has_key?(struct, :__meta__) or
       (Map.has_key?(struct, :__struct__) and
-         not (struct.__struct__ in [Ecto.Association.NotLoaded]))
+         struct.__struct__ not in [Ecto.Association.NotLoaded])
   end
 end

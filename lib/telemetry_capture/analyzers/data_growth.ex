@@ -72,8 +72,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.DataGrowth do
   end
 
   defp detect_growth(timeline, list_paths) do
-    list_paths
-    |> Enum.flat_map(fn path ->
+    Enum.flat_map(list_paths, fn path ->
       sizes = extract_sizes_for_path(timeline, path)
       analyze_list_growth(path, sizes, timeline)
     end)
@@ -181,8 +180,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.DataGrowth do
 
   defp calculate_stats(list_paths, timeline) do
     growing =
-      list_paths
-      |> Enum.filter(fn path ->
+      Enum.filter(list_paths, fn path ->
         sizes = extract_sizes_for_path(timeline, path)
 
         if length(sizes) >= 2 do

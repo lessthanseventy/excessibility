@@ -75,8 +75,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EventPattern do
         [
           %{
             severity: :warning,
-            message:
-              "#{length(chunk)} consecutive '#{event_type}' events - may indicate unnecessary re-renders",
+            message: "#{length(chunk)} consecutive '#{event_type}' events - may indicate unnecessary re-renders",
             events: sequences,
             metadata: %{event_type: event_type, count: length(chunk)}
           }
@@ -90,19 +89,14 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EventPattern do
   defp detect_excessive_events(timeline) do
     event_counts = count_events(timeline)
 
-    event_counts
-    |> Enum.flat_map(fn {event_type, count} ->
+    Enum.flat_map(event_counts, fn {event_type, count} ->
       if count > 10 do
-        sequences =
-          timeline
-          |> Enum.filter(&(&1.event == event_type))
-          |> Enum.map(& &1.sequence)
+        sequences = timeline |> Enum.filter(&(&1.event == event_type)) |> Enum.map(& &1.sequence)
 
         [
           %{
             severity: :info,
-            message:
-              "Many '#{event_type}' events (#{count} total) - consider if all are necessary",
+            message: "Many '#{event_type}' events (#{count} total) - consider if all are necessary",
             events: sequences,
             metadata: %{event_type: event_type, count: count}
           }
@@ -117,25 +111,18 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EventPattern do
     # Detect rapid-fire events (likely candidates for debouncing)
     rapid_events = detect_rapid_events(timeline)
 
-    rapid_events
-    |> Enum.flat_map(fn {event_type, sequences, count} ->
+    Enum.flat_map(rapid_events, fn {event_type, sequences, count} ->
       suggestion =
         cond do
-          event_type =~ ~r/(keyup|keydown|input|change)/ ->
-            "consider debouncing"
-
-          event_type =~ ~r/(scroll|resize|mousemove)/ ->
-            "consider throttling"
-
-          true ->
-            "consider batching or debouncing"
+          event_type =~ ~r/(keyup|keydown|input|change)/ -> "consider debouncing"
+          event_type =~ ~r/(scroll|resize|mousemove)/ -> "consider throttling"
+          true -> "consider batching or debouncing"
         end
 
       [
         %{
           severity: :info,
-          message:
-            "Rapid '#{event_type}' events (#{count} in sequence) - #{suggestion}",
+          message: "Rapid '#{event_type}' events (#{count} in sequence) - #{suggestion}",
           events: sequences,
           metadata: %{event_type: event_type, count: count, suggestion: suggestion}
         }

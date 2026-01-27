@@ -1,6 +1,4 @@
 defmodule Excessibility.TelemetryCapture.Enrichers.State do
-  @behaviour Excessibility.TelemetryCapture.Enricher
-
   @moduledoc """
   Enriches timeline events with state structure information.
 
@@ -24,6 +22,8 @@ defmodule Excessibility.TelemetryCapture.Enrichers.State do
         state_max_depth: 4
       }
   """
+
+  @behaviour Excessibility.TelemetryCapture.Enricher
 
   def name, do: :state
 

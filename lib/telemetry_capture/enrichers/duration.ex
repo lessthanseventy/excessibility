@@ -1,6 +1,4 @@
 defmodule Excessibility.TelemetryCapture.Enrichers.Duration do
-  @behaviour Excessibility.TelemetryCapture.Enricher
-
   @moduledoc """
   Enriches timeline events with duration information.
 
@@ -21,6 +19,8 @@ defmodule Excessibility.TelemetryCapture.Enrichers.Duration do
       }
   """
 
+  @behaviour Excessibility.TelemetryCapture.Enricher
+
   def name, do: :duration
 
   def enrich(_assigns, opts) do
@@ -33,6 +33,7 @@ defmodule Excessibility.TelemetryCapture.Enrichers.Duration do
   end
 
   defp extract_duration_ms(nil), do: nil
+
   defp extract_duration_ms(%{duration: duration}) when is_integer(duration) do
     # Phoenix telemetry uses native time units
     # Convert to milliseconds and round

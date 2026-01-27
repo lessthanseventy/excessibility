@@ -1,6 +1,4 @@
 defmodule Excessibility.TelemetryCapture.Enrichers.CollectionSize do
-  @behaviour Excessibility.TelemetryCapture.Enricher
-
   @moduledoc """
   Enriches timeline events with collection size information.
 
@@ -24,6 +22,8 @@ defmodule Excessibility.TelemetryCapture.Enrichers.CollectionSize do
         total_list_items: 62
       }
   """
+
+  @behaviour Excessibility.TelemetryCapture.Enricher
 
   def name, do: :collection_size
 
@@ -94,12 +94,11 @@ defmodule Excessibility.TelemetryCapture.Enrichers.CollectionSize do
 
   defp build_path_key(path) do
     path
-    |> Enum.map(fn
+    |> Enum.map_join(".", fn
       key when is_atom(key) -> Atom.to_string(key)
       key when is_integer(key) -> "[#{key}]"
       key -> to_string(key)
     end)
-    |> Enum.join(".")
     |> String.replace(".[", "[")
     |> String.to_atom()
   end
