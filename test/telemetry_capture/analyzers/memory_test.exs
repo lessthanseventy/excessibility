@@ -82,7 +82,8 @@ defmodule Excessibility.TelemetryCapture.Analyzers.MemoryTest do
   # Helper to build test timeline
   defp build_timeline(memory_sizes) do
     timeline_entries =
-      Enum.with_index(memory_sizes, 1)
+      memory_sizes
+      |> Enum.with_index(1)
       |> Enum.map(fn {size, seq} ->
         %{
           sequence: seq,

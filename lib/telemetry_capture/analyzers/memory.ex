@@ -1,6 +1,4 @@
 defmodule Excessibility.TelemetryCapture.Analyzers.Memory do
-  @behaviour Excessibility.TelemetryCapture.Analyzer
-
   @moduledoc """
   Analyzes memory usage patterns across timeline events.
 
@@ -36,6 +34,8 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Memory do
         stats: %{min: 2300, max: 890000, avg: 145000, median_delta: 12000}
       }
   """
+
+  @behaviour Excessibility.TelemetryCapture.Analyzer
 
   def name, do: :memory
   def default_enabled?, do: true
@@ -90,12 +90,14 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Memory do
     count = length(sorted_list)
     mid = div(count, 2)
 
-    if rem(count, 2) == 0 do
-      (Enum.at(sorted_list, mid - 1) + Enum.at(sorted_list, mid)) / 2
-    else
-      Enum.at(sorted_list, mid)
-    end
-    |> round()
+    if_result =
+      if rem(count, 2) == 0 do
+        (Enum.at(sorted_list, mid - 1) + Enum.at(sorted_list, mid)) / 2
+      else
+        Enum.at(sorted_list, mid)
+      end
+
+    round(if_result)
   end
 
   defp calculate_std_dev(values, mean) do
@@ -187,17 +189,17 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Memory do
 
   defp significant_consecutive_increases?([a, b, c], stats) do
     # All must be increasing
-    increasing = a.memory_size < b.memory_size and b.memory_size < c.memory_size
+    increasing? = a.memory_size < b.memory_size and b.memory_size < c.memory_size
 
-    if not increasing do
-      false
-    else
+    if increasing? do
       # At least one increase must be > median_delta to avoid flagging tiny healthy growth
       delta1 = b.memory_size - a.memory_size
       delta2 = c.memory_size - b.memory_size
       threshold = stats.median_delta
 
       delta1 > threshold or delta2 > threshold
+    else
+      false
     end
   end
 

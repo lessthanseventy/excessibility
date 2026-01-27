@@ -114,16 +114,18 @@ defmodule Excessibility.TelemetryCapture.Timeline do
     # NEW: Run enrichers
     enrichments = run_enrichers(filtered_assigns, opts)
 
-    %{
-      sequence: sequence,
-      event: snapshot.event_type,
-      timestamp: snapshot.timestamp,
-      view_module: snapshot.view_module,
-      key_state: key_state,
-      changes: changes,
-      duration_since_previous_ms: duration_since_previous
-    }
-    |> Map.merge(enrichments)
+    Map.merge(
+      %{
+        sequence: sequence,
+        event: snapshot.event_type,
+        timestamp: snapshot.timestamp,
+        view_module: snapshot.view_module,
+        key_state: key_state,
+        changes: changes,
+        duration_since_previous_ms: duration_since_previous
+      },
+      enrichments
+    )
   end
 
   # NEW: Add helper function
