@@ -14,7 +14,6 @@ defmodule Mix.Tasks.Excessibility.Install do
   alias Igniter.Libs.Phoenix
   alias Igniter.Mix.Task.Info
   alias Igniter.Project.Config
-  alias Igniter.Project.Deps
   alias Igniter.Project.Module, as: ProjectModule
 
   @impl true
@@ -208,7 +207,6 @@ defmodule Mix.Tasks.Excessibility.Install do
   # By default, set up MCP server
   defp maybe_setup_mcp(igniter, _skip?) do
     igniter
-    |> Deps.add_dep({:hermes_mcp, "~> 0.14"})
     |> create_mcp_config()
     |> copy_skills_plugin()
     |> add_mcp_notice()
@@ -222,7 +220,7 @@ defmodule Mix.Tasks.Excessibility.Install do
     {
       "excessibility": {
         "command": "mix",
-        "args": ["run", "--no-halt", "-e", "Excessibility.MCP.Server.start_link(transport: :stdio)"],
+        "args": ["run", "--no-halt", "-e", "Excessibility.MCP.Server.start()"],
         "cwd": "#{project_path}"
       }
     }
@@ -270,22 +268,20 @@ defmodule Mix.Tasks.Excessibility.Install do
       """
       🔌 MCP Server Setup Complete!
 
-      1. Run `mix deps.get` to fetch hermes_mcp
-
-      2. Add the MCP server to Claude Code:
+      1. Add the MCP server to Claude Code:
          - Copy .claude/mcp_servers.json to your Claude Code config
-         - Or run: claude mcp add excessibility
+         - Or run: claude mcp add excessibility -s project -- mix run --no-halt -e "Excessibility.MCP.Server.start()"
 
-      3. Install the skills plugin:
+      2. Install the skills plugin (optional):
          - Run: claude plugins add <path-to-excessibility>/priv/claude-plugin
 
-      4. Available MCP tools:
+      3. Available MCP tools:
          - e11y_check: Run Pa11y accessibility checks
          - e11y_debug: Debug with timeline analysis
          - get_timeline: Read captured timeline
          - get_snapshots: List/read HTML snapshots
 
-      5. Available skills: /e11y-tdd, /e11y-debug, /e11y-fix
+      4. Available skills: /e11y-tdd, /e11y-debug, /e11y-fix
       """
     )
   end
