@@ -199,10 +199,10 @@ The MCP server provides tools for AI assistants to run accessibility checks and 
 
 **Setup:**
 
-1. Add hermes_mcp as an optional dependency (already included):
+1. Add hermes_mcp to your dependencies (optional, for MCP server):
 
     ```elixir
-    {:hermes_mcp, "~> 0.14", optional: true}
+    {:hermes_mcp, "~> 0.14"}
     ```
 
 2. Configure Claude Code's `mcp_servers.json`:
