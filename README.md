@@ -180,6 +180,74 @@ Create `.claude_docs/excessibility.md` to teach Claude how to use these debuggin
 mix excessibility.setup_claude_docs
 ```
 
+## MCP Server & Claude Code Skills
+
+Excessibility includes an MCP (Model Context Protocol) server and Claude Code skills plugin for AI-assisted development.
+
+### MCP Server
+
+The MCP server provides tools for AI assistants to run accessibility checks and debug LiveView state.
+
+**Available tools:**
+
+| Tool | Description |
+|------|-------------|
+| `e11y_check` | Run tests and/or Pa11y accessibility checks on HTML snapshots |
+| `e11y_debug` | Run tests with telemetry capture and timeline analysis |
+| `get_timeline` | Read captured timeline showing LiveView state evolution |
+| `get_snapshots` | List or read HTML snapshots captured during tests |
+
+**Setup:**
+
+1. Add hermes_mcp as an optional dependency (already included):
+
+    ```elixir
+    {:hermes_mcp, "~> 0.14", optional: true}
+    ```
+
+2. Configure Claude Code's `mcp_servers.json`:
+
+    ```json
+    {
+      "excessibility": {
+        "command": "mix",
+        "args": ["run", "--no-halt", "-e", "Excessibility.MCP.Server.start_link(transport: :stdio)"],
+        "cwd": "/path/to/your/project"
+      }
+    }
+    ```
+
+3. The MCP server is now available in Claude Code.
+
+### Claude Code Skills Plugin
+
+Install the skills plugin for structured accessibility workflows:
+
+```bash
+claude plugins add /path/to/excessibility/priv/claude-plugin
+```
+
+**Available skills:**
+
+| Skill | Description |
+|-------|-------------|
+| `/e11y-tdd` | TDD workflow with html_snapshot and Pa11y - sprinkle snapshots to see what's rendered, delete when done |
+| `/e11y-debug` | Debug workflow with timeline analysis - inspect state at each event, correlate with Pa11y failures |
+| `/e11y-fix` | Reference guide for fixing Pa11y/WCAG errors with Phoenix-specific patterns |
+
+**Example workflow:**
+
+```
+/e11y-tdd
+
+# Claude will guide you through:
+# 1. EXPLORE - Add html_snapshot() calls to see what's rendered
+# 2. RED - Write test with snapshot at key moment
+# 3. GREEN - Implement feature, use snapshots to debug
+# 4. CHECK - Run mix excessibility for Pa11y validation
+# 5. CLEAN - Remove temporary snapshots
+```
+
 ## Installation
 
 Add to `mix.exs`:
