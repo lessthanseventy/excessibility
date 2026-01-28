@@ -199,7 +199,13 @@ defmodule Excessibility.TelemetryCapture.Formatter do
           :info -> "ℹ️"
         end
 
-      "#{emoji} #{finding.message}"
+      prompt =
+        case get_in(finding, [:metadata, :suggested_prompt]) do
+          nil -> ""
+          prompt_text -> "\n  💡 Ask: #{prompt_text}"
+        end
+
+      "#{emoji} #{finding.message}#{prompt}"
     end)
   end
 

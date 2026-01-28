@@ -313,5 +313,49 @@ defmodule Excessibility.TelemetryCapture.FormatterTest do
       assert String.length(verbose) > String.length(brief)
       assert verbose =~ "Median"
     end
+
+    test "includes suggested prompts when findings have them" do
+      results = %{
+        memory: %{
+          findings: [
+            %{
+              severity: :warning,
+              message: "Memory grew 5x",
+              events: [1, 2],
+              metadata: %{
+                suggested_prompt: "What assigns are growing between events 1 and 2?"
+              }
+            }
+          ],
+          stats: %{}
+        }
+      }
+
+      output = Formatter.format_analysis_results(results, [])
+
+      assert output =~ "💡 Ask:"
+      assert output =~ "What assigns are growing between events 1 and 2?"
+    end
+
+    test "handles findings without suggested prompts" do
+      results = %{
+        memory: %{
+          findings: [
+            %{
+              severity: :info,
+              message: "Normal operation",
+              events: [],
+              metadata: %{}
+            }
+          ],
+          stats: %{}
+        }
+      }
+
+      output = Formatter.format_analysis_results(results, [])
+
+      assert output =~ "Normal operation"
+      refute output =~ "💡"
+    end
   end
 end
