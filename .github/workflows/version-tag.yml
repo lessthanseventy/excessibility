@@ -16,35 +16,30 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Read VERSION file
+      - name: Set up Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: '1.17'
+          otp-version: '26'
+
+      - name: Extract version from mix.exs
         id: version
         run: |
-          VERSION=$(cat VERSION | tr -d '\n')
+          # Extract version from mix.exs @version attribute
+          VERSION=$(grep '@version "' mix.exs | sed 's/.*@version "\([^"]*\)".*/\1/')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Version from VERSION file: $VERSION"
+          echo "Version from mix.exs: $VERSION"
 
-          # Extract major.minor for README check (e.g., 0.6.1 -> 0.6)
+          # Extract major.minor for README check (e.g., 0.9.0 -> 0.9)
           MAJOR_MINOR=$(echo $VERSION | cut -d. -f1,2)
           echo "major_minor=$MAJOR_MINOR" >> $GITHUB_OUTPUT
           echo "Major.Minor for README: $MAJOR_MINOR"
-
-      - name: Check mix.exs version
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          if ! grep -q "@version \"$VERSION\"" mix.exs; then
-            echo "ERROR: mix.exs version does not match VERSION file"
-            echo "Expected: @version \"$VERSION\""
-            echo "Found in mix.exs:"
-            grep "@version" mix.exs || echo "(no @version found)"
-            exit 1
-          fi
-          echo "✓ mix.exs version matches: $VERSION"
 
       - name: Check README version
         run: |
           MAJOR_MINOR="${{ steps.version.outputs.major_minor }}"
           if ! grep -q "{:excessibility, \"~> $MAJOR_MINOR\"" README.md; then
-            echo "ERROR: README.md version does not match VERSION file"
+            echo "ERROR: README.md version does not match mix.exs"
             echo "Expected: {:excessibility, \"~> $MAJOR_MINOR\""
             echo "Found in README.md:"
             grep "{:excessibility," README.md || echo "(no excessibility dependency found)"
