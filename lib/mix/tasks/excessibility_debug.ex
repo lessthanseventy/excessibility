@@ -34,8 +34,9 @@ defmodule Mix.Tasks.Excessibility.Debug do
 
   ## Analysis Options
 
-  - `--analyze=NAMES` - Run specific analyzers (comma-separated). Available: memory. Default: memory
+  - `--analyze=NAMES` - Run specific analyzers (comma-separated). Available: memory, performance, data_growth, event_pattern, n_plus_one, state_machine
   - `--analyze=all` - Run all available analyzers
+  - `--profile=NAME` - Use a predefined profile (quick, memory, performance, full)
   - `--no-analyze` - Skip analysis, show timeline only
   - `--verbose` - Show detailed stats even when no issues found
 
@@ -71,10 +72,11 @@ defmodule Mix.Tasks.Excessibility.Debug do
           no_filter_phoenix: :boolean,
           highlight: :string,
           analyze: :string,
+          profile: :string,
           no_analyze: :boolean,
           verbose: :boolean
         ],
-        aliases: [f: :format]
+        aliases: [f: :format, p: :profile]
       )
 
     format = Keyword.get(opts, :format, "markdown")
@@ -470,9 +472,14 @@ defmodule Mix.Tasks.Excessibility.Debug do
   end
 
   defp parse_analyzer_selection(opts) do
+    alias Excessibility.TelemetryCapture.Profiles
+
     cond do
       Keyword.get(opts, :no_analyze) ->
         []
+
+      profile = Keyword.get(opts, :profile) ->
+        Profiles.get(String.to_atom(profile)) || []
 
       analyze = Keyword.get(opts, :analyze) ->
         case analyze do
