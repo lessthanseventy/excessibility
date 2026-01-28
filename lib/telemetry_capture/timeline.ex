@@ -7,6 +7,7 @@ defmodule Excessibility.TelemetryCapture.Timeline do
   """
 
   alias Excessibility.TelemetryCapture.Diff
+  alias Excessibility.TelemetryCapture.Enricher
   alias Excessibility.TelemetryCapture.Filter
   alias Excessibility.TelemetryCapture.Registry
 
@@ -131,6 +132,7 @@ defmodule Excessibility.TelemetryCapture.Timeline do
   # Run selected enrichers on assigns
   defp run_enrichers(assigns, snapshot, opts) do
     requested_enrichers = Keyword.get(opts, :enrichers, :all)
+    quick? = Keyword.get(opts, :quick, false)
 
     enrichers =
       case requested_enrichers do
@@ -141,6 +143,16 @@ defmodule Excessibility.TelemetryCapture.Timeline do
           names
           |> Enum.map(&Registry.get_enricher/1)
           |> Enum.reject(&is_nil/1)
+      end
+
+    # Filter out expensive enrichers when quick mode is enabled
+    enrichers =
+      if quick? do
+        Enum.reject(enrichers, fn enricher ->
+          Enricher.get_cost(enricher) == :expensive
+        end)
+      else
+        enrichers
       end
 
     # Pass measurements through opts for enrichers that need them
