@@ -197,9 +197,18 @@ The MCP server provides tools for AI assistants to run accessibility checks and 
 | `get_timeline` | Read captured timeline showing LiveView state evolution |
 | `get_snapshots` | List or read HTML snapshots captured during tests |
 
-**Setup:**
+**Quick Setup:**
 
-1. Add hermes_mcp to your dependencies (optional, for MCP server):
+```bash
+mix excessibility.install --with-mcp
+mix deps.get
+```
+
+This adds hermes_mcp dependency and creates `.claude/mcp_servers.json`.
+
+**Manual Setup:**
+
+1. Add hermes_mcp to your dependencies:
 
     ```elixir
     {:hermes_mcp, "~> 0.14"}
