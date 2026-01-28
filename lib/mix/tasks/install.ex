@@ -14,6 +14,7 @@ defmodule Mix.Tasks.Excessibility.Install do
   alias Igniter.Libs.Phoenix
   alias Igniter.Mix.Task.Info
   alias Igniter.Project.Config
+  alias Igniter.Project.Deps
   alias Igniter.Project.Module, as: ProjectModule
 
   @impl true
@@ -207,7 +208,7 @@ defmodule Mix.Tasks.Excessibility.Install do
   # By default, set up MCP server
   defp maybe_setup_mcp(igniter, _skip?) do
     igniter
-    |> Igniter.Project.Deps.add_dep({:hermes_mcp, "~> 0.14"})
+    |> Deps.add_dep({:hermes_mcp, "~> 0.14"})
     |> create_mcp_config()
     |> copy_skills_plugin()
     |> add_mcp_notice()
