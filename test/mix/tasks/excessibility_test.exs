@@ -22,18 +22,22 @@ defmodule Mix.Tasks.ExcessibilityTest do
   end
 
   describe "pa11y not found" do
-    test "exits with error when pa11y doesn't exist" do
+    test "exits with error when pa11y doesn't exist and snapshots exist" do
       Application.put_env(:excessibility, :pa11y_path, "/nonexistent/pa11y.js")
+      # Need at least one snapshot to trigger pa11y check
+      File.write!(Path.join(@snapshot_dir, "test.html"), "<html></html>")
 
       assert catch_exit(Excessibility.run([])) == {:shutdown, 1}
     end
 
-    test "shows helpful error message when pa11y missing" do
-      Application.put_env(:excessibility, :pa11y_path, "/nonexistent/pa11y.js")
+    test "shows helpful message when no snapshots exist" do
+      output =
+        capture_io(fn ->
+          catch_exit(Excessibility.run([]))
+        end)
 
-      # Mix.shell().error writes directly to stderr via Mix.Shell, not IO
-      # The exit happens before we can capture, so we just verify the exit
-      assert catch_exit(Excessibility.run([])) == {:shutdown, 1}
+      assert output =~ "No snapshots found"
+      assert output =~ "mix test"
     end
   end
 
@@ -71,23 +75,19 @@ defmodule Mix.Tasks.ExcessibilityTest do
           Excessibility.run([])
         end)
 
-      # Should run on test.html and another.html
-      assert output =~ "test.html"
-      assert output =~ "another.html"
-
-      # Should NOT run on .good.html or .bad.html
-      refute output =~ "test.good.html"
-      refute output =~ "test.bad.html"
+      # Should report checking 2 snapshots (test.html and another.html)
+      assert output =~ "Checking 2 snapshot(s)"
+      assert output =~ "passed accessibility checks"
     end
 
     test "handles empty snapshot directory" do
       output =
         capture_io(fn ->
-          Excessibility.run([])
+          catch_exit(Excessibility.run([]))
         end)
 
-      # Should not crash, just process zero files
-      refute output =~ "Pa11y failed"
+      # Should show helpful message about no snapshots
+      assert output =~ "No snapshots found"
     end
   end
 
@@ -98,11 +98,11 @@ defmodule Mix.Tasks.ExcessibilityTest do
       File.mkdir_p!(pa11y_dir)
       pa11y_path = Path.join(pa11y_dir, "pa11y.js")
 
-      # This mock script prints its arguments so we can verify --config is passed
+      # This mock script prints its arguments and exits with 1 so output is shown
       File.write!(pa11y_path, """
       #!/usr/bin/env node
       console.log("Args:", process.argv.slice(2).join(" "));
-      process.exit(0);
+      process.exit(1);
       """)
 
       File.chmod!(pa11y_path, 0o755)
@@ -123,9 +123,10 @@ defmodule Mix.Tasks.ExcessibilityTest do
 
       output =
         capture_io(fn ->
-          Excessibility.run([])
+          catch_exit(Excessibility.run([]))
         end)
 
+      # The mock pa11y prints Args: which includes --config
       assert output =~ "--config"
       assert output =~ "test_pa11y.json"
 
@@ -138,7 +139,7 @@ defmodule Mix.Tasks.ExcessibilityTest do
 
       output =
         capture_io(fn ->
-          Excessibility.run([])
+          catch_exit(Excessibility.run([]))
         end)
 
       refute output =~ "--config"
