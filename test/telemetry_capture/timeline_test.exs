@@ -103,7 +103,7 @@ defmodule Excessibility.TelemetryCapture.TimelineTest do
   end
 
   describe "enricher integration" do
-    test "build_timeline_entry includes enriched data" do
+    test "build_timeline_entry includes enriched data when enrichers specified" do
       snapshot = %{
         event_type: "mount",
         assigns: %{user: "test", count: 5},
@@ -111,7 +111,7 @@ defmodule Excessibility.TelemetryCapture.TimelineTest do
         view_module: TestModule
       }
 
-      entry = Timeline.build_timeline_entry(snapshot, nil, 1, [])
+      entry = Timeline.build_timeline_entry(snapshot, nil, 1, enrichers: [:memory])
 
       # Should have memory_size from Memory enricher
       assert Map.has_key?(entry, :memory_size)
@@ -127,7 +127,7 @@ defmodule Excessibility.TelemetryCapture.TimelineTest do
         view_module: TestModule
       }
 
-      entry = Timeline.build_timeline_entry(snapshot, nil, 2, [])
+      entry = Timeline.build_timeline_entry(snapshot, nil, 2, enrichers: [:memory])
 
       # Original fields still present
       assert entry.sequence == 2
@@ -136,6 +136,58 @@ defmodule Excessibility.TelemetryCapture.TimelineTest do
 
       # Enriched field added
       assert Map.has_key?(entry, :memory_size)
+    end
+  end
+
+  describe "selective enrichment" do
+    test "only runs specified enrichers" do
+      snapshot = build_snapshot(%{count: 1})
+
+      # Only request memory enricher
+      entry = Timeline.build_timeline_entry(snapshot, nil, 1, enrichers: [:memory])
+
+      assert Map.has_key?(entry, :memory_size)
+      refute Map.has_key?(entry, :event_duration_ms)
+      refute Map.has_key?(entry, :list_sizes)
+    end
+
+    test "runs no enrichers when empty list specified" do
+      snapshot = build_snapshot(%{count: 1})
+
+      entry = Timeline.build_timeline_entry(snapshot, nil, 1, enrichers: [])
+
+      refute Map.has_key?(entry, :memory_size)
+      refute Map.has_key?(entry, :event_duration_ms)
+    end
+
+    test "runs all enrichers when :all specified" do
+      snapshot = build_snapshot(%{products: [1, 2, 3]})
+
+      entry = Timeline.build_timeline_entry(snapshot, nil, 1, enrichers: :all)
+
+      # Should have data from multiple enrichers
+      assert Map.has_key?(entry, :memory_size)
+      assert Map.has_key?(entry, :list_sizes)
+    end
+
+    test "build_timeline passes enrichers option through" do
+      snapshots = [build_snapshot(%{count: 1})]
+
+      timeline = Timeline.build_timeline(snapshots, "test", enrichers: [:memory])
+      event = hd(timeline.timeline)
+
+      assert Map.has_key?(event, :memory_size)
+      refute Map.has_key?(event, :event_duration_ms)
+    end
+
+    defp build_snapshot(assigns) do
+      %{
+        assigns: assigns,
+        event_type: "mount",
+        timestamp: DateTime.utc_now(),
+        view_module: TestLive,
+        measurements: %{}
+      }
     end
   end
 end

@@ -128,9 +128,20 @@ defmodule Excessibility.TelemetryCapture.Timeline do
     )
   end
 
-  # NEW: Add helper function
+  # Run selected enrichers on assigns
   defp run_enrichers(assigns, snapshot, opts) do
-    enrichers = Registry.discover_enrichers()
+    requested_enrichers = Keyword.get(opts, :enrichers, :all)
+
+    enrichers =
+      case requested_enrichers do
+        :all ->
+          Registry.discover_enrichers()
+
+        names when is_list(names) ->
+          names
+          |> Enum.map(&Registry.get_enricher/1)
+          |> Enum.reject(&is_nil/1)
+      end
 
     # Pass measurements through opts for enrichers that need them
     measurements = Map.get(snapshot, :measurements, %{})
