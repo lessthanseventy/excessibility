@@ -197,14 +197,18 @@ The MCP server provides tools for AI assistants to run accessibility checks and 
 | `get_timeline` | Read captured timeline showing LiveView state evolution |
 | `get_snapshots` | List or read HTML snapshots captured during tests |
 
-**Quick Setup:**
+**Automatic Setup:**
+
+MCP server support is configured automatically when you run the installer:
 
 ```bash
-mix excessibility.install --with-mcp
+mix excessibility.install
 mix deps.get
 ```
 
 This adds hermes_mcp dependency and creates `.claude/mcp_servers.json`.
+
+Use `--no-mcp` to skip MCP setup if you don't need AI assistant integration.
 
 **Manual Setup:**
 
