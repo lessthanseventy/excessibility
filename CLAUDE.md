@@ -43,11 +43,13 @@ open doc/index.html
 
 ### Accessibility Testing
 ```bash
-# Generate snapshots (run tests first)
-mix test
-
-# Run Pa11y against snapshots
+# Run Pa11y on all existing snapshots
 mix excessibility
+
+# Run specific test + Pa11y on new snapshots
+mix excessibility test/my_test.exs
+mix excessibility test/my_test.exs:42
+mix excessibility --only a11y
 
 # Approve pending diffs interactively
 mix excessibility.approve
@@ -59,37 +61,104 @@ mix excessibility.approve --keep good
 mix excessibility.approve --keep bad
 ```
 
-### Timeline Analysis
+## Claude Workflow for Accessibility
 
-The telemetry capture automatically generates `timeline.json` for each test run:
+When helping users write accessible Phoenix code, follow this workflow:
 
-```bash
-# Run test with telemetry capture
-mix test test/my_live_view_test.exs
+### 1. Add Snapshot Calls to Tests
 
-# View timeline
-cat test/excessibility/timeline.json
+For any LiveView or controller test, add `html_snapshot()` calls to capture rendered HTML:
 
-# Generate debug report with analysis
-mix excessibility.debug test/my_live_view_test.exs
+```elixir
+defmodule MyAppWeb.PageLiveTest do
+  use MyAppWeb.ConnCase
+  use Excessibility  # Required
 
-# Run specific analyzers
-mix excessibility.debug test/my_live_view_test.exs --analyze=memory
+  test "page is accessible", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/")
 
-# Skip analysis
-mix excessibility.debug test/my_live_view_test.exs --no-analyze
+    # Capture snapshot for Pa11y
+    html_snapshot(view)
 
-# Verbose output (detailed stats)
-mix excessibility.debug test/my_live_view_test.exs --verbose
-
-# Filtering options
-mix excessibility.debug test/my_live_view_test.exs --full
-mix excessibility.debug test/my_live_view_test.exs --highlight=current_user,cart
+    # Continue with assertions...
+  end
+end
 ```
 
-**Available Analyzers:**
+### 2. Run Tests to Generate Snapshots
 
-- `memory` - Detects memory bloat and leaks using adaptive thresholds (enabled by default)
+```bash
+mix test test/my_app_web/live/page_live_test.exs
+```
+
+This creates HTML files in `test/excessibility/html_snapshots/`.
+
+### 3. Run Pa11y Accessibility Check
+
+```bash
+# Check all existing snapshots
+mix excessibility
+
+# Or run a specific test and check new snapshots in one command
+mix excessibility test/my_app_web/live/page_live_test.exs
+mix excessibility test/my_test.exs:42
+mix excessibility --only a11y
+```
+
+Pa11y will report WCAG violations. Common issues:
+- Missing form labels
+- Low color contrast
+- Missing alt text
+- Invalid ARIA attributes
+
+### 4. Fix Issues and Re-test
+
+After fixing accessibility issues, re-run tests and Pa11y to verify.
+
+### Timeline Analysis (for debugging)
+
+Use `mix excessibility.debug` to analyze LiveView behavior. All arguments pass through to `mix test`:
+
+```bash
+# Run a test file with debug analysis
+mix excessibility.debug test/my_live_view_test.exs
+
+# Run specific test by line number
+mix excessibility.debug test/my_live_view_test.exs:42
+
+# Run tests with a tag
+mix excessibility.debug --only live_view
+
+# With debug options
+mix excessibility.debug test/my_test.exs --analyze=memory
+mix excessibility.debug test/my_test.exs --no-analyze
+mix excessibility.debug test/my_test.exs --verbose
+mix excessibility.debug test/my_test.exs --full
+mix excessibility.debug test/my_test.exs --highlight=current_user,cart
+```
+
+This generates `timeline.json` with event flow, memory usage, and pattern analysis - useful for debugging performance but separate from accessibility testing.
+
+**Available Analyzers (Default Enabled):**
+
+- `memory` - Detects memory bloat and leaks using adaptive thresholds
+- `performance` - Identifies slow events and bottlenecks
+- `data_growth` - Analyzes list growth patterns
+- `event_pattern` - Detects inefficient event patterns
+- `n_plus_one` - Identifies potential N+1 query issues
+- `state_machine` - Analyzes state transitions
+- `render_efficiency` - Detects wasted renders with no state changes
+- `assign_lifecycle` - Finds dead state (assigns that never change)
+- `handle_event_noop` - Detects empty event handlers
+- `form_validation` - Flags excessive validation roundtrips
+- `summary` - Natural language timeline overview
+
+**Available Analyzers (Opt-in):**
+
+- `cascade_effect` - Detects rapid event cascades (use `--analyze=cascade_effect`)
+- `hypothesis` - Root cause suggestions (use `--analyze=hypothesis`)
+- `code_pointer` - Maps events to source locations (use `--analyze=code_pointer`)
+- `accessibility_correlation` - Flags state changes with a11y implications (use `--analyze=accessibility_correlation`)
 
 **Timeline Enrichments:**
 
