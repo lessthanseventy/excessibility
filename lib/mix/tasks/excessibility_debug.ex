@@ -155,13 +155,22 @@ defmodule Mix.Tasks.Excessibility.Debug do
     # Enable telemetry capture
     System.put_env("EXCESSIBILITY_TELEMETRY_CAPTURE", "true")
 
+    # Get opts from process dictionary
+    debug_opts = Process.get(:excessibility_debug_opts, %{})
+    filter_opts = Map.get(debug_opts, :filter_opts, [])
+
+    # Resolve which analyzers to run and pass via env var
+    analyzer_names = parse_analyzer_selection(filter_opts)
+    analyzers_env = Enum.map_join(analyzer_names, ",", &to_string/1)
+
     # Run the test and capture stdout/stderr
     result =
       System.cmd("mix", ["test", test_path],
         stderr_to_stdout: true,
         env: [
           {"MIX_ENV", "test"},
-          {"EXCESSIBILITY_TELEMETRY_CAPTURE", "true"}
+          {"EXCESSIBILITY_TELEMETRY_CAPTURE", "true"},
+          {"EXCESSIBILITY_ANALYZERS", analyzers_env}
         ]
       )
 

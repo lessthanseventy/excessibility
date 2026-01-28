@@ -7,6 +7,7 @@ defmodule Excessibility.TelemetryCapture do
   """
 
   alias Excessibility.TelemetryCapture.Formatter
+  alias Excessibility.TelemetryCapture.Registry
   alias Excessibility.TelemetryCapture.Timeline
 
   require Logger
@@ -187,13 +188,36 @@ defmodule Excessibility.TelemetryCapture do
         Logger.info("Wrote telemetry snapshot: #{filename}")
       end)
 
-      # Generate and write timeline.json
-      timeline = Timeline.build_timeline(snapshots, test_name)
+      # Generate and write timeline.json with selective enrichment
+      enrichers = resolve_enrichers_from_env()
+      timeline = Timeline.build_timeline(snapshots, test_name, enrichers: enrichers)
       timeline_json = Formatter.format_json(timeline)
       timeline_path = Path.join(output_path, "timeline.json")
       File.write!(timeline_path, timeline_json)
 
       IO.puts("📊 Excessibility: Wrote timeline.json")
+    end
+  end
+
+  # Resolve which enrichers to run based on EXCESSIBILITY_ANALYZERS env var
+  defp resolve_enrichers_from_env do
+    case System.get_env("EXCESSIBILITY_ANALYZERS") do
+      nil ->
+        # No analyzer selection - use all enrichers
+        :all
+
+      "" ->
+        # Empty string means no analyzers - use no enrichers
+        []
+
+      analyzers_str ->
+        # Parse analyzer names and resolve their enrichers
+        analyzer_names =
+          analyzers_str
+          |> String.split(",")
+          |> Enum.map(&String.to_atom/1)
+
+        Registry.resolve_enrichers(analyzer_names)
     end
   end
 
