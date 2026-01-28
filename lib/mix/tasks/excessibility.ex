@@ -1,14 +1,28 @@
 defmodule Mix.Tasks.Excessibility do
-  @shortdoc "Runs Pa11y against generated snapshots"
+  @shortdoc "Run accessibility checks on snapshots"
+
   @moduledoc """
-  Runs Pa11y accessibility checks against all generated HTML snapshots.
+  Runs Pa11y accessibility checks on HTML snapshots.
 
   ## Usage
 
-      $ mix excessibility
+  With no arguments, checks ALL existing snapshots:
 
-  This task scans `test/excessibility/html_snapshots/` for `.html` files
-  (excluding `.good.html` and `.bad.html` diff files) and runs Pa11y on each one.
+      mix excessibility
+
+  With arguments, runs tests first then checks NEW snapshots only:
+
+      # Run a test file
+      mix excessibility test/my_app_web/live/page_live_test.exs
+
+      # Run a specific test by line number
+      mix excessibility test/my_app_web/live/page_live_test.exs:42
+
+      # Run tests with a tag
+      mix excessibility --only a11y
+
+      # Run a describe block
+      mix excessibility test/my_test.exs:10
 
   ## Configuration
 
@@ -31,20 +45,100 @@ defmodule Mix.Tasks.Excessibility do
 
   Run `mix excessibility.install` first to install Pa11y via npm.
   """
+
   use Mix.Task
 
   @requirements ["app.config"]
 
   @impl Mix.Task
-  def run(_args) do
-    snapshot_dir = Path.join([output_path(), "html_snapshots"])
+  def run([]) do
+    # No args - check all existing snapshots
+    run_pa11y_on_all()
+  end
+
+  def run(args) do
+    # With args - run tests first, then check new snapshots
+    run_tests_then_check(args)
+  end
+
+  defp run_pa11y_on_all do
+    files = list_snapshots()
+
+    if Enum.empty?(files) do
+      Mix.shell().info("""
+      No snapshots found in #{snapshot_dir()}.
+
+      Run your tests first to generate snapshots:
+
+          mix test
+
+      Or run a specific test:
+
+          mix excessibility test/my_test.exs
+      """)
+
+      exit({:shutdown, 0})
+    end
+
+    Mix.shell().info("Checking #{length(files)} snapshot(s)...\n")
+    run_pa11y(files)
+  end
+
+  defp run_tests_then_check(args) do
+    # Get snapshot count before test
+    snapshots_before = list_snapshots()
+
+    # Run mix test with all args passed through
+    Mix.shell().info("Running: mix test #{Enum.join(args, " ")}\n")
+    {_output, exit_code} = System.cmd("mix", ["test" | args], into: IO.stream(:stdio, :line))
+
+    if exit_code != 0 do
+      Mix.shell().error("\nTests failed - skipping accessibility check")
+      exit({:shutdown, exit_code})
+    end
+
+    # Get new snapshots
+    snapshots_after = list_snapshots()
+    new_snapshots = snapshots_after -- snapshots_before
+
+    if Enum.empty?(new_snapshots) do
+      Mix.shell().info("""
+
+      No new snapshots generated. Make sure your test includes html_snapshot() calls:
+
+          use Excessibility
+
+          test "page is accessible", %{conn: conn} do
+            {:ok, view, _html} = live(conn, "/")
+            html_snapshot(view)  # <-- Add this
+          end
+      """)
+
+      exit({:shutdown, 0})
+    end
+
+    Mix.shell().info("\n## Accessibility Check\n")
+    Mix.shell().info("Checking #{length(new_snapshots)} snapshot(s)...\n")
+
+    run_pa11y(new_snapshots)
+  end
+
+  defp list_snapshots do
+    snapshot_dir()
+    |> Path.join("*.html")
+    |> Path.wildcard()
+    |> Enum.reject(&String.ends_with?(&1, [".bad.html", ".good.html"]))
+    |> Enum.sort()
+  end
+
+  defp run_pa11y(files) do
     pa11y = pa11y_path()
 
     unless File.exists?(pa11y) do
       Mix.shell().error("""
-      Could not find Pa11y at #{pa11y}.
+      Pa11y not found at #{pa11y}.
 
-      Run `mix excessibility.install` first so Pa11y is installed locally, or set :pa11y_path in your config.
+      Run `mix excessibility.install` first.
       """)
 
       exit({:shutdown, 1})
@@ -52,38 +146,41 @@ defmodule Mix.Tasks.Excessibility do
 
     config_args = pa11y_config_args()
 
-    files =
-      snapshot_dir
-      |> Path.join("*.html")
-      |> Path.wildcard()
-      |> Enum.reject(&String.ends_with?(&1, [".bad.html", ".good.html"]))
+    results =
+      Enum.map(files, fn file ->
+        file_url = "file://" <> Path.expand(file)
+        {output, status} = System.cmd("node", [pa11y | config_args] ++ [file_url], stderr_to_stdout: true)
+        {file, status, output}
+      end)
 
-    if Enum.empty?(files) do
-      Mix.shell().info("""
-      No snapshots found in #{snapshot_dir}.
+    {passed, failed} = Enum.split_with(results, fn {_file, status, _output} -> status == 0 end)
 
-      Run your tests first to generate snapshots:
+    if length(failed) > 0 do
+      Mix.shell().info("### Issues Found\n")
 
-          mix test
+      Enum.each(failed, fn {file, _status, output} ->
+        Mix.shell().info("**#{Path.basename(file)}**")
+        Mix.shell().info(output)
+      end)
 
-      Then run this task again.
-      """)
+      Mix.shell().info("\n#{length(failed)} file(s) with issues, #{length(passed)} passed")
+      exit({:shutdown, 1})
+    else
+      Mix.shell().info("All #{length(passed)} snapshot(s) passed accessibility checks")
     end
+  end
 
-    Enum.each(files, fn file ->
-      file_url = "file://" <> Path.expand(file)
+  defp snapshot_dir do
+    Path.join([output_path(), "html_snapshots"])
+  end
 
-      Mix.shell().info("🔍 Running Pa11y on #{file_url}...")
+  defp output_path do
+    Application.get_env(:excessibility, :excessibility_output_path, "test/excessibility")
+  end
 
-      {output, status} =
-        System.cmd("node", [pa11y | config_args] ++ [file_url], stderr_to_stdout: true)
-
-      IO.puts(output)
-
-      if status != 0 do
-        Mix.shell().error("❌ Pa11y failed on #{file}")
-      end
-    end)
+  defp pa11y_path do
+    Application.get_env(:excessibility, :pa11y_path) ||
+      Path.join([dependency_root(), "assets/node_modules/pa11y/bin/pa11y.js"])
   end
 
   defp pa11y_config_args do
@@ -94,15 +191,6 @@ defmodule Mix.Tasks.Excessibility do
     else
       []
     end
-  end
-
-  defp pa11y_path do
-    Application.get_env(:excessibility, :pa11y_path) ||
-      Path.join([dependency_root(), "assets/node_modules/pa11y/bin/pa11y.js"])
-  end
-
-  defp output_path do
-    Application.get_env(:excessibility, :excessibility_output_path, "test/excessibility")
   end
 
   defp dependency_root do

@@ -2,7 +2,10 @@ defmodule Mix.Tasks.Excessibility.Debug do
   @shortdoc "Debug a test with comprehensive snapshot analysis"
 
   @moduledoc """
-  Run a test and generate a comprehensive debug report with all snapshots.
+  Run tests and generate a comprehensive debug report with all snapshots.
+
+  All arguments are passed through to `mix test`, so you can use any
+  test filtering options.
 
   This command automatically enables telemetry capture by setting
   `EXCESSIBILITY_TELEMETRY_CAPTURE=true`, which captures:
@@ -17,7 +20,19 @@ defmodule Mix.Tasks.Excessibility.Debug do
 
   ## Usage
 
+      # Run a test file
       mix excessibility.debug test/my_test.exs
+
+      # Run a specific test by line number
+      mix excessibility.debug test/my_test.exs:42
+
+      # Run tests with a tag
+      mix excessibility.debug --only live_view
+
+      # Run a describe block
+      mix excessibility.debug test/my_test.exs:10
+
+      # With debug options
       mix excessibility.debug test/my_test.exs --format=json
       mix excessibility.debug test/my_test.exs --full
       mix excessibility.debug test/my_test.exs --minimal
@@ -57,12 +72,13 @@ defmodule Mix.Tasks.Excessibility.Debug do
 
   use Mix.Task
 
+  alias Excessibility.TelemetryCapture.Analyzer
   alias Excessibility.TelemetryCapture.Formatter
   alias Excessibility.TelemetryCapture.Registry
 
   @impl Mix.Task
   def run(args) do
-    {opts, test_paths, _} =
+    {opts, test_args, _} =
       OptionParser.parse(args,
         strict: [
           format: :string,
@@ -90,27 +106,26 @@ defmodule Mix.Tasks.Excessibility.Debug do
       filter_opts: filter_opts
     })
 
-    if test_paths == [] do
-      Mix.shell().error("Usage: mix excessibility.debug test/path_test.exs")
-      exit({:shutdown, 1})
-    end
-
-    test_path = List.first(test_paths)
-
-    unless File.exists?(test_path) do
-      Mix.shell().error("Test file not found: #{test_path}")
+    if test_args == [] do
+      Mix.shell().error("Usage: mix excessibility.debug [mix test args]")
+      Mix.shell().info("\nExamples:")
+      Mix.shell().info("  mix excessibility.debug test/my_test.exs")
+      Mix.shell().info("  mix excessibility.debug test/my_test.exs:42")
+      Mix.shell().info("  mix excessibility.debug --only live_view")
       exit({:shutdown, 1})
     end
 
     # Run the test and capture output
-    {test_output, exit_code} = run_test(test_path)
+    {test_output, exit_code} = run_test(test_args)
 
     # Gather snapshots
     snapshots = gather_snapshots()
 
     # Build report based on format
+    test_description = Enum.join(test_args, " ")
+
     report_data = %{
-      test_path: test_path,
+      test_path: test_description,
       status: if(exit_code == 0, do: "passed", else: "failed"),
       test_output: test_output,
       snapshots: snapshots,
@@ -153,7 +168,7 @@ defmodule Mix.Tasks.Excessibility.Debug do
     end
   end
 
-  defp run_test(test_path) do
+  defp run_test(test_args) do
     # Enable telemetry capture
     System.put_env("EXCESSIBILITY_TELEMETRY_CAPTURE", "true")
 
@@ -165,10 +180,13 @@ defmodule Mix.Tasks.Excessibility.Debug do
     analyzer_names = parse_analyzer_selection(filter_opts)
     analyzers_env = Enum.map_join(analyzer_names, ",", &to_string/1)
 
-    # Run the test and capture stdout/stderr
+    # Run the test with all args passed through
+    Mix.shell().info("Running: mix test #{Enum.join(test_args, " ")}\n")
+
     result =
-      System.cmd("mix", ["test", test_path],
+      System.cmd("mix", ["test" | test_args],
         stderr_to_stdout: true,
+        into: IO.stream(:stdio, :line),
         env: [
           {"MIX_ENV", "test"},
           {"EXCESSIBILITY_TELEMETRY_CAPTURE", "true"},
@@ -498,9 +516,28 @@ defmodule Mix.Tasks.Excessibility.Debug do
   end
 
   defp run_analyzers(timeline, analyzer_names, opts) do
-    analyzer_names
-    |> Enum.map(&Registry.get_analyzer/1)
-    |> Enum.reject(&is_nil/1)
-    |> Map.new(fn analyzer -> {analyzer.name(), analyzer.analyze(timeline, opts)} end)
+    analyzers =
+      analyzer_names
+      |> Enum.map(&Registry.get_analyzer/1)
+      |> Enum.reject(&is_nil/1)
+
+    # Sort by dependencies for correct execution order
+    sorted_analyzers = Analyzer.sort_by_dependencies(analyzers)
+
+    # Run analyzers in order, accumulating results for dependent analyzers
+    {results, _} =
+      Enum.reduce(sorted_analyzers, {%{}, %{}}, fn analyzer, {results, prior_results} ->
+        # Pass prior results to analyzer
+        analyzer_opts = Keyword.put(opts, :prior_results, prior_results)
+        result = analyzer.analyze(timeline, analyzer_opts)
+
+        # Accumulate results
+        {
+          Map.put(results, analyzer.name(), result),
+          Map.put(prior_results, analyzer.name(), result)
+        }
+      end)
+
+    results
   end
 end

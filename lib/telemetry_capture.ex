@@ -159,11 +159,14 @@ defmodule Excessibility.TelemetryCapture do
   end
 
   @doc """
-  Writes captured snapshots to HTML files.
+  Writes captured snapshots to timeline.json.
+
+  Note: HTML snapshot files are NOT generated from telemetry capture.
+  For real accessibility testing, use `html_snapshot(view)` in your tests
+  to capture actual rendered HTML.
   """
   def write_snapshots(test_name) do
     snapshots = get_snapshots()
-    IO.puts("💾 Excessibility: Writing #{length(snapshots)} telemetry snapshots for test #{inspect(test_name)}")
 
     if snapshots != [] do
       output_path =
@@ -173,20 +176,7 @@ defmodule Excessibility.TelemetryCapture do
           "test/excessibility"
         )
 
-      snapshots_path = Path.join(output_path, "html_snapshots")
-      File.mkdir_p!(snapshots_path)
-
-      snapshots
-      |> Enum.with_index(1)
-      |> Enum.each(fn {snapshot, index} ->
-        filename = "#{sanitize_test_name(test_name)}_telemetry_#{index}_#{sanitize_event_type(snapshot.event_type)}.html"
-        path = Path.join(snapshots_path, filename)
-
-        html = build_snapshot_html(snapshot, index, test_name)
-        File.write!(path, html)
-
-        Logger.info("Wrote telemetry snapshot: #{filename}")
-      end)
+      File.mkdir_p!(output_path)
 
       # Generate and write timeline.json with selective enrichment
       enrichers = resolve_enrichers_from_env()
@@ -195,7 +185,7 @@ defmodule Excessibility.TelemetryCapture do
       timeline_path = Path.join(output_path, "timeline.json")
       File.write!(timeline_path, timeline_json)
 
-      IO.puts("📊 Excessibility: Wrote timeline.json")
+      IO.puts("📊 Excessibility: Wrote timeline.json with #{length(snapshots)} events")
     end
   end
 
@@ -219,48 +209,5 @@ defmodule Excessibility.TelemetryCapture do
 
         Registry.resolve_enrichers(analyzer_names)
     end
-  end
-
-  defp build_snapshot_html(snapshot, sequence, test_name) do
-    """
-    <!--
-    Excessibility Telemetry Snapshot
-    Test: #{test_name}
-    Sequence: #{sequence}
-    Event: #{snapshot.event_type}
-    Timestamp: #{snapshot.timestamp}
-    View Module: #{inspect(snapshot.view_module)}
-    Assigns: #{inspect(snapshot.assigns, pretty: true)}
-    -->
-
-    <html>
-      <head>
-        <title>Telemetry Snapshot - #{snapshot.event_type}</title>
-      </head>
-      <body>
-        <h1>Telemetry Snapshot: #{snapshot.event_type}</h1>
-        <h2>Sequence: #{sequence}</h2>
-        <h3>Assigns:</h3>
-        <pre>#{inspect(snapshot.assigns, pretty: true)}</pre>
-        <p><em>Note: This is a telemetry-captured snapshot. Full HTML rendering requires the LiveView process context.</em></p>
-      </body>
-    </html>
-    """
-  end
-
-  defp sanitize_test_name(test_name) when is_atom(test_name) do
-    test_name
-    |> to_string()
-    |> String.replace(" ", "_")
-    |> String.replace(~r/[^a-zA-Z0-9_]/, "")
-  end
-
-  defp sanitize_test_name(test_name), do: to_string(test_name)
-
-  defp sanitize_event_type(event_type) do
-    event_type
-    |> to_string()
-    |> String.replace(":", "_")
-    |> String.replace(" ", "_")
   end
 end
