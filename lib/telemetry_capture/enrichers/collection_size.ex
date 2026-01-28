@@ -26,6 +26,7 @@ defmodule Excessibility.TelemetryCapture.Enrichers.CollectionSize do
   @behaviour Excessibility.TelemetryCapture.Enricher
 
   def name, do: :collection_size
+  def cost, do: :expensive
 
   def enrich(assigns, _opts) do
     {list_sizes, total_items} = count_lists(assigns, [])
