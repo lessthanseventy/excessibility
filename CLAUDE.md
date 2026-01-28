@@ -129,8 +129,12 @@ Use `--full` to disable filtering and see complete assigns.
 
 **Creating Custom Enrichers:**
 
+Built-in enrichers are auto-discovered from `lib/telemetry_capture/enrichers/`.
+Users can also register custom enrichers in their own apps via config:
+
 ```elixir
-defmodule MyApp.CustomEnricher do
+# lib/my_app/enrichers/custom.ex
+defmodule MyApp.Enrichers.Custom do
   @behaviour Excessibility.TelemetryCapture.Enricher
 
   def name, do: :custom
@@ -140,18 +144,19 @@ defmodule MyApp.CustomEnricher do
   end
 end
 
-# Register in Registry
-# lib/telemetry_capture/registry.ex
-@enrichers [
-  Excessibility.TelemetryCapture.Enrichers.Memory,
-  MyApp.CustomEnricher
-]
+# config/test.exs
+config :excessibility,
+  custom_enrichers: [MyApp.Enrichers.Custom]
 ```
 
 **Creating Custom Analyzers:**
 
+Built-in analyzers are auto-discovered from `lib/telemetry_capture/analyzers/`.
+Users can also register custom analyzers in their own apps via config:
+
 ```elixir
-defmodule MyApp.CustomAnalyzer do
+# lib/my_app/analyzers/custom.ex
+defmodule MyApp.Analyzers.Custom do
   @behaviour Excessibility.TelemetryCapture.Analyzer
 
   def name, do: :custom
@@ -165,12 +170,9 @@ defmodule MyApp.CustomAnalyzer do
   end
 end
 
-# Register in Registry
-# lib/telemetry_capture/registry.ex
-@analyzers [
-  Excessibility.TelemetryCapture.Analyzers.Memory,
-  MyApp.CustomAnalyzer
-]
+# config/test.exs
+config :excessibility,
+  custom_analyzers: [MyApp.Analyzers.Custom]
 ```
 
 ### Installation (for testing installer)
@@ -241,6 +243,8 @@ All configuration in `test/test_helper.exs` or `config/test.exs`:
 - `:pa11y_path` - Path to Pa11y executable (auto-detected)
 - `:pa11y_config` - Path to pa11y.json (default: `"pa11y.json"`)
 - `:head_render_path` - Route for `<head>` extraction (default: `"/"`)
+- `:custom_enrichers` - List of custom enricher modules (default: `[]`)
+- `:custom_analyzers` - List of custom analyzer modules (default: `[]`)
 
 ## Testing Strategy
 
