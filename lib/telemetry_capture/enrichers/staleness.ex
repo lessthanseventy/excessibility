@@ -97,8 +97,7 @@ defmodule Excessibility.TelemetryCapture.Enrichers.Staleness do
 
   defp path_to_atom(path) do
     path
-    |> Enum.map(&to_string/1)
-    |> Enum.join(".")
+    |> Enum.map_join(".", &to_string/1)
     |> String.to_atom()
   end
 end
