@@ -3,7 +3,7 @@ defmodule Excessibility.TelemetryCapture.Analyzer do
   Behaviour for timeline analyzers.
 
   Analyzers detect patterns across complete timelines and return structured findings.
-  Analyzers are selectively enabled via CLI flags.
+  Analyzers declare their enricher dependencies via `requires_enrichers/0`.
 
   ## Example
 
@@ -12,6 +12,7 @@ defmodule Excessibility.TelemetryCapture.Analyzer do
 
         def name, do: :custom
         def default_enabled?, do: false
+        def requires_enrichers, do: [:memory, :duration]
 
         def analyze(timeline, _opts) do
           %{
@@ -25,6 +26,7 @@ defmodule Excessibility.TelemetryCapture.Analyzer do
 
   - `name/0` - Returns atom identifier for this analyzer
   - `default_enabled?/0` - Whether analyzer runs by default without explicit flag
+  - `requires_enrichers/0` - (Optional) List of enricher names this analyzer needs
   - `analyze/2` - Takes complete timeline and options, returns analysis results
 
   ## Types
@@ -36,7 +38,10 @@ defmodule Excessibility.TelemetryCapture.Analyzer do
 
   @callback name() :: atom()
   @callback default_enabled?() :: boolean()
+  @callback requires_enrichers() :: [atom()]
   @callback analyze(timeline :: map(), opts :: keyword()) :: analysis_result()
+
+  @optional_callbacks requires_enrichers: 0
 
   @type analysis_result :: %{
           findings: [finding()],
@@ -49,4 +54,16 @@ defmodule Excessibility.TelemetryCapture.Analyzer do
           events: [integer()],
           metadata: map()
         }
+
+  @doc """
+  Gets required enrichers for an analyzer module.
+  Returns empty list if not defined.
+  """
+  def get_required_enrichers(analyzer_module) do
+    if function_exported?(analyzer_module, :requires_enrichers, 0) do
+      analyzer_module.requires_enrichers()
+    else
+      []
+    end
+  end
 end

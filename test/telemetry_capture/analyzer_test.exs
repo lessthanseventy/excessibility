@@ -1,6 +1,46 @@
 defmodule Excessibility.TelemetryCapture.AnalyzerTest do
   use ExUnit.Case, async: true
 
+  alias Excessibility.TelemetryCapture.Analyzer
+
+  describe "requires_enrichers/0 callback" do
+    defmodule AnalyzerWithDeps do
+      @moduledoc false
+      @behaviour Analyzer
+
+      def name, do: :with_deps
+      def default_enabled?, do: true
+      def requires_enrichers, do: [:memory, :duration]
+      def analyze(_timeline, _opts), do: %{findings: [], stats: %{}}
+    end
+
+    defmodule AnalyzerWithoutDeps do
+      @moduledoc false
+      @behaviour Analyzer
+
+      def name, do: :without_deps
+      def default_enabled?, do: true
+      # No requires_enrichers defined - should default to []
+      def analyze(_timeline, _opts), do: %{findings: [], stats: %{}}
+    end
+
+    test "is an optional callback" do
+      callbacks = Analyzer.behaviour_info(:callbacks)
+      optional = Analyzer.behaviour_info(:optional_callbacks)
+
+      assert {:requires_enrichers, 0} in callbacks
+      assert {:requires_enrichers, 0} in optional
+    end
+
+    test "get_required_enrichers/1 returns declared enrichers when defined" do
+      assert Analyzer.get_required_enrichers(AnalyzerWithDeps) == [:memory, :duration]
+    end
+
+    test "get_required_enrichers/1 returns empty list when not defined" do
+      assert Analyzer.get_required_enrichers(AnalyzerWithoutDeps) == []
+    end
+  end
+
   # Test implementation of analyzer
   defmodule TestAnalyzer do
     @moduledoc false
