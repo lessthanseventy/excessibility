@@ -119,6 +119,32 @@ defmodule Excessibility.TelemetryCapture.Registry do
     end)
   end
 
+  @doc """
+  Finds enricher by name.
+
+  Returns nil if not found.
+  """
+  def get_enricher(name) do
+    Enum.find(discover_enrichers(), fn enricher ->
+      enricher.name() == name
+    end)
+  end
+
+  @doc """
+  Resolves which enrichers are needed for a set of analyzer names.
+
+  Returns deduplicated list of enricher names.
+  """
+  def resolve_enrichers(analyzer_names) do
+    alias Excessibility.TelemetryCapture.Analyzer
+
+    analyzer_names
+    |> Enum.map(&get_analyzer/1)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.flat_map(&Analyzer.get_required_enrichers/1)
+    |> Enum.uniq()
+  end
+
   # Validates that a module implements the Enricher behaviour
   defp valid_enricher?(module) do
     case Code.ensure_compiled(module) do
