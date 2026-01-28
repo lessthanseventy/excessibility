@@ -1,185 +1,323 @@
-if Code.ensure_loaded?(Hermes.Server) do
-  # Tool components must be defined before the server that uses them
+defmodule Excessibility.MCP.Server do
+  @moduledoc """
+  Minimal MCP server for excessibility tools.
 
-  defmodule Excessibility.MCP.Tools.E11yCheck do
-    @moduledoc """
-    Run tests and/or Pa11y accessibility checks on HTML snapshots.
+  Implements just enough of the MCP protocol for stdio transport:
+  - JSON-RPC 2.0 message handling
+  - initialize/initialized handshake
+  - tools/list and tools/call
 
-    Without arguments: Run Pa11y on all existing snapshots.
-    With arguments: Run `mix test [args]`, then Pa11y on new snapshots.
-    """
+  ## Usage
 
-    use Hermes.Server.Component, type: :tool
+      Excessibility.MCP.Server.start()
 
-    alias Hermes.Server.Response
+  Or via mix:
 
-    schema do
-      field(:test_args, :string, description: "Arguments to pass to mix test (optional)")
-    end
+      mix run --no-halt -e "Excessibility.MCP.Server.start()"
+  """
 
-    @impl true
-    def execute(params, frame) do
-      test_args = Map.get(params, "test_args", "")
+  @server_info %{
+    "name" => "excessibility",
+    "version" => "0.9.0"
+  }
 
-      {output, exit_code} =
-        if test_args == "" do
-          System.cmd("mix", ["excessibility"], stderr_to_stdout: true)
-        else
-          args = String.split(test_args)
-          System.cmd("mix", ["excessibility" | args], stderr_to_stdout: true)
-        end
+  @capabilities %{
+    "tools" => %{}
+  }
 
-      result = %{
-        "status" => if(exit_code == 0, do: "success", else: "failure"),
-        "exit_code" => exit_code,
-        "output" => output
-      }
-
-      {:reply, Response.json(Response.tool(), result), frame}
-    end
-  end
-
-  defmodule Excessibility.MCP.Tools.E11yDebug do
-    @moduledoc """
-    Run tests with telemetry capture and timeline analysis.
-
-    Captures LiveView state evolution and runs analyzers to help debug issues.
-    """
-
-    use Hermes.Server.Component, type: :tool
-
-    alias Hermes.Server.Response
-
-    schema do
-      field(:test_args, {:required, :string}, description: "Arguments to pass to mix test (required)")
-
-      field(:analyzers, :string, description: "Comma-separated list of analyzers to run")
-      field(:format, :string, description: "Output format: markdown or json")
-    end
-
-    @impl true
-    def execute(params, frame) do
-      test_args = Map.fetch!(params, "test_args")
-      analyzers = Map.get(params, "analyzers")
-      format = Map.get(params, "format")
-
-      args = String.split(test_args)
-      args = if analyzers, do: args ++ ["--analyze=#{analyzers}"], else: args
-      args = if format, do: args ++ ["--format=#{format}"], else: args
-
-      {output, exit_code} =
-        System.cmd("mix", ["excessibility.debug" | args], stderr_to_stdout: true)
-
-      base_path =
-        Application.get_env(:excessibility, :excessibility_output_path, "test/excessibility")
-
-      timeline_path = Path.join(base_path, "timeline.json")
-
-      timeline =
-        if File.exists?(timeline_path) do
-          case File.read(timeline_path) do
-            {:ok, content} -> Jason.decode!(content)
-            _ -> nil
-          end
-        end
-
-      result = %{
-        "status" => if(exit_code == 0, do: "success", else: "failure"),
-        "exit_code" => exit_code,
-        "output" => output,
-        "timeline_path" => timeline_path,
-        "timeline" => timeline
-      }
-
-      {:reply, Response.json(Response.tool(), result), frame}
-    end
-  end
-
-  defmodule Excessibility.MCP.Tools.GetTimeline do
-    @moduledoc """
-    Read the captured timeline showing LiveView state evolution.
-
-    The timeline shows state at each event (mount, handle_event, render)
-    with enrichments like memory size, duration, and changes.
-    """
-
-    use Hermes.Server.Component, type: :tool
-
-    alias Hermes.Server.Response
-
-    schema do
-      field(:path, :string, description: "Custom path to timeline.json (optional)")
-    end
-
-    @impl true
-    def execute(params, frame) do
-      base_path =
-        Application.get_env(:excessibility, :excessibility_output_path, "test/excessibility")
-
-      timeline_path = Map.get(params, "path") || Path.join(base_path, "timeline.json")
-
-      result =
-        if File.exists?(timeline_path) do
-          case File.read(timeline_path) do
-            {:ok, content} ->
-              %{
-                "status" => "success",
-                "path" => timeline_path,
-                "timeline" => Jason.decode!(content)
-              }
-
-            {:error, reason} ->
-              %{
-                "status" => "error",
-                "error" => "Failed to read file: #{inspect(reason)}",
-                "path" => timeline_path
-              }
-          end
-        else
-          %{
-            "status" => "not_found",
-            "error" => "Timeline file not found",
-            "path" => timeline_path
+  @tools [
+    %{
+      "name" => "e11y_check",
+      "description" => "Run Pa11y accessibility checks on HTML snapshots. Without args: check existing snapshots. With test_args: run tests first, then check.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "test_args" => %{
+            "type" => "string",
+            "description" => "Arguments to pass to mix test (optional)"
           }
-        end
+        }
+      }
+    },
+    %{
+      "name" => "e11y_debug",
+      "description" => "Run tests with telemetry capture and timeline analysis for debugging LiveView state.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "test_args" => %{
+            "type" => "string",
+            "description" => "Arguments to pass to mix test (required)"
+          },
+          "analyzers" => %{
+            "type" => "string",
+            "description" => "Comma-separated list of analyzers to run"
+          }
+        },
+        "required" => ["test_args"]
+      }
+    },
+    %{
+      "name" => "get_timeline",
+      "description" => "Read the captured timeline showing LiveView state evolution at each event.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "path" => %{
+            "type" => "string",
+            "description" => "Custom path to timeline.json (optional)"
+          }
+        }
+      }
+    },
+    %{
+      "name" => "get_snapshots",
+      "description" => "List or read HTML snapshots captured during tests.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "filter" => %{
+            "type" => "string",
+            "description" => "Glob pattern to filter snapshots (e.g., '*_test_*.html')"
+          },
+          "include_content" => %{
+            "type" => "boolean",
+            "description" => "Include HTML content in response"
+          }
+        }
+      }
+    }
+  ]
 
-      {:reply, Response.json(Response.tool(), result), frame}
+  @doc """
+  Starts the MCP server, reading from stdin and writing to stdout.
+  """
+  def start do
+    # Disable logger output to stdout (would corrupt MCP messages)
+    Logger.configure(level: :none)
+
+    loop()
+  end
+
+  defp loop do
+    case IO.read(:stdio, :line) do
+      :eof ->
+        :ok
+
+      {:error, _reason} ->
+        :ok
+
+      line ->
+        line
+        |> String.trim()
+        |> handle_line()
+
+        loop()
     end
   end
 
-  defmodule Excessibility.MCP.Tools.GetSnapshots do
-    @moduledoc """
-    List or read HTML snapshots captured during tests.
+  defp handle_line(""), do: :ok
 
-    Use to see what HTML was rendered, inspect specific components,
-    or compare before/after states.
-    """
+  defp handle_line(line) do
+    case Jason.decode(line) do
+      {:ok, message} ->
+        response = handle_message(message)
 
-    use Hermes.Server.Component, type: :tool
+        if response do
+          send_response(response)
+        end
 
-    alias Hermes.Server.Response
-
-    schema do
-      field(:filter, :string, description: "Glob pattern to filter snapshots (e.g., '*_test_*.html')")
-
-      field(:include_content, :boolean, description: "Include HTML content in response")
+      {:error, _} ->
+        send_error(-32_700, "Parse error", nil)
     end
+  end
 
-    @impl true
-    def execute(params, frame) do
-      base_path =
-        Application.get_env(:excessibility, :excessibility_output_path, "test/excessibility")
+  # Initialize request
+  defp handle_message(%{"jsonrpc" => "2.0", "id" => id, "method" => "initialize", "params" => params}) do
+    _client_info = Map.get(params, "clientInfo", %{})
+    _protocol_version = Map.get(params, "protocolVersion")
 
-      snapshots_dir = Path.join(base_path, "html_snapshots")
-      filter = Map.get(params, "filter", "*.html")
-      include_content? = Map.get(params, "include_content", false)
+    %{
+      "jsonrpc" => "2.0",
+      "id" => id,
+      "result" => %{
+        "protocolVersion" => "2024-11-05",
+        "serverInfo" => @server_info,
+        "capabilities" => @capabilities
+      }
+    }
+  end
 
-      result = build_snapshots_result(snapshots_dir, filter, include_content?)
+  # Initialized notification (no response needed)
+  defp handle_message(%{"jsonrpc" => "2.0", "method" => "notifications/initialized"}) do
+    nil
+  end
 
-      {:reply, Response.json(Response.tool(), result), frame}
-    end
+  # Tools list
+  defp handle_message(%{"jsonrpc" => "2.0", "id" => id, "method" => "tools/list"}) do
+    %{
+      "jsonrpc" => "2.0",
+      "id" => id,
+      "result" => %{
+        "tools" => @tools
+      }
+    }
+  end
 
-    defp build_snapshots_result(snapshots_dir, filter, include_content?) do
+  # Tools call
+  defp handle_message(%{"jsonrpc" => "2.0", "id" => id, "method" => "tools/call", "params" => params}) do
+    tool_name = Map.get(params, "name")
+    arguments = Map.get(params, "arguments", %{})
+
+    result = call_tool(tool_name, arguments)
+
+    %{
+      "jsonrpc" => "2.0",
+      "id" => id,
+      "result" => result
+    }
+  end
+
+  # Ping
+  defp handle_message(%{"jsonrpc" => "2.0", "id" => id, "method" => "ping"}) do
+    %{
+      "jsonrpc" => "2.0",
+      "id" => id,
+      "result" => %{}
+    }
+  end
+
+  # Unknown method
+  defp handle_message(%{"jsonrpc" => "2.0", "id" => id, "method" => method}) do
+    %{
+      "jsonrpc" => "2.0",
+      "id" => id,
+      "error" => %{
+        "code" => -32_601,
+        "message" => "Method not found: #{method}"
+      }
+    }
+  end
+
+  # Notifications (no id) - ignore
+  defp handle_message(%{"jsonrpc" => "2.0", "method" => _method}) do
+    nil
+  end
+
+  defp handle_message(_) do
+    nil
+  end
+
+  # Tool implementations
+
+  defp call_tool("e11y_check", args) do
+    test_args = Map.get(args, "test_args", "")
+
+    {output, exit_code} =
+      if test_args == "" do
+        System.cmd("mix", ["excessibility"], stderr_to_stdout: true)
+      else
+        cmd_args = String.split(test_args)
+        System.cmd("mix", ["excessibility" | cmd_args], stderr_to_stdout: true)
+      end
+
+    %{
+      "content" => [
+        %{
+          "type" => "text",
+          "text" => Jason.encode!(%{
+            "status" => if(exit_code == 0, do: "success", else: "failure"),
+            "exit_code" => exit_code,
+            "output" => output
+          })
+        }
+      ]
+    }
+  end
+
+  defp call_tool("e11y_debug", args) do
+    test_args = Map.get(args, "test_args", "")
+    analyzers = Map.get(args, "analyzers")
+
+    cmd_args = String.split(test_args)
+    cmd_args = if analyzers, do: cmd_args ++ ["--analyze=#{analyzers}"], else: cmd_args
+
+    {output, exit_code} =
+      System.cmd("mix", ["excessibility.debug" | cmd_args], stderr_to_stdout: true)
+
+    base_path = Application.get_env(:excessibility, :excessibility_output_path, "test/excessibility")
+    timeline_path = Path.join(base_path, "timeline.json")
+
+    timeline =
+      if File.exists?(timeline_path) do
+        case File.read(timeline_path) do
+          {:ok, content} -> Jason.decode!(content)
+          _ -> nil
+        end
+      end
+
+    %{
+      "content" => [
+        %{
+          "type" => "text",
+          "text" => Jason.encode!(%{
+            "status" => if(exit_code == 0, do: "success", else: "failure"),
+            "exit_code" => exit_code,
+            "output" => output,
+            "timeline_path" => timeline_path,
+            "timeline" => timeline
+          })
+        }
+      ]
+    }
+  end
+
+  defp call_tool("get_timeline", args) do
+    base_path = Application.get_env(:excessibility, :excessibility_output_path, "test/excessibility")
+    timeline_path = Map.get(args, "path") || Path.join(base_path, "timeline.json")
+
+    result =
+      if File.exists?(timeline_path) do
+        case File.read(timeline_path) do
+          {:ok, content} ->
+            %{
+              "status" => "success",
+              "path" => timeline_path,
+              "timeline" => Jason.decode!(content)
+            }
+
+          {:error, reason} ->
+            %{
+              "status" => "error",
+              "error" => "Failed to read file: #{inspect(reason)}",
+              "path" => timeline_path
+            }
+        end
+      else
+        %{
+          "status" => "not_found",
+          "error" => "Timeline file not found",
+          "path" => timeline_path
+        }
+      end
+
+    %{
+      "content" => [
+        %{
+          "type" => "text",
+          "text" => Jason.encode!(result)
+        }
+      ]
+    }
+  end
+
+  defp call_tool("get_snapshots", args) do
+    base_path = Application.get_env(:excessibility, :excessibility_output_path, "test/excessibility")
+    snapshots_dir = Path.join(base_path, "html_snapshots")
+    filter = Map.get(args, "filter", "*.html")
+    include_content? = Map.get(args, "include_content", false)
+
+    result =
       if File.dir?(snapshots_dir) do
         pattern = Path.join(snapshots_dir, filter)
 
@@ -200,71 +338,58 @@ if Code.ensure_loaded?(Hermes.Server) do
           "path" => snapshots_dir
         }
       end
-    end
 
-    defp build_snapshot(path, include_content?) do
-      snapshot = %{
-        "filename" => Path.basename(path),
-        "path" => path,
-        "size" => File.stat!(path).size
-      }
+    %{
+      "content" => [
+        %{
+          "type" => "text",
+          "text" => Jason.encode!(result)
+        }
+      ]
+    }
+  end
 
-      if include_content? do
-        Map.put(snapshot, "content", File.read!(path))
-      else
-        snapshot
-      end
+  defp call_tool(name, _args) do
+    %{
+      "content" => [
+        %{
+          "type" => "text",
+          "text" => Jason.encode!(%{"error" => "Unknown tool: #{name}"})
+        }
+      ],
+      "isError" => true
+    }
+  end
+
+  defp build_snapshot(path, include_content?) do
+    snapshot = %{
+      "filename" => Path.basename(path),
+      "path" => path,
+      "size" => File.stat!(path).size
+    }
+
+    if include_content? do
+      Map.put(snapshot, "content", File.read!(path))
+    else
+      snapshot
     end
   end
 
-  # Server module - uses the tools defined above
-  defmodule Excessibility.MCP.Server do
-    @moduledoc """
-    MCP server providing excessibility tools for AI assistants.
+  defp send_response(response) do
+    json = Jason.encode!(response)
+    IO.write(:stdio, json <> "\n")
+  end
 
-    ## Tools
+  defp send_error(code, message, id) do
+    response = %{
+      "jsonrpc" => "2.0",
+      "id" => id,
+      "error" => %{
+        "code" => code,
+        "message" => message
+      }
+    }
 
-    - `e11y_check` - Run tests and/or Pa11y accessibility checks on HTML snapshots
-    - `e11y_debug` - Run tests with telemetry capture and timeline analysis
-    - `get_timeline` - Read the captured timeline showing LiveView state evolution
-    - `get_snapshots` - List or read HTML snapshots captured during tests
-
-    ## Usage
-
-    Start the server with stdio transport:
-
-        {:ok, _pid} = Hermes.Server.start_link(Excessibility.MCP.Server, [], transport: :stdio)
-
-    Or add to your supervision tree:
-
-        children = [
-          {Excessibility.MCP.Server, transport: :stdio}
-        ]
-
-    ## Configuration
-
-    The server reads the output path from application config:
-
-        config :excessibility,
-          excessibility_output_path: "test/excessibility"
-    """
-
-    use Hermes.Server,
-      name: "excessibility",
-      version: "0.9.0",
-      capabilities: [:tools]
-
-    component(Excessibility.MCP.Tools.E11yCheck)
-    component(Excessibility.MCP.Tools.E11yDebug)
-    component(Excessibility.MCP.Tools.GetTimeline)
-    component(Excessibility.MCP.Tools.GetSnapshots)
-
-    @impl true
-    def init(_client_info, frame) do
-      base_path =
-        Application.get_env(:excessibility, :excessibility_output_path, "test/excessibility")
-
-      {:ok, assign(frame, base_path: base_path)}
-    end
+    send_response(response)
   end
 end

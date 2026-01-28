@@ -206,31 +206,25 @@ mix excessibility.install
 mix deps.get
 ```
 
-This adds hermes_mcp dependency and creates `.claude/mcp_servers.json`.
+This creates `.claude/mcp_servers.json` with the excessibility MCP server configuration.
 
 Use `--no-mcp` to skip MCP setup if you don't need AI assistant integration.
 
 **Manual Setup:**
 
-1. Add hermes_mcp to your dependencies:
+Configure Claude Code's `mcp_servers.json`:
 
-    ```elixir
-    {:hermes_mcp, "~> 0.14"}
-    ```
+```json
+{
+  "excessibility": {
+    "command": "mix",
+    "args": ["run", "--no-halt", "-e", "Excessibility.MCP.Server.start()"],
+    "cwd": "/path/to/your/project"
+  }
+}
+```
 
-2. Configure Claude Code's `mcp_servers.json`:
-
-    ```json
-    {
-      "excessibility": {
-        "command": "mix",
-        "args": ["run", "--no-halt", "-e", "Excessibility.MCP.Server.start_link(transport: :stdio)"],
-        "cwd": "/path/to/your/project"
-      }
-    }
-    ```
-
-3. The MCP server is now available in Claude Code.
+The MCP server is now available in Claude Code.
 
 ### Claude Code Skills Plugin
 
