@@ -15,6 +15,12 @@ defmodule Excessibility.TelemetryCapture.Analyzers.StateMachineTest do
     end
   end
 
+  describe "requires_enrichers/0" do
+    test "declares state enricher dependency" do
+      assert StateMachine.requires_enrichers() == [:state]
+    end
+  end
+
   describe "analyze/2" do
     test "returns map with findings and stats" do
       timeline = %{timeline: []}

@@ -45,6 +45,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.StateMachine do
 
   def name, do: :state_machine
   def default_enabled?, do: true
+  def requires_enrichers, do: [:state]
 
   def analyze(%{timeline: []}, _opts) do
     %{findings: [], stats: %{}}

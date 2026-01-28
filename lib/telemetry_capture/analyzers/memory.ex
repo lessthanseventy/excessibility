@@ -39,6 +39,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Memory do
 
   def name, do: :memory
   def default_enabled?, do: true
+  def requires_enrichers, do: [:memory]
 
   def analyze(%{timeline: []}, _opts) do
     %{findings: [], stats: %{}}

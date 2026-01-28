@@ -15,6 +15,12 @@ defmodule Excessibility.TelemetryCapture.Analyzers.DataGrowthTest do
     end
   end
 
+  describe "requires_enrichers/0" do
+    test "declares collection_size enricher dependency" do
+      assert DataGrowth.requires_enrichers() == [:collection_size]
+    end
+  end
+
   describe "analyze/2" do
     test "returns map with findings and stats" do
       timeline = %{timeline: []}

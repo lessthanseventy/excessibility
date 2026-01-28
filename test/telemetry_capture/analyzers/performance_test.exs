@@ -15,6 +15,12 @@ defmodule Excessibility.TelemetryCapture.Analyzers.PerformanceTest do
     end
   end
 
+  describe "requires_enrichers/0" do
+    test "declares duration enricher dependency" do
+      assert Performance.requires_enrichers() == [:duration]
+    end
+  end
+
   describe "analyze/2" do
     test "returns map with findings and stats" do
       timeline = %{timeline: []}

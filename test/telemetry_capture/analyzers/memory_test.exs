@@ -15,6 +15,12 @@ defmodule Excessibility.TelemetryCapture.Analyzers.MemoryTest do
     end
   end
 
+  describe "requires_enrichers/0" do
+    test "declares memory enricher dependency" do
+      assert Memory.requires_enrichers() == [:memory]
+    end
+  end
+
   describe "analyze/2" do
     test "returns correct structure" do
       timeline = build_timeline([1000, 2000, 3000])

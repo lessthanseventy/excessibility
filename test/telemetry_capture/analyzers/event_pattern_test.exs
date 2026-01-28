@@ -15,6 +15,12 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EventPatternTest do
     end
   end
 
+  describe "requires_enrichers/0" do
+    test "declares no enricher dependencies" do
+      assert EventPattern.requires_enrichers() == []
+    end
+  end
+
   describe "analyze/2" do
     test "returns map with findings and stats" do
       timeline = %{timeline: []}
