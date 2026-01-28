@@ -112,14 +112,15 @@ The debug command outputs a comprehensive markdown report with:
 
 The report is both human-readable and AI-parseable, perfect for pasting into Claude.
 
-**Available formats:**
+**Available formats (all args pass through to mix test):**
 
 ```bash
 mix excessibility.debug test/my_test.exs                    # Markdown report (default)
+mix excessibility.debug test/my_test.exs:42                 # Run specific test
+mix excessibility.debug --only live_view                    # Run tests with tag
 mix excessibility.debug test/my_test.exs --format=json      # Structured JSON
 mix excessibility.debug test/my_test.exs --format=package   # Directory with MANIFEST
 mix excessibility.latest                                    # Re-display last report
-mix excessibility.package test/my_test.exs                  # Shortcut for package format
 ```
 
 ### 🔍 Telemetry Timeline Analysis
@@ -240,9 +241,14 @@ The installer will:
 3. **Typical workflow:**
 
     ```bash
-    # Write tests with html_snapshot calls, then:
+    # Run specific test + Pa11y in one command
+    mix excessibility test/my_test.exs
+    mix excessibility test/my_test.exs:42
+    mix excessibility --only a11y
+
+    # Or run tests separately, then check all snapshots
     mix test                    # Generates snapshots in test/excessibility/
-    mix excessibility           # Runs Pa11y against snapshots, reports violations
+    mix excessibility           # Runs Pa11y against all snapshots
 
     # Lock current snapshots as known-good baseline
     mix excessibility.baseline
@@ -391,14 +397,15 @@ Screenshots are saved alongside HTML files with `.png` extension.
 | Task | Description |
 |------|-------------|
 | `mix excessibility.install` | Configure config/test.exs, create pa11y.json, install Pa11y via npm |
-| `mix excessibility` | Run Pa11y against all generated snapshots |
+| `mix excessibility` | Run Pa11y against all existing snapshots |
+| `mix excessibility [test args]` | Run tests, then Pa11y on new snapshots (passthrough to mix test) |
 | `mix excessibility.baseline` | Lock current snapshots as baseline |
 | `mix excessibility.compare` | Compare snapshots against baseline, resolve diffs interactively |
 | `mix excessibility.compare --keep good` | Keep all baseline versions (reject changes) |
 | `mix excessibility.compare --keep bad` | Accept all new versions as baseline |
-| `mix excessibility.debug [test]` | Run test and generate comprehensive debug report |
-| `mix excessibility.debug [test] --format=json` | Output debug report as JSON |
-| `mix excessibility.debug [test] --format=package` | Create debug package directory |
+| `mix excessibility.debug [test args]` | Run tests with telemetry, generate debug report (passthrough to mix test) |
+| `mix excessibility.debug [test args] --format=json` | Output debug report as JSON |
+| `mix excessibility.debug [test args] --format=package` | Create debug package directory |
 | `mix excessibility.latest` | Display most recent debug report |
 | `mix excessibility.package [test]` | Create debug package (alias for --format=package) |
 | `mix excessibility.setup_claude_docs` | Create/update .claude_docs/excessibility.md |
