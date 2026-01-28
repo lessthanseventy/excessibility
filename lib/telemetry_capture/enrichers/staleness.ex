@@ -33,9 +33,9 @@ defmodule Excessibility.TelemetryCapture.Enrichers.Staleness do
     timestamps = find_timestamps(assigns, [], now)
 
     stale =
-      timestamps
-      |> Enum.filter(fn ts -> ts.age_seconds >= threshold end)
-      |> Enum.filter(fn ts -> stale_field?(ts.field_name) end)
+      Enum.filter(timestamps, fn ts ->
+        ts.age_seconds >= threshold and stale_field?(ts.field_name)
+      end)
 
     %{
       stale_data_count: length(stale),
@@ -55,7 +55,7 @@ defmodule Excessibility.TelemetryCapture.Enrichers.Staleness do
       current_path = path ++ [key]
 
       cond do
-        timestamp_field?(key) and is_timestamp?(value) ->
+        timestamp_field?(key) and timestamp_value?(value) ->
           age = calculate_age(value, now)
           [%{key: path_to_atom(current_path), age_seconds: age, field_name: key}]
 
@@ -79,9 +79,9 @@ defmodule Excessibility.TelemetryCapture.Enrichers.Staleness do
 
   defp timestamp_field?(_), do: false
 
-  defp is_timestamp?(%DateTime{}), do: true
-  defp is_timestamp?(%NaiveDateTime{}), do: true
-  defp is_timestamp?(_), do: false
+  defp timestamp_value?(%DateTime{}), do: true
+  defp timestamp_value?(%NaiveDateTime{}), do: true
+  defp timestamp_value?(_), do: false
 
   defp calculate_age(%DateTime{} = timestamp, now) do
     DateTime.diff(now, timestamp, :second)
