@@ -122,6 +122,10 @@ mix excessibility.debug test/my_test.exs --verbose
 
 ## Extending the Framework
 
+Built-in enrichers and analyzers are auto-discovered at compile time from `lib/telemetry_capture/enrichers/` and `lib/telemetry_capture/analyzers/`.
+
+Users can also register custom plugins in their own applications via config.
+
 ### Creating a Custom Enricher
 
 1. **Implement the behaviour:**
@@ -144,20 +148,17 @@ defmodule MyApp.Enrichers.Query do
 end
 ```
 
-2. **Register in Registry:**
+2. **Register via config:**
 
 ```elixir
-# lib/telemetry_capture/registry.ex
-@enrichers [
-  Excessibility.TelemetryCapture.Enrichers.Memory,
-  MyApp.Enrichers.Query  # Add your enricher
-]
+# config/test.exs
+config :excessibility,
+  custom_enrichers: [MyApp.Enrichers.Query]
 ```
 
 3. **Write tests:**
 
 ```elixir
-# test/my_app/enrichers/query_test.exs
 test "counts Ecto records" do
   assigns = %{users: [%User{}, %User{}]}
   result = MyApp.Enrichers.Query.enrich(assigns, [])
@@ -189,14 +190,12 @@ defmodule MyApp.Analyzers.StateMachine do
 end
 ```
 
-2. **Register in Registry:**
+2. **Register via config:**
 
 ```elixir
-# lib/telemetry_capture/registry.ex
-@analyzers [
-  Excessibility.TelemetryCapture.Analyzers.Memory,
-  MyApp.Analyzers.StateMachine  # Add your analyzer
-]
+# config/test.exs
+config :excessibility,
+  custom_analyzers: [MyApp.Analyzers.StateMachine]
 ```
 
 3. **Write tests:**

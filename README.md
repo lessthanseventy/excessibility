@@ -137,7 +137,7 @@ mix excessibility.debug test/my_test.exs
 
 See [CLAUDE.md](CLAUDE.md) for detailed usage.
 
-### How It Works
+### Telemetry Implementation
 
 Excessibility hooks into Phoenix LiveView's built-in telemetry events:
 - `[:phoenix, :live_view, :mount, :stop]`
@@ -146,8 +146,8 @@ Excessibility hooks into Phoenix LiveView's built-in telemetry events:
 - `[:phoenix, :live_view, :render, :stop]` - **Captures all render cycles** (form updates, state changes)
 
 When you run `mix excessibility.debug`, it:
-1. Sets `EXCESSIBILITY_TELEMETRY_CAPTURE=true`
-2. Attaches telemetry handlers
+1. Enables telemetry capture via environment variable
+2. Attaches telemetry handlers to LiveView events
 3. Runs your test
 4. Captures snapshots with real assigns from the LiveView process
 5. Generates a complete debug report
@@ -186,7 +186,7 @@ Add to `mix.exs`:
 ```elixir
 def deps do
   [
-    {:excessibility, "~> 0.8", only: [:dev, :test]}
+    {:excessibility, "~> 0.9", only: [:dev, :test]}
   ]
 end
 ```
@@ -326,6 +326,8 @@ All configuration goes in `test/test_helper.exs` or `config/test.exs`:
 | `:pa11y_path` | No | auto-detected | Path to Pa11y executable |
 | `:pa11y_config` | No | `"pa11y.json"` | Path to Pa11y config file |
 | `:head_render_path` | No | `"/"` | Route used for rendering `<head>` content |
+| `:custom_enrichers` | No | `[]` | List of custom enricher modules (see [Telemetry Analysis](docs/telemetry-analysis.md)) |
+| `:custom_analyzers` | No | `[]` | List of custom analyzer modules (see [Telemetry Analysis](docs/telemetry-analysis.md)) |
 
 Example:
 
