@@ -206,82 +206,130 @@ defmodule Mix.Tasks.Excessibility.Install do
 
   # By default, set up MCP server
   defp maybe_setup_mcp(igniter, _skip?) do
-    igniter
-    |> create_mcp_config()
-    |> copy_skills_plugin()
-    |> add_mcp_notice()
+    cond do
+      igniter.args.options[:dry_run] ->
+        igniter
+        |> add_mcp_manual_setup_notice()
+
+      true ->
+        igniter
+        |> install_mcp_server()
+        |> install_skills_plugin()
+    end
   end
 
-  defp create_mcp_config(igniter) do
-    config_path = ".claude/mcp_servers.json"
+  defp install_mcp_server(igniter) do
     project_path = File.cwd!()
 
-    config_content = """
-    {
-      "excessibility": {
-        "command": "mix",
-        "args": ["run", "--no-halt", "-e", "Excessibility.MCP.Server.start()"],
-        "cwd": "#{project_path}"
-      }
-    }
-    """
+    Mix.shell().info("Setting up MCP server for Claude Code...")
 
-    Igniter.create_or_update_file(igniter, config_path, config_content, fn source ->
-      # Don't overwrite existing config, but notify
-      Igniter.add_notice(
-        igniter,
-        "Existing #{config_path} found. Add excessibility server config manually if needed."
-      )
+    case System.cmd("claude", [
+           "mcp",
+           "add",
+           "excessibility",
+           "-s",
+           "project",
+           "--",
+           "mix",
+           "run",
+           "--no-halt",
+           "-e",
+           "Excessibility.MCP.Server.start()"
+         ], cd: project_path, stderr_to_stdout: true) do
+      {output, 0} ->
+        Mix.shell().info("✅ MCP server registered with Claude Code")
 
-      source
-    end)
+        if String.contains?(output, "already exists") do
+          Mix.shell().info("   (server was already configured)")
+        end
+
+        igniter
+
+      {output, _status} ->
+        if String.contains?(output, "command not found") or String.contains?(output, "not found") do
+          Igniter.add_warning(
+            igniter,
+            """
+            Could not find 'claude' CLI. Install from: https://github.com/anthropics/claude-code
+
+            Or manually add MCP server:
+              claude mcp add excessibility -s project -- mix run --no-halt -e "Excessibility.MCP.Server.start()"
+            """
+          )
+        else
+          Igniter.add_warning(
+            igniter,
+            """
+            MCP server registration failed: #{output}
+
+            Manually add with:
+              claude mcp add excessibility -s project -- mix run --no-halt -e "Excessibility.MCP.Server.start()"
+            """
+          )
+        end
+    end
   end
 
-  defp copy_skills_plugin(igniter) do
-    # Get the path to excessibility's priv/claude-plugin
+  defp install_skills_plugin(igniter) do
     dep_path = Mix.Project.deps_paths()[:excessibility] || File.cwd!()
-    source_plugin_path = Path.join(dep_path, "priv/claude-plugin")
-    target_plugin_path = ".claude/plugins/excessibility"
+    plugin_path = Path.join(dep_path, "priv/claude-plugin")
 
-    if File.dir?(source_plugin_path) do
-      Igniter.add_notice(
-        igniter,
-        """
-        📦 Excessibility Claude Code skills available at:
-           #{source_plugin_path}
+    if File.dir?(plugin_path) do
+      Mix.shell().info("Installing Claude Code skills plugin...")
 
-        Install with:
-           claude plugins add #{source_plugin_path}
+      case System.cmd("claude", ["plugins", "add", plugin_path], stderr_to_stdout: true) do
+        {output, 0} ->
+          Mix.shell().info("✅ Skills plugin installed (/e11y-tdd, /e11y-debug, /e11y-fix)")
 
-        Or copy to your project:
-           cp -r #{source_plugin_path} #{target_plugin_path}
-        """
-      )
+          if String.contains?(output, "already installed") do
+            Mix.shell().info("   (plugin was already installed)")
+          end
+
+          igniter
+
+        {output, _status} ->
+          if String.contains?(output, "command not found") or String.contains?(output, "not found") do
+            Igniter.add_notice(
+              igniter,
+              """
+              Install skills plugin manually:
+                claude plugins add #{plugin_path}
+              """
+            )
+          else
+            Igniter.add_notice(
+              igniter,
+              """
+              Skills plugin installation failed: #{output}
+
+              Install manually:
+                claude plugins add #{plugin_path}
+              """
+            )
+          end
+      end
     else
       igniter
     end
   end
 
-  defp add_mcp_notice(igniter) do
+  defp add_mcp_manual_setup_notice(igniter) do
+    dep_path = Mix.Project.deps_paths()[:excessibility] || File.cwd!()
+    plugin_path = Path.join(dep_path, "priv/claude-plugin")
+
     Igniter.add_notice(
       igniter,
       """
-      🔌 MCP Server Setup Complete!
+      🔌 MCP Server Setup (dry run - run these manually):
 
-      1. Add the MCP server to Claude Code:
-         - Copy .claude/mcp_servers.json to your Claude Code config
-         - Or run: claude mcp add excessibility -s project -- mix run --no-halt -e "Excessibility.MCP.Server.start()"
+      1. Add MCP server to Claude Code:
+         claude mcp add excessibility -s project -- mix run --no-halt -e "Excessibility.MCP.Server.start()"
 
-      2. Install the skills plugin (optional):
-         - Run: claude plugins add <path-to-excessibility>/priv/claude-plugin
+      2. Install skills plugin:
+         claude plugins add #{plugin_path}
 
-      3. Available MCP tools:
-         - e11y_check: Run Pa11y accessibility checks
-         - e11y_debug: Debug with timeline analysis
-         - get_timeline: Read captured timeline
-         - get_snapshots: List/read HTML snapshots
-
-      4. Available skills: /e11y-tdd, /e11y-debug, /e11y-fix
+      Available tools: e11y_check, e11y_debug, get_timeline, get_snapshots
+      Available skills: /e11y-tdd, /e11y-debug, /e11y-fix
       """
     )
   end
