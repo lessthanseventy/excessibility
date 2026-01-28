@@ -1,0 +1,22 @@
+{
+  "name": "excessibility",
+  "description": "LiveView introspection and accessibility testing skills for Phoenix. Use html_snapshot() to capture state at any point, Pa11y for WCAG compliance, timeline analysis for debugging.",
+  "version": "0.9.0",
+  "author": {
+    "name": "Andrew Moore"
+  },
+  "repository": "https://github.com/lessthanseventy/excessibility",
+  "license": "MIT",
+  "keywords": [
+    "accessibility",
+    "a11y",
+    "phoenix",
+    "liveview",
+    "testing",
+    "wcag",
+    "debugging",
+    "introspection",
+    "html-snapshot",
+    "pa11y"
+  ]
+}
