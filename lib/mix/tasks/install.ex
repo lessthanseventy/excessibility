@@ -25,10 +25,10 @@ defmodule Mix.Tasks.Excessibility.Install do
         head_render_path: :string,
         assets_dir: :string,
         skip_npm: :boolean,
-        with_mcp: :boolean
+        no_mcp: :boolean
       ],
-      defaults: [skip_npm: false, head_render_path: "/", with_mcp: false],
-      example: "mix excessibility.install --endpoint MyAppWeb.Endpoint --with-mcp"
+      defaults: [skip_npm: false, head_render_path: "/", no_mcp: false],
+      example: "mix excessibility.install --endpoint MyAppWeb.Endpoint"
     }
   end
 
@@ -40,7 +40,7 @@ defmodule Mix.Tasks.Excessibility.Install do
     head_render_path = opts[:head_render_path] || "/"
     assets_dir = opts[:assets_dir] || default_assets_dir()
     skip_npm? = opts[:skip_npm]
-    with_mcp? = opts[:with_mcp]
+    skip_mcp? = opts[:no_mcp]
 
     igniter
     |> ensure_test_config(endpoint, head_render_path)
@@ -48,7 +48,7 @@ defmodule Mix.Tasks.Excessibility.Install do
     |> ensure_pa11y_config()
     |> maybe_install_pa11y(assets_dir, skip_npm?)
     |> maybe_create_claude_docs()
-    |> maybe_setup_mcp(with_mcp?)
+    |> maybe_setup_mcp(skip_mcp?)
   end
 
   defp fallback_endpoint(nil, igniter) do
@@ -201,10 +201,11 @@ defmodule Mix.Tasks.Excessibility.Install do
     end
   end
 
-  defp maybe_setup_mcp(igniter, false), do: igniter
-  defp maybe_setup_mcp(igniter, nil), do: igniter
+  # Skip MCP setup if --no-mcp flag is passed
+  defp maybe_setup_mcp(igniter, true), do: igniter
 
-  defp maybe_setup_mcp(igniter, true) do
+  # By default, set up MCP server
+  defp maybe_setup_mcp(igniter, _skip?) do
     igniter
     |> Igniter.Project.Deps.add_dep({:hermes_mcp, "~> 0.14"})
     |> create_mcp_config()
