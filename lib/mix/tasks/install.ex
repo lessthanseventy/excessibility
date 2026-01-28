@@ -24,10 +24,11 @@ defmodule Mix.Tasks.Excessibility.Install do
         endpoint: :string,
         head_render_path: :string,
         assets_dir: :string,
-        skip_npm: :boolean
+        skip_npm: :boolean,
+        with_mcp: :boolean
       ],
-      defaults: [skip_npm: false, head_render_path: "/"],
-      example: "mix excessibility.install --endpoint MyAppWeb.Endpoint --head-render-path /login"
+      defaults: [skip_npm: false, head_render_path: "/", with_mcp: false],
+      example: "mix excessibility.install --endpoint MyAppWeb.Endpoint --with-mcp"
     }
   end
 
@@ -39,6 +40,7 @@ defmodule Mix.Tasks.Excessibility.Install do
     head_render_path = opts[:head_render_path] || "/"
     assets_dir = opts[:assets_dir] || default_assets_dir()
     skip_npm? = opts[:skip_npm]
+    with_mcp? = opts[:with_mcp]
 
     igniter
     |> ensure_test_config(endpoint, head_render_path)
@@ -46,6 +48,7 @@ defmodule Mix.Tasks.Excessibility.Install do
     |> ensure_pa11y_config()
     |> maybe_install_pa11y(assets_dir, skip_npm?)
     |> maybe_create_claude_docs()
+    |> maybe_setup_mcp(with_mcp?)
   end
 
   defp fallback_endpoint(nil, igniter) do
@@ -196,6 +199,93 @@ defmodule Mix.Tasks.Excessibility.Install do
           """
         )
     end
+  end
+
+  defp maybe_setup_mcp(igniter, false), do: igniter
+  defp maybe_setup_mcp(igniter, nil), do: igniter
+
+  defp maybe_setup_mcp(igniter, true) do
+    igniter
+    |> Igniter.Project.Deps.add_dep({:hermes_mcp, "~> 0.14"})
+    |> create_mcp_config()
+    |> copy_skills_plugin()
+    |> add_mcp_notice()
+  end
+
+  defp create_mcp_config(igniter) do
+    config_path = ".claude/mcp_servers.json"
+    project_path = File.cwd!()
+
+    config_content = """
+    {
+      "excessibility": {
+        "command": "mix",
+        "args": ["run", "--no-halt", "-e", "Excessibility.MCP.Server.start_link(transport: :stdio)"],
+        "cwd": "#{project_path}"
+      }
+    }
+    """
+
+    Igniter.create_or_update_file(igniter, config_path, config_content, fn source ->
+      # Don't overwrite existing config, but notify
+      Igniter.add_notice(
+        igniter,
+        "Existing #{config_path} found. Add excessibility server config manually if needed."
+      )
+
+      source
+    end)
+  end
+
+  defp copy_skills_plugin(igniter) do
+    # Get the path to excessibility's priv/claude-plugin
+    dep_path = Mix.Project.deps_paths()[:excessibility] || File.cwd!()
+    source_plugin_path = Path.join(dep_path, "priv/claude-plugin")
+    target_plugin_path = ".claude/plugins/excessibility"
+
+    if File.dir?(source_plugin_path) do
+      Igniter.add_notice(
+        igniter,
+        """
+        📦 Excessibility Claude Code skills available at:
+           #{source_plugin_path}
+
+        Install with:
+           claude plugins add #{source_plugin_path}
+
+        Or copy to your project:
+           cp -r #{source_plugin_path} #{target_plugin_path}
+        """
+      )
+    else
+      igniter
+    end
+  end
+
+  defp add_mcp_notice(igniter) do
+    Igniter.add_notice(
+      igniter,
+      """
+      🔌 MCP Server Setup Complete!
+
+      1. Run `mix deps.get` to fetch hermes_mcp
+
+      2. Add the MCP server to Claude Code:
+         - Copy .claude/mcp_servers.json to your Claude Code config
+         - Or run: claude mcp add excessibility
+
+      3. Install the skills plugin:
+         - Run: claude plugins add <path-to-excessibility>/priv/claude-plugin
+
+      4. Available MCP tools:
+         - e11y_check: Run Pa11y accessibility checks
+         - e11y_debug: Debug with timeline analysis
+         - get_timeline: Read captured timeline
+         - get_snapshots: List/read HTML snapshots
+
+      5. Available skills: /e11y-tdd, /e11y-debug, /e11y-fix
+      """
+    )
   end
 
   defp claude_docs_content do
