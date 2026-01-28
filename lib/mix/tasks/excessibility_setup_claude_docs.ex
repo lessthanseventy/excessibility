@@ -57,6 +57,21 @@ defmodule Mix.Tasks.Excessibility.SetupClaudeDocs do
     Excessibility automatically captures LiveView state during tests using telemetry,
     giving you complete execution context without modifying test code.
 
+    ## When to Use Excessibility Skills
+
+    **The excessibility plugin provides specialized skills - use them proactively:**
+
+    - **Implementing LiveView features** (forms, modals, dynamic content)
+      → Use `/e11y-tdd` skill for test-driven development with accessibility checking
+
+    - **Debugging LiveView test failures or state issues**
+      → Use `/e11y-debug` skill for timeline analysis and state inspection
+
+    - **Fixing Pa11y or WCAG accessibility violations**
+      → Use `/e11y-fix` skill for Phoenix-specific accessibility patterns
+
+    **When these patterns match, using the skill is not optional** - it provides the workflow and tools to see actual rendered HTML and LiveView state, not just guesses.
+
     ## Key Feature: Telemetry-Based Auto-Capture
 
     Debug **any existing LiveView test** with automatic snapshot capture:
