@@ -15,6 +15,12 @@ defmodule Excessibility.TelemetryCapture.Analyzers.NPlusOneTest do
     end
   end
 
+  describe "requires_enrichers/0" do
+    test "declares query enricher dependency" do
+      assert NPlusOne.requires_enrichers() == [:query]
+    end
+  end
+
   describe "analyze/2" do
     test "returns map with findings and stats" do
       timeline = %{timeline: []}

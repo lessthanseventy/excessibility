@@ -44,6 +44,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Performance do
 
   def name, do: :performance
   def default_enabled?, do: true
+  def requires_enrichers, do: [:duration]
 
   def analyze(%{timeline: []}, _opts) do
     %{findings: [], stats: %{}}

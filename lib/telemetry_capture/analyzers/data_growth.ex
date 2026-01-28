@@ -45,6 +45,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.DataGrowth do
 
   def name, do: :data_growth
   def default_enabled?, do: true
+  def requires_enrichers, do: [:collection_size]
 
   def analyze(%{timeline: []}, _opts) do
     %{findings: [], stats: %{}}

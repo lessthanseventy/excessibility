@@ -41,6 +41,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EventPattern do
 
   def name, do: :event_pattern
   def default_enabled?, do: true
+  def requires_enrichers, do: []
 
   def analyze(%{timeline: []}, _opts) do
     %{findings: [], stats: %{}}

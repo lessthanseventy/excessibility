@@ -42,6 +42,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.NPlusOne do
 
   def name, do: :n_plus_one
   def default_enabled?, do: true
+  def requires_enrichers, do: [:query]
 
   def analyze(%{timeline: []}, _opts) do
     %{findings: [], stats: %{}}
