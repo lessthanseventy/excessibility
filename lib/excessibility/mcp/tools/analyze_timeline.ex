@@ -8,6 +8,7 @@ defmodule Excessibility.MCP.Tools.AnalyzeTimeline do
 
   @behaviour Excessibility.MCP.Tool
 
+  alias Excessibility.MCP.ClientContext
   alias Excessibility.TelemetryCapture.Analyzer
   alias Excessibility.TelemetryCapture.Registry
 
@@ -40,11 +41,6 @@ defmodule Excessibility.MCP.Tools.AnalyzeTimeline do
         "verbose" => %{
           "type" => "boolean",
           "description" => "Show detailed stats even when no issues found"
-        },
-        "cwd" => %{
-          "type" => "string",
-          "description" =>
-            "Working directory to look for timeline in (defaults to current directory). Required when testing projects other than excessibility itself."
         }
       }
     }
@@ -56,16 +52,8 @@ defmodule Excessibility.MCP.Tools.AnalyzeTimeline do
 
     if progress_callback, do: progress_callback.("Loading timeline...", 0)
 
-    cwd = Map.get(args, "cwd")
     base_path = Application.get_env(:excessibility, :excessibility_output_path, "test/excessibility")
-
-    default_path =
-      if cwd && File.dir?(cwd) do
-        Path.join([cwd, base_path, "timeline.json"])
-      else
-        Path.join(base_path, "timeline.json")
-      end
-
+    default_path = ClientContext.client_path(Path.join(base_path, "timeline.json"))
     timeline_path = Map.get(args, "path") || default_path
 
     case load_timeline(timeline_path) do
