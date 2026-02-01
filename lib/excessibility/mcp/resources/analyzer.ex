@@ -206,7 +206,7 @@ defmodule Excessibility.MCP.Resources.Analyzer do
   defp analyzer_detects do
     %{
       memory: ["Memory bloat (large growth between events)", "Memory leaks (3+ consecutive increases)"],
-      performance: ["Slow events (> mean + 2σ)", "Bottlenecks (> 50% of total time)", "Very slow events (> 1000ms)"],
+      performance: ["Slow events (> mean + 2std_dev)", "Bottlenecks (> 50% of total time)", "Very slow events (> 1000ms)"],
       data_growth: ["Unbounded list growth", "Accumulating data structures"],
       event_pattern: ["Repeated identical events", "Inefficient event sequences"],
       n_plus_one: ["N+1 query patterns", "Repeated database calls in loops"],

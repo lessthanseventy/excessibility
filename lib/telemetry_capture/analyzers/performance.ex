@@ -3,7 +3,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Performance do
   Analyzes performance patterns across timeline events.
 
   Detects:
-  - Slow events using adaptive thresholds (> mean + 2σ)
+  - Slow events using adaptive thresholds (> mean + 2std_dev)
   - Bottlenecks (events taking >50% of total time)
   - Very slow events (>1000ms)
 
@@ -14,8 +14,8 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Performance do
 
   1. Calculate baseline stats (mean, std deviation)
   2. Detect slow events:
-     - Warning: Duration > mean + 2σ
-     - Critical: Duration > 1000ms OR > mean + 3σ
+     - Warning: Duration > mean + 2std_dev
+     - Critical: Duration > 1000ms OR > mean + 3std_dev
   3. Detect bottlenecks: Events taking >50% of total time
 
   ## Output
@@ -119,8 +119,8 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Performance do
       check_event_duration(event, stats, threshold_warning, threshold_critical)
     end)
 
-    # Critical: >1000ms OR > mean + 3σ
-    # Warning: > mean + 2σ
+    # Critical: >1000ms OR > mean + 3std_dev
+    # Warning: > mean + 2std_dev
   end
 
   defp check_event_duration(event, stats, threshold_warning, threshold_critical) do

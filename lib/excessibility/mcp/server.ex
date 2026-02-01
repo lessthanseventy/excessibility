@@ -50,6 +50,9 @@ defmodule Excessibility.MCP.Server do
     # Disable logger output to stdout (would corrupt MCP messages)
     Logger.configure(level: :none)
 
+    # Set stdio to binary mode for reliable line reading
+    :io.setopts(:standard_io, binary: true, encoding: :latin1)
+
     {:ok, pid} = GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
 
     # Run the stdio loop in the current process

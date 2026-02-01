@@ -1,0 +1,6 @@
+#!/bin/bash
+cd /home/andrew/projects/excessibility
+export TERM=dumb
+export NO_COLOR=1
+export ELIXIR_CLI_ECHO=false
+exec mix run --no-halt -e "Excessibility.MCP.Server.start()" 2>/dev/null
