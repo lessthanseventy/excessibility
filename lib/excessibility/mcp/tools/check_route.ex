@@ -48,11 +48,11 @@ defmodule Excessibility.MCP.Tools.CheckRoute do
   @impl true
   def execute(%{"url" => url} = args, opts) do
     progress_callback = Keyword.get(opts, :progress_callback)
-    port = Map.get(args, "port", 4000)
     wait_for = Map.get(args, "wait_for")
     timeout = Map.get(args, "timeout", 30_000)
 
-    full_url = normalize_url(url, port)
+    # Parse port from URL if it's a full URL, otherwise use the port arg or default
+    {full_url, port} = normalize_url_and_port(url, Map.get(args, "port", 4000))
 
     if progress_callback, do: progress_callback.("Checking if app is running...", 0)
 
@@ -69,16 +69,25 @@ defmodule Excessibility.MCP.Tools.CheckRoute do
     {:error, "Missing required argument: url"}
   end
 
-  defp normalize_url(url, port) do
+  defp normalize_url_and_port(url, default_port) do
     cond do
       String.starts_with?(url, "http://") or String.starts_with?(url, "https://") ->
-        url
+        # Parse port from full URL
+        port = parse_port_from_url(url, default_port)
+        {url, port}
 
       String.starts_with?(url, "/") ->
-        "http://localhost:#{port}#{url}"
+        {"http://localhost:#{default_port}#{url}", default_port}
 
       true ->
-        "http://localhost:#{port}/#{url}"
+        {"http://localhost:#{default_port}/#{url}", default_port}
+    end
+  end
+
+  defp parse_port_from_url(url, default_port) do
+    case URI.parse(url) do
+      %URI{port: nil} -> default_port
+      %URI{port: port} -> port
     end
   end
 
