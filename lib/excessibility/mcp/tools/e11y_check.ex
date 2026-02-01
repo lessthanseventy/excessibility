@@ -5,6 +5,8 @@ defmodule Excessibility.MCP.Tools.E11yCheck do
 
   @behaviour Excessibility.MCP.Tool
 
+  alias Excessibility.MCP.ClientContext
+
   @impl true
   def name, do: "e11y_check"
 
@@ -21,11 +23,6 @@ defmodule Excessibility.MCP.Tools.E11yCheck do
         "test_args" => %{
           "type" => "string",
           "description" => "Arguments to pass to mix test (optional)"
-        },
-        "cwd" => %{
-          "type" => "string",
-          "description" =>
-            "Working directory to run tests from (defaults to current directory). Required when testing projects other than excessibility itself."
         }
       }
     }
@@ -34,13 +31,11 @@ defmodule Excessibility.MCP.Tools.E11yCheck do
   @impl true
   def execute(args, opts) do
     test_args = Map.get(args, "test_args", "")
-    cwd = Map.get(args, "cwd")
     progress_callback = Keyword.get(opts, :progress_callback)
 
     if progress_callback, do: progress_callback.("Starting Pa11y check...", 0)
 
-    cmd_opts = [stderr_to_stdout: true]
-    cmd_opts = if cwd && File.dir?(cwd), do: [{:cd, cwd} | cmd_opts], else: cmd_opts
+    cmd_opts = ClientContext.cmd_opts(stderr_to_stdout: true)
 
     {output, exit_code} =
       if test_args == "" do

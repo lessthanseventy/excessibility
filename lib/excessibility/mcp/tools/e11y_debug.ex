@@ -5,6 +5,8 @@ defmodule Excessibility.MCP.Tools.E11yDebug do
 
   @behaviour Excessibility.MCP.Tool
 
+  alias Excessibility.MCP.ClientContext
+
   @impl true
   def name, do: "e11y_debug"
 
@@ -25,11 +27,6 @@ defmodule Excessibility.MCP.Tools.E11yDebug do
         "analyzers" => %{
           "type" => "string",
           "description" => "Comma-separated list of analyzers to run"
-        },
-        "cwd" => %{
-          "type" => "string",
-          "description" =>
-            "Working directory to run tests from (defaults to current directory). Required when testing projects other than excessibility itself."
         }
       },
       "required" => ["test_args"]
@@ -40,7 +37,6 @@ defmodule Excessibility.MCP.Tools.E11yDebug do
   def execute(args, opts) do
     test_args = Map.get(args, "test_args", "")
     analyzers = Map.get(args, "analyzers")
-    cwd = Map.get(args, "cwd")
     progress_callback = Keyword.get(opts, :progress_callback)
 
     if progress_callback, do: progress_callback.("Running tests with telemetry capture...", 0)
@@ -48,21 +44,13 @@ defmodule Excessibility.MCP.Tools.E11yDebug do
     cmd_args = String.split(test_args)
     cmd_args = if analyzers, do: cmd_args ++ ["--analyze=#{analyzers}"], else: cmd_args
 
-    cmd_opts = [stderr_to_stdout: true]
-    cmd_opts = if cwd && File.dir?(cwd), do: [{:cd, cwd} | cmd_opts], else: cmd_opts
-
+    cmd_opts = ClientContext.cmd_opts(stderr_to_stdout: true)
     {output, exit_code} = System.cmd("mix", ["excessibility.debug" | cmd_args], cmd_opts)
 
     if progress_callback, do: progress_callback.("Reading timeline...", 80)
 
     base_path = Application.get_env(:excessibility, :excessibility_output_path, "test/excessibility")
-
-    timeline_path =
-      if cwd && File.dir?(cwd) do
-        Path.join([cwd, base_path, "timeline.json"])
-      else
-        Path.join(base_path, "timeline.json")
-      end
+    timeline_path = ClientContext.client_path(Path.join(base_path, "timeline.json"))
 
     timeline =
       if File.exists?(timeline_path) do

@@ -5,6 +5,8 @@ defmodule Excessibility.MCP.Tools.GetSnapshots do
 
   @behaviour Excessibility.MCP.Tool
 
+  alias Excessibility.MCP.ClientContext
+
   @impl true
   def name, do: "get_snapshots"
 
@@ -25,11 +27,6 @@ defmodule Excessibility.MCP.Tools.GetSnapshots do
         "include_content" => %{
           "type" => "boolean",
           "description" => "Include HTML content in response"
-        },
-        "cwd" => %{
-          "type" => "string",
-          "description" =>
-            "Working directory to look for snapshots in (defaults to current directory). Required when testing projects other than excessibility itself."
         }
       }
     }
@@ -37,15 +34,8 @@ defmodule Excessibility.MCP.Tools.GetSnapshots do
 
   @impl true
   def execute(args, _opts) do
-    cwd = Map.get(args, "cwd")
     base_path = Application.get_env(:excessibility, :excessibility_output_path, "test/excessibility")
-
-    snapshots_dir =
-      if cwd && File.dir?(cwd) do
-        Path.join([cwd, base_path, "html_snapshots"])
-      else
-        Path.join(base_path, "html_snapshots")
-      end
+    snapshots_dir = ClientContext.client_path(Path.join(base_path, "html_snapshots"))
     filter = Map.get(args, "filter", "*.html")
     include_content? = Map.get(args, "include_content", false)
 
