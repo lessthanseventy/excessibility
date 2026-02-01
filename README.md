@@ -190,12 +190,27 @@ The MCP server provides tools for AI assistants to run accessibility checks and 
 
 **Available tools:**
 
-| Tool | Description |
-|------|-------------|
-| `e11y_check` | Run tests and/or Pa11y accessibility checks on HTML snapshots |
-| `e11y_debug` | Run tests with telemetry capture and timeline analysis |
-| `get_timeline` | Read captured timeline showing LiveView state evolution |
-| `get_snapshots` | List or read HTML snapshots captured during tests |
+| Tool | Speed | Description |
+|------|-------|-------------|
+| `check_route` | Fast | Run Pa11y on a live route (requires app running) |
+| `explain_issue` | Fast | Get explanation and fix suggestions for a WCAG violation code |
+| `suggest_fixes` | Fast | Get Phoenix-specific code fixes for accessibility issues |
+| `generate_test` | Fast | Generate test code with `html_snapshot()` calls for a route |
+| `list_analyzers` | Fast | List available timeline analyzers |
+| `get_timeline` | Fast | Read captured timeline showing LiveView state evolution |
+| `get_snapshots` | Fast | List or read HTML snapshots captured during tests |
+| `analyze_timeline` | Fast | Run analyzers on captured timeline data |
+| `list_violations` | Fast | List recent Pa11y violations from snapshots |
+| `e11y_check` | Slow | Run tests and/or Pa11y accessibility checks on HTML snapshots |
+| `e11y_debug` | Slow | Run tests with telemetry capture - returns timeline for analysis |
+
+**Recommended workflow:**
+
+1. `check_route` - Quick accessibility check on running app
+2. `explain_issue` - Understand what violations mean
+3. `generate_test` - Create test with `html_snapshot()` calls
+4. `e11y_debug` - Run test to capture timeline
+5. `analyze_timeline` - Find performance issues
 
 **Automatic Setup:**
 

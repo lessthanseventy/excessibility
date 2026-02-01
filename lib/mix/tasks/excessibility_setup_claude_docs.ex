@@ -237,18 +237,26 @@ defmodule Mix.Tasks.Excessibility.SetupClaudeDocs do
 
     1. **Start fast** - use `check_route` on key pages (instant results)
     2. **If issues found** - use `explain_issue` and `suggest_fixes` for guidance
-    3. **For perf analysis** - run `e11y_debug` on a SINGLE test file (not directories!)
+    3. **For perf analysis**:
+       - Use `generate_test` to create tests with `html_snapshot()` calls
+       - Run `e11y_debug` on the test file (tests MUST call `html_snapshot()` to generate timeline)
+       - Use `analyze_timeline` to find issues
 
     ### Available MCP Tools
 
-    - `check_route(url, port)` ⚡ **FAST** - Check running app for a11y issues. Use this first!
-    - `e11y_check(test_args)` - Run Pa11y on snapshots
-    - `e11y_debug(test_args, analyzers)` 🐢 **SLOW** - Run tests with telemetry capture
+    **Fast (instant):**
+    - `check_route(url, port)` - Check running app for a11y issues. Use this first!
     - `explain_issue(issue)` - Explain WCAG codes with Phoenix examples
     - `suggest_fixes(run_pa11y)` - Get Phoenix-specific fix suggestions
+    - `generate_test(route)` - Generate test code with `html_snapshot()` calls
     - `get_timeline()` - Read captured timeline data
+    - `get_snapshots()` - List HTML snapshots from tests
     - `analyze_timeline(analyzers)` - Run analyzers on existing timeline
     - `list_analyzers()` - List available analyzers
+
+    **Slow (run tests):**
+    - `e11y_check(test_args)` - Run Pa11y on snapshots
+    - `e11y_debug(test_args)` - Run tests with telemetry capture (requires `html_snapshot()` calls in tests)
 
     ### Important: Timeouts for Slow Tools
 

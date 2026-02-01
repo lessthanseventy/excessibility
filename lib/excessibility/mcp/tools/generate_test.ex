@@ -15,8 +15,8 @@ defmodule Excessibility.MCP.Tools.GenerateTest do
 
   @impl true
   def description do
-    "Generate accessibility snapshot test code for a route. " <>
-      "Returns the test code as a string for you to save to a file."
+    "Generate test code with html_snapshot() calls for accessibility and telemetry capture. " <>
+      "Save to test/excessibility/ then run with e11y_debug to capture timeline data."
   end
 
   @impl true

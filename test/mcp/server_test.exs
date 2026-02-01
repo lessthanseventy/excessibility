@@ -370,14 +370,15 @@ defmodule Excessibility.MCP.ServerTest do
 
       result = Jason.decode!(content["text"])
 
-      # Should have captured output
-      assert Map.has_key?(result, "output")
+      # Should have result fields
+      assert Map.has_key?(result, "output_file")
+      assert Map.has_key?(result, "result_summary")
       assert Map.has_key?(result, "exit_code")
       assert Map.has_key?(result, "status")
 
-      # Output should contain something (error message about file not found)
-      assert is_binary(result["output"])
-      assert String.length(result["output"]) > 0
+      # Output file should exist and contain something
+      assert is_binary(result["output_file"])
+      assert File.exists?(result["output_file"])
     end
 
     @tag :slow
