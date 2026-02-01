@@ -13,8 +13,9 @@ defmodule Excessibility.MCP.Tools.E11yDebug do
 
   @impl true
   def description do
-    "SLOW: Run tests with telemetry capture and timeline analysis. " <>
-      "Use SINGLE test files only (not directories). Always pass timeout: 300000 (5 min)."
+    "Run tests with telemetry capture. Returns timeline data for performance analysis. " <>
+      "NOTE: Tests must call html_snapshot() to generate timeline events. " <>
+      "Use generate_test to scaffold proper tests first."
   end
 
   @impl true
@@ -48,6 +49,8 @@ defmodule Excessibility.MCP.Tools.E11yDebug do
     timeout = Map.get(args, "timeout")
     progress_callback = Keyword.get(opts, :progress_callback)
 
+    debug_log("e11y_debug.execute starting")
+
     if progress_callback, do: progress_callback.("Running tests with telemetry capture...", 0)
 
     cmd_args = String.split(test_args)
@@ -55,31 +58,69 @@ defmodule Excessibility.MCP.Tools.E11yDebug do
 
     cmd_opts = ClientContext.cmd_opts(stderr_to_stdout: true)
 
+    debug_log("e11y_debug: calling subprocess")
     {output, exit_code} = run_with_optional_timeout(cmd_args, cmd_opts, timeout)
+    debug_log("e11y_debug: subprocess returned exit_code=#{exit_code} output_len=#{String.length(output)}")
 
     if progress_callback, do: progress_callback.("Reading timeline...", 80)
 
     base_path = Application.get_env(:excessibility, :excessibility_output_path, "test/excessibility")
     timeline_path = ClientContext.client_path(Path.join(base_path, "timeline.json"))
+    debug_log("e11y_debug: timeline_path=#{timeline_path}")
+
+    # Write full output to temp file instead of returning it
+    output_file = Path.join(System.tmp_dir!(), "e11y_debug_output_#{System.os_time(:second)}.txt")
+    File.write!(output_file, output)
+    debug_log("e11y_debug: wrote output to #{output_file}")
 
     timeline =
       if File.exists?(timeline_path) do
+        debug_log("e11y_debug: reading timeline file")
+
         case File.read(timeline_path) do
-          {:ok, content} -> Jason.decode!(content)
-          _ -> nil
+          {:ok, content} ->
+            debug_log("e11y_debug: timeline file read, size=#{byte_size(content)}")
+            Jason.decode!(content)
+
+          _ ->
+            debug_log("e11y_debug: failed to read timeline")
+            nil
         end
+      else
+        debug_log("e11y_debug: timeline file does not exist")
+        nil
       end
 
+    debug_log("e11y_debug: building result")
     if progress_callback, do: progress_callback.("Debug complete", 100)
 
-    {:ok,
-     %{
-       "status" => if(exit_code == 0, do: "success", else: "failure"),
-       "exit_code" => exit_code,
-       "output" => output,
-       "timeline_path" => timeline_path,
-       "timeline" => timeline
-     }}
+    # Extract just test result line (e.g. "1 test, 1 failure")
+    result_line =
+      output
+      |> String.split("\n")
+      |> Enum.find(fn line -> line =~ ~r/\d+\s+(test|failure|passed)/ end)
+      |> Kernel.||("See output_file for details")
+
+    result =
+      {:ok,
+       %{
+         "status" => if(exit_code == 0, do: "success", else: "failure"),
+         "exit_code" => exit_code,
+         "output_file" => output_file,
+         "result_summary" => result_line,
+         "timeline_path" => timeline_path,
+         "timeline" => timeline
+       }}
+
+    debug_log("e11y_debug: returning result")
+    result
+  end
+
+  defp debug_log(msg) do
+    case System.get_env("MCP_LOG_FILE") do
+      nil -> :ok
+      path -> File.write!(path, "[#{DateTime.utc_now()}] #{msg}\n", [:append])
+    end
   end
 
   defp run_with_optional_timeout(cmd_args, cmd_opts, timeout) do

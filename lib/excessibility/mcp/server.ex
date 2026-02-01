@@ -48,6 +48,7 @@ defmodule Excessibility.MCP.Server do
   """
   def start do
     # Disable logger output to stdout (would corrupt MCP messages)
+    # Set MCP_LOG_FILE=/tmp/mcp.log to enable file-based debug logging in subprocess.ex
     Logger.configure(level: :none)
 
     # Set stdio to binary mode for reliable line reading
@@ -286,6 +287,8 @@ defmodule Excessibility.MCP.Server do
   # ============================================================================
 
   defp call_tool(name, args) do
+    debug_log("call_tool: #{name}")
+
     case Registry.get_tool(name) do
       nil ->
         %{
@@ -299,8 +302,19 @@ defmodule Excessibility.MCP.Server do
         }
 
       tool_module ->
+        debug_log("call_tool: executing #{name}")
         result = tool_module.execute(args, [])
-        Tool.format_result(result)
+        debug_log("call_tool: #{name} returned, formatting result")
+        formatted = Tool.format_result(result)
+        debug_log("call_tool: #{name} formatted, done")
+        formatted
+    end
+  end
+
+  defp debug_log(msg) do
+    case System.get_env("MCP_LOG_FILE") do
+      nil -> :ok
+      path -> File.write!(path, "[#{DateTime.utc_now()}] SERVER: #{msg}\n", [:append])
     end
   end
 
@@ -339,8 +353,12 @@ defmodule Excessibility.MCP.Server do
   # ============================================================================
 
   defp send_response(response) do
+    debug_log("send_response: encoding JSON")
     json = Jason.encode!(response)
-    IO.write(:stdio, json <> "\n")
+    debug_log("send_response: JSON encoded, size=#{byte_size(json)}")
+    # Write to stdout as raw bytes, single newline
+    IO.binwrite(:stdio, json <> "\n")
+    debug_log("send_response: written to stdio")
   end
 
   defp send_error(code, message, id) do

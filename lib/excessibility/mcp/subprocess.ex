@@ -6,6 +6,19 @@ defmodule Excessibility.MCP.Subprocess do
   actually kills the underlying OS process when a timeout occurs.
   """
 
+  require Logger
+
+  # Simple file-based debug logging (works even when Logger is disabled)
+  # Set MCP_LOG_FILE=/tmp/mcp.log to enable
+  defp debug_log(msg) do
+    Logger.debug(msg)
+
+    case System.get_env("MCP_LOG_FILE") do
+      nil -> :ok
+      path -> File.write!(path, "[#{DateTime.utc_now()}] #{msg}\n", [:append])
+    end
+  end
+
   @doc """
   Runs a command with optional timeout.
 
@@ -35,13 +48,20 @@ defmodule Excessibility.MCP.Subprocess do
     env = Keyword.get(opts, :env, [])
     stderr_to_stdout? = Keyword.get(opts, :stderr_to_stdout, false)
 
+    debug_log("Subprocess.run: cmd=#{cmd} args=#{inspect(args)} cd=#{inspect(cd)} timeout=#{inspect(timeout)}")
+
     port_opts = build_port_opts(cmd, args, cd, env, stderr_to_stdout?)
 
-    if timeout do
-      run_with_timeout(port_opts, timeout)
-    else
-      run_without_timeout(port_opts)
-    end
+    result =
+      if timeout do
+        run_with_timeout(port_opts, timeout)
+      else
+        run_without_timeout(port_opts)
+      end
+
+    {output, exit_code} = result
+    debug_log("Subprocess.run completed: exit_code=#{exit_code} output_length=#{String.length(output)}")
+    result
   end
 
   defp build_port_opts(cmd, args, cd, env, stderr_to_stdout?) do
@@ -159,14 +179,24 @@ defmodule Excessibility.MCP.Subprocess do
     _ -> :ok
   end
 
-  defp collect_output(port, acc) do
+  defp collect_output(port, acc, chunks \\ 0) do
     receive do
       {^port, {:data, data}} ->
-        collect_output(port, [data | acc])
+        if rem(chunks, 100) == 0 do
+          debug_log("Subprocess: received chunk #{chunks}, total bytes so far: #{IO.iodata_length(acc)}")
+        end
+
+        collect_output(port, [data | acc], chunks + 1)
 
       {^port, {:exit_status, status}} ->
         output = acc |> Enum.reverse() |> IO.iodata_to_binary()
+        debug_log("Subprocess: exit_status=#{status}, total chunks=#{chunks}, output_bytes=#{byte_size(output)}")
         {output, status}
+    after
+      60_000 ->
+        output = acc |> Enum.reverse() |> IO.iodata_to_binary()
+        debug_log("WARNING: Subprocess: no data for 60s, chunks=#{chunks}, bytes=#{byte_size(output)}")
+        collect_output(port, acc, chunks)
     end
   end
 
