@@ -130,13 +130,34 @@ defmodule Excessibility.MCP.Subprocess do
   end
 
   defp kill_os_process(os_pid) when is_integer(os_pid) do
-    # Kill the process and all its children
-    System.cmd("kill", ["-9", to_string(os_pid)], stderr_to_stdout: true)
+    # Kill the entire process tree recursively
+    kill_process_tree(os_pid)
   rescue
     _ -> :ok
   end
 
   defp kill_os_process(_), do: :ok
+
+  defp kill_process_tree(pid) do
+    pid_str = to_string(pid)
+
+    # First, recursively kill all children
+    {children_output, _} = System.cmd("pgrep", ["-P", pid_str], stderr_to_stdout: true)
+
+    children_output
+    |> String.split("\n", trim: true)
+    |> Enum.each(fn child_pid_str ->
+      case Integer.parse(child_pid_str) do
+        {child_pid, _} -> kill_process_tree(child_pid)
+        :error -> :ok
+      end
+    end)
+
+    # Then kill the process itself
+    System.cmd("kill", ["-9", pid_str], stderr_to_stdout: true)
+  rescue
+    _ -> :ok
+  end
 
   defp collect_output(port, acc) do
     receive do
