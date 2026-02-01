@@ -8,7 +8,9 @@ defmodule Excessibility.MCP.ServerTest do
 
   describe "start/0" do
     test "function exists" do
-      assert function_exported?(Server, :start, 0)
+      # Ensure module is loaded first
+      {:module, _} = Code.ensure_loaded(Server)
+      assert {:start, 0} in Server.__info__(:functions)
     end
   end
 
