@@ -22,7 +22,12 @@ defmodule Excessibility.MCP.Tools.E11yCheck do
       "properties" => %{
         "test_args" => %{
           "type" => "string",
-          "description" => "Arguments to pass to mix test (optional)"
+          "description" => "Arguments to pass to mix test (optional). Use a single test file, not a directory."
+        },
+        "timeout" => %{
+          "type" => "integer",
+          "description" =>
+            "Optional timeout in milliseconds. No timeout by default. Recommended: 300000 (5 min) for CI/automation."
         }
       }
     }
@@ -31,19 +36,14 @@ defmodule Excessibility.MCP.Tools.E11yCheck do
   @impl true
   def execute(args, opts) do
     test_args = Map.get(args, "test_args", "")
+    timeout = Map.get(args, "timeout")
     progress_callback = Keyword.get(opts, :progress_callback)
 
     if progress_callback, do: progress_callback.("Starting Pa11y check...", 0)
 
     cmd_opts = ClientContext.cmd_opts(stderr_to_stdout: true)
 
-    {output, exit_code} =
-      if test_args == "" do
-        System.cmd("mix", ["excessibility"], cmd_opts)
-      else
-        cmd_args = String.split(test_args)
-        System.cmd("mix", ["excessibility" | cmd_args], cmd_opts)
-      end
+    {output, exit_code} = run_with_optional_timeout(test_args, cmd_opts, timeout)
 
     if progress_callback, do: progress_callback.("Pa11y check complete", 100)
 
@@ -53,5 +53,32 @@ defmodule Excessibility.MCP.Tools.E11yCheck do
        "exit_code" => exit_code,
        "output" => output
      }}
+  end
+
+  defp run_with_optional_timeout(test_args, cmd_opts, nil) do
+    # No timeout - run directly
+    if test_args == "" do
+      System.cmd("mix", ["excessibility"], cmd_opts)
+    else
+      cmd_args = String.split(test_args)
+      System.cmd("mix", ["excessibility" | cmd_args], cmd_opts)
+    end
+  end
+
+  defp run_with_optional_timeout(test_args, cmd_opts, timeout) when is_integer(timeout) do
+    task =
+      Task.async(fn ->
+        if test_args == "" do
+          System.cmd("mix", ["excessibility"], cmd_opts)
+        else
+          cmd_args = String.split(test_args)
+          System.cmd("mix", ["excessibility" | cmd_args], cmd_opts)
+        end
+      end)
+
+    case Task.yield(task, timeout) || Task.shutdown(task, :brutal_kill) do
+      {:ok, result} -> result
+      nil -> {"Error: Command timed out after #{div(timeout, 1000)} seconds", 124}
+    end
   end
 end
