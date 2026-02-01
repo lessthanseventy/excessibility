@@ -33,3 +33,4 @@ pally_test-*.tar
 
 # Git worktrees
 /.worktrees/
+.mcp.json
