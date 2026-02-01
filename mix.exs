@@ -14,7 +14,8 @@ defmodule Excessibility.MixProject do
       description: description(),
       package: package(),
       deps: deps(),
-      docs: docs()
+      docs: docs(),
+      test_ignore_filters: [~r"/support/"]
     ]
   end
 
