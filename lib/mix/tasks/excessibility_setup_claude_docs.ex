@@ -7,25 +7,32 @@ defmodule Mix.Tasks.Excessibility.SetupClaudeDocs do
   ## Usage
 
       mix excessibility.setup_claude_docs
+      mix excessibility.setup_claude_docs --force
+
+  ## Options
+
+    * `--force` - Overwrite existing file without prompting
 
   ## Description
 
   Creates `.claude_docs/excessibility.md` with documentation teaching Claude
   how to use Excessibility for debugging Phoenix apps.
 
-  If the file already exists, prompts before overwriting.
+  If the file already exists, prompts before overwriting (unless --force).
   """
 
   use Mix.Task
 
   @impl Mix.Task
-  def run(_args) do
+  def run(args) do
+    force? = "--force" in args
+
     claude_docs_dir = ".claude_docs"
     claude_docs_path = Path.join(claude_docs_dir, "excessibility.md")
 
     cond do
       File.exists?(claude_docs_path) ->
-        if Mix.shell().yes?("#{claude_docs_path} already exists. Overwrite?") do
+        if force? or Mix.shell().yes?("#{claude_docs_path} already exists. Overwrite?") do
           write_docs(claude_docs_path)
           Mix.shell().info("✅ Updated #{claude_docs_path}")
         else

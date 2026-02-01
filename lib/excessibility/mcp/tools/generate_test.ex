@@ -8,6 +8,8 @@ defmodule Excessibility.MCP.Tools.GenerateTest do
 
   @behaviour Excessibility.MCP.Tool
 
+  alias Excessibility.MCP.ClientContext
+
   @impl true
   def name, do: "generate_test"
 
@@ -74,14 +76,34 @@ defmodule Excessibility.MCP.Tools.GenerateTest do
   end
 
   defp detect_app_module do
-    case Application.get_env(:excessibility, :endpoint) do
-      nil ->
-        "MyAppWeb"
+    # Try to detect from client's mix.exs
+    client_cwd = ClientContext.get_cwd()
+    mix_path = Path.join(client_cwd, "mix.exs")
 
-      endpoint when is_atom(endpoint) ->
-        endpoint
-        |> Module.split()
-        |> List.first()
+    if File.exists?(mix_path) do
+      detect_from_mix_exs(mix_path)
+    else
+      "MyAppWeb"
+    end
+  end
+
+  defp detect_from_mix_exs(mix_path) do
+    case File.read(mix_path) do
+      {:ok, content} ->
+        # Look for patterns like: app: :live_beats or app: :my_app
+        case Regex.run(~r/app:\s*:(\w+)/, content) do
+          [_, app_name] ->
+            # Convert :live_beats to LiveBeatsWeb
+            app_name
+            |> Macro.camelize()
+            |> Kernel.<>("Web")
+
+          nil ->
+            "MyAppWeb"
+        end
+
+      {:error, _} ->
+        "MyAppWeb"
     end
   end
 

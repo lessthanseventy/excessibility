@@ -81,7 +81,8 @@ defmodule Excessibility.MixProject do
       {:phoenix, ">= 1.5.0"},
       {:phoenix_live_view, ">= 0.17.0"},
       {:styler, "~> 0.9", only: [:dev, :test], runtime: false},
-      {:wallaby, ">= 0.25.0"}
+      # Wallaby is optional - add it to your project if you want Wallaby.Session support
+      {:wallaby, ">= 0.25.0", optional: true, only: :test}
     ]
   end
 end
