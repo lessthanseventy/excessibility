@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-02-01
+
+### Fixed
+- Fixed e11y_debug MCP tool hanging by reducing response size (24KB → ~300 bytes)
+- Output now written to temp file instead of included in response
+- Added recursive process tree killing on timeout to prevent zombie processes
+
+### Added
+- Debug logging for MCP server via `MCP_LOG_FILE` environment variable
+- Complete MCP tools documentation in README (11 tools with speed indicators)
+- Better workflow guidance in generated claude_docs
+
+### Changed
+- e11y_debug now returns `output_file` path and `result_summary` instead of full output
+- Improved tool descriptions to clarify workflow (generate_test → e11y_debug)
+
 ## [0.8.3] - 2026-01-25
 
 ### Fixed
