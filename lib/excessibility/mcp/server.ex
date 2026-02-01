@@ -28,7 +28,8 @@ defmodule Excessibility.MCP.Server do
   @tools [
     %{
       "name" => "e11y_check",
-      "description" => "Run Pa11y accessibility checks on HTML snapshots. Without args: check existing snapshots. With test_args: run tests first, then check.",
+      "description" =>
+        "Run Pa11y accessibility checks on HTML snapshots. Without args: check existing snapshots. With test_args: run tests first, then check.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -225,11 +226,12 @@ defmodule Excessibility.MCP.Server do
       "content" => [
         %{
           "type" => "text",
-          "text" => Jason.encode!(%{
-            "status" => if(exit_code == 0, do: "success", else: "failure"),
-            "exit_code" => exit_code,
-            "output" => output
-          })
+          "text" =>
+            Jason.encode!(%{
+              "status" => if(exit_code == 0, do: "success", else: "failure"),
+              "exit_code" => exit_code,
+              "output" => output
+            })
         }
       ]
     }
@@ -260,13 +262,14 @@ defmodule Excessibility.MCP.Server do
       "content" => [
         %{
           "type" => "text",
-          "text" => Jason.encode!(%{
-            "status" => if(exit_code == 0, do: "success", else: "failure"),
-            "exit_code" => exit_code,
-            "output" => output,
-            "timeline_path" => timeline_path,
-            "timeline" => timeline
-          })
+          "text" =>
+            Jason.encode!(%{
+              "status" => if(exit_code == 0, do: "success", else: "failure"),
+              "exit_code" => exit_code,
+              "output" => output,
+              "timeline_path" => timeline_path,
+              "timeline" => timeline
+            })
         }
       ]
     }

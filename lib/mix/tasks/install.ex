@@ -206,15 +206,12 @@ defmodule Mix.Tasks.Excessibility.Install do
 
   # By default, set up MCP server
   defp maybe_setup_mcp(igniter, _skip?) do
-    cond do
-      igniter.args.options[:dry_run] ->
-        igniter
-        |> add_mcp_manual_setup_notice()
-
-      true ->
-        igniter
-        |> install_mcp_server()
-        |> install_skills_plugin()
+    if igniter.args.options[:dry_run] do
+      add_mcp_manual_setup_notice(igniter)
+    else
+      igniter
+      |> install_mcp_server()
+      |> install_skills_plugin()
     end
   end
 
@@ -223,19 +220,24 @@ defmodule Mix.Tasks.Excessibility.Install do
 
     Mix.shell().info("Setting up MCP server for Claude Code...")
 
-    case System.cmd("claude", [
-           "mcp",
-           "add",
-           "excessibility",
-           "-s",
-           "project",
-           "--",
-           "mix",
-           "run",
-           "--no-halt",
-           "-e",
-           "Excessibility.MCP.Server.start()"
-         ], cd: project_path, stderr_to_stdout: true) do
+    case System.cmd(
+           "claude",
+           [
+             "mcp",
+             "add",
+             "excessibility",
+             "-s",
+             "project",
+             "--",
+             "mix",
+             "run",
+             "--no-halt",
+             "-e",
+             "Excessibility.MCP.Server.start()"
+           ],
+           cd: project_path,
+           stderr_to_stdout: true
+         ) do
       {output, 0} ->
         Mix.shell().info("✅ MCP server registered with Claude Code")
 
@@ -275,42 +277,54 @@ defmodule Mix.Tasks.Excessibility.Install do
     plugin_path = Path.join(dep_path, "priv/claude-plugin")
 
     if File.dir?(plugin_path) do
-      Mix.shell().info("Installing Claude Code skills plugin...")
-
-      case System.cmd("claude", ["plugins", "add", plugin_path], stderr_to_stdout: true) do
-        {output, 0} ->
-          Mix.shell().info("✅ Skills plugin installed (/e11y-tdd, /e11y-debug, /e11y-fix)")
-
-          if String.contains?(output, "already installed") do
-            Mix.shell().info("   (plugin was already installed)")
-          end
-
-          igniter
-
-        {output, _status} ->
-          if String.contains?(output, "command not found") or String.contains?(output, "not found") do
-            Igniter.add_notice(
-              igniter,
-              """
-              Install skills plugin manually:
-                claude plugins add #{plugin_path}
-              """
-            )
-          else
-            Igniter.add_notice(
-              igniter,
-              """
-              Skills plugin installation failed: #{output}
-
-              Install manually:
-                claude plugins add #{plugin_path}
-              """
-            )
-          end
-      end
+      do_install_skills_plugin(igniter, plugin_path)
     else
       igniter
     end
+  end
+
+  defp do_install_skills_plugin(igniter, plugin_path) do
+    Mix.shell().info("Installing Claude Code skills plugin...")
+
+    case System.cmd("claude", ["plugins", "add", plugin_path], stderr_to_stdout: true) do
+      {output, 0} ->
+        handle_plugin_success(igniter, output)
+
+      {output, _status} ->
+        handle_plugin_failure(igniter, output, plugin_path)
+    end
+  end
+
+  defp handle_plugin_success(igniter, output) do
+    Mix.shell().info("✅ Skills plugin installed (/e11y-tdd, /e11y-debug, /e11y-fix)")
+
+    if String.contains?(output, "already installed") do
+      Mix.shell().info("   (plugin was already installed)")
+    end
+
+    igniter
+  end
+
+  defp handle_plugin_failure(igniter, output, plugin_path) do
+    not_found? =
+      String.contains?(output, "command not found") or String.contains?(output, "not found")
+
+    message =
+      if not_found? do
+        """
+        Install skills plugin manually:
+          claude plugins add #{plugin_path}
+        """
+      else
+        """
+        Skills plugin installation failed: #{output}
+
+        Install manually:
+          claude plugins add #{plugin_path}
+        """
+      end
+
+    Igniter.add_notice(igniter, message)
   end
 
   defp add_mcp_manual_setup_notice(igniter) do

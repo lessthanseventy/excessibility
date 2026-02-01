@@ -9,7 +9,7 @@ defmodule Mix.Tasks.Excessibility.InstallTest do
     igniter =
       []
       |> Igniter.Test.test_project()
-      |> put_args(endpoint: "DemoWeb.Endpoint", skip_npm: true)
+      |> put_args(endpoint: "DemoWeb.Endpoint", skip_npm: true, no_mcp: true)
       |> Install.igniter()
 
     content = file_content(igniter, "config/test.exs")
@@ -26,7 +26,7 @@ defmodule Mix.Tasks.Excessibility.InstallTest do
     igniter =
       []
       |> Igniter.Test.test_project()
-      |> put_args(endpoint: "DemoWeb.Endpoint", head_render_path: "/login", skip_npm: true)
+      |> put_args(endpoint: "DemoWeb.Endpoint", head_render_path: "/login", skip_npm: true, no_mcp: true)
       |> Install.igniter()
 
     content = file_content(igniter, "config/test.exs")
@@ -38,7 +38,7 @@ defmodule Mix.Tasks.Excessibility.InstallTest do
     igniter =
       []
       |> Igniter.Test.test_project()
-      |> put_args(endpoint: "DemoWeb.Endpoint", skip_npm: true)
+      |> put_args(endpoint: "DemoWeb.Endpoint", skip_npm: true, no_mcp: true)
       |> Install.igniter()
       # Run install again
       |> Install.igniter()
