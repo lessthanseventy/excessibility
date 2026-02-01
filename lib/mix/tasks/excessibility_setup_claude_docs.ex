@@ -219,6 +219,53 @@ defmodule Mix.Tasks.Excessibility.SetupClaudeDocs do
     - `mix excessibility.debug` automatically generates timeline.json
     - The timeline.json shows state changes clearly
     - Metadata in snapshots shows LiveView assigns at each step
+
+    ## MCP Tools (if enabled)
+
+    If you have the Excessibility MCP server configured, use these tools for faster iteration:
+
+    ### Recommended Workflow for "find a11y/perf issues" requests
+
+    **Do this in order - start fast, go deeper if needed:**
+
+    1. **Start fast** - use `check_route` on key pages (instant results)
+    2. **If issues found** - use `explain_issue` and `suggest_fixes` for guidance
+    3. **For perf analysis** - run `e11y_debug` on a SINGLE test file (not directories!)
+
+    ### Available MCP Tools
+
+    - `check_route(url, port)` ⚡ **FAST** - Check running app for a11y issues. Use this first!
+    - `e11y_check(test_args)` - Run Pa11y on snapshots
+    - `e11y_debug(test_args, analyzers)` 🐢 **SLOW** - Run tests with telemetry capture
+    - `explain_issue(issue)` - Explain WCAG codes with Phoenix examples
+    - `suggest_fixes(run_pa11y)` - Get Phoenix-specific fix suggestions
+    - `get_timeline()` - Read captured timeline data
+    - `analyze_timeline(analyzers)` - Run analyzers on existing timeline
+    - `list_analyzers()` - List available analyzers
+
+    ### Important: Timeouts for Slow Tools
+
+    `e11y_debug` and `e11y_check` run actual tests which can be slow (especially Wallaby browser tests).
+
+    **Always:**
+    - Specify a single test FILE, never a directory like `test/live/`
+    - Pass `timeout: 300000` (5 minutes) to prevent hanging:
+
+    ```
+    e11y_debug(test_args: "test/my_test.exs", timeout: 300000)
+    e11y_check(test_args: "test/my_test.exs", timeout: 300000)
+    ```
+
+    ### Quick Examples
+
+    ```
+    # Fast - check running app directly
+    check_route(url: "/")
+    check_route(url: "/signin")
+
+    # Slow - always use single files + timeout
+    e11y_debug(test_args: "test/my_app_web/live/page_live_test.exs", timeout: 300000)
+    ```
     """
   end
 end
