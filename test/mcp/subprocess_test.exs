@@ -104,5 +104,59 @@ defmodule Excessibility.MCP.SubprocessTest do
       assert output =~ "timed out"
       assert exit_code == 124
     end
+
+    test "captures large output correctly" do
+      # Generate lots of output to test buffering
+      {output, exit_code} =
+        Subprocess.run(
+          "sh",
+          ["-c", "for i in $(seq 1 1000); do echo \"Line $i: some test output here\"; done"],
+          timeout: 10_000,
+          stderr_to_stdout: true
+        )
+
+      assert exit_code == 0
+      assert output =~ "Line 1:"
+      assert output =~ "Line 1000:"
+      # Should have captured all 1000 lines
+      assert length(String.split(output, "\n")) >= 1000
+    end
+
+    test "captures mixed stdout and stderr" do
+      {output, exit_code} =
+        Subprocess.run(
+          "sh",
+          ["-c", "echo stdout; echo stderr >&2; echo stdout2"],
+          timeout: 5_000,
+          stderr_to_stdout: true
+        )
+
+      assert exit_code == 0
+      assert output =~ "stdout"
+      assert output =~ "stderr"
+      assert output =~ "stdout2"
+    end
+  end
+
+  describe "e11y_debug realistic scenario" do
+    @tag :integration
+    test "runs mix excessibility.debug and returns output" do
+      # Run against a non-existent file - should fail fast but return output
+      {output, exit_code} =
+        Subprocess.run(
+          "mix",
+          ["excessibility.debug", "test/nonexistent_file.exs"],
+          timeout: 30_000,
+          stderr_to_stdout: true,
+          cd: File.cwd!()
+        )
+
+      # Should complete (not hang)
+      assert is_binary(output)
+      # Should have some output (error message or compilation output)
+      assert String.length(output) > 0
+      # Exit code should be non-zero for non-existent file
+      assert exit_code != 0 or output =~ "could not find"
+    end
   end
 end
