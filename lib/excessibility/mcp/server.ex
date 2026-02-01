@@ -1,11 +1,13 @@
 defmodule Excessibility.MCP.Server do
   @moduledoc """
-  Minimal MCP server for excessibility tools.
+  MCP server for excessibility tools, resources, and prompts.
 
-  Implements just enough of the MCP protocol for stdio transport:
+  Implements the MCP protocol for stdio transport:
   - JSON-RPC 2.0 message handling
   - initialize/initialized handshake
   - tools/list and tools/call
+  - resources/list and resources/read
+  - prompts/list and prompts/get
 
   ## Usage
 
@@ -16,91 +18,79 @@ defmodule Excessibility.MCP.Server do
       mix run --no-halt -e "Excessibility.MCP.Server.start()"
   """
 
+  use GenServer
+
+  alias Excessibility.MCP.Prompt
+  alias Excessibility.MCP.Registry
+  alias Excessibility.MCP.Resource
+  alias Excessibility.MCP.Tool
+
   @server_info %{
     "name" => "excessibility",
     "version" => "0.9.0"
   }
 
   @capabilities %{
-    "tools" => %{}
+    "tools" => %{},
+    "resources" => %{"subscribe" => false, "listChanged" => false},
+    "prompts" => %{"listChanged" => false}
   }
 
-  @tools [
-    %{
-      "name" => "e11y_check",
-      "description" =>
-        "Run Pa11y accessibility checks on HTML snapshots. Without args: check existing snapshots. With test_args: run tests first, then check.",
-      "inputSchema" => %{
-        "type" => "object",
-        "properties" => %{
-          "test_args" => %{
-            "type" => "string",
-            "description" => "Arguments to pass to mix test (optional)"
-          }
-        }
-      }
-    },
-    %{
-      "name" => "e11y_debug",
-      "description" => "Run tests with telemetry capture and timeline analysis for debugging LiveView state.",
-      "inputSchema" => %{
-        "type" => "object",
-        "properties" => %{
-          "test_args" => %{
-            "type" => "string",
-            "description" => "Arguments to pass to mix test (required)"
-          },
-          "analyzers" => %{
-            "type" => "string",
-            "description" => "Comma-separated list of analyzers to run"
-          }
-        },
-        "required" => ["test_args"]
-      }
-    },
-    %{
-      "name" => "get_timeline",
-      "description" => "Read the captured timeline showing LiveView state evolution at each event.",
-      "inputSchema" => %{
-        "type" => "object",
-        "properties" => %{
-          "path" => %{
-            "type" => "string",
-            "description" => "Custom path to timeline.json (optional)"
-          }
-        }
-      }
-    },
-    %{
-      "name" => "get_snapshots",
-      "description" => "List or read HTML snapshots captured during tests.",
-      "inputSchema" => %{
-        "type" => "object",
-        "properties" => %{
-          "filter" => %{
-            "type" => "string",
-            "description" => "Glob pattern to filter snapshots (e.g., '*_test_*.html')"
-          },
-          "include_content" => %{
-            "type" => "boolean",
-            "description" => "Include HTML content in response"
-          }
-        }
-      }
-    }
-  ]
+  defstruct [:cache]
+
+  # ============================================================================
+  # Public API
+  # ============================================================================
 
   @doc """
   Starts the MCP server, reading from stdin and writing to stdout.
+  Blocks indefinitely processing messages.
   """
   def start do
     # Disable logger output to stdout (would corrupt MCP messages)
     Logger.configure(level: :none)
 
-    loop()
+    {:ok, pid} = GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
+
+    # Run the stdio loop in the current process
+    loop(pid)
   end
 
-  defp loop do
+  @doc """
+  Starts the server as a supervised GenServer.
+  """
+  def start_link(opts \\ []) do
+    GenServer.start_link(__MODULE__, opts, name: __MODULE__)
+  end
+
+  @doc """
+  Handles a JSON-RPC message and returns a response.
+  Useful for testing.
+  """
+  def handle_rpc(pid \\ __MODULE__, message) do
+    GenServer.call(pid, {:handle_rpc, message})
+  end
+
+  # ============================================================================
+  # GenServer Callbacks
+  # ============================================================================
+
+  @impl true
+  def init(_opts) do
+    {:ok, %__MODULE__{cache: %{}}}
+  end
+
+  @impl true
+  def handle_call({:handle_rpc, message}, _from, state) do
+    response = handle_message(message, state)
+    {:reply, response, state}
+  end
+
+  # ============================================================================
+  # Private - Message Loop
+  # ============================================================================
+
+  defp loop(pid) do
     case IO.read(:stdio, :line) do
       :eof ->
         :ok
@@ -111,18 +101,18 @@ defmodule Excessibility.MCP.Server do
       line ->
         line
         |> String.trim()
-        |> handle_line()
+        |> handle_line(pid)
 
-        loop()
+        loop(pid)
     end
   end
 
-  defp handle_line(""), do: :ok
+  defp handle_line("", _pid), do: :ok
 
-  defp handle_line(line) do
+  defp handle_line(line, pid) do
     case Jason.decode(line) do
       {:ok, message} ->
-        response = handle_message(message)
+        response = handle_rpc(pid, message)
 
         if response do
           send_response(response)
@@ -133,8 +123,12 @@ defmodule Excessibility.MCP.Server do
     end
   end
 
+  # ============================================================================
+  # Private - Message Handlers
+  # ============================================================================
+
   # Initialize request
-  defp handle_message(%{"jsonrpc" => "2.0", "id" => id, "method" => "initialize", "params" => params}) do
+  defp handle_message(%{"jsonrpc" => "2.0", "id" => id, "method" => "initialize", "params" => params}, _state) do
     _client_info = Map.get(params, "clientInfo", %{})
     _protocol_version = Map.get(params, "protocolVersion")
 
@@ -150,23 +144,26 @@ defmodule Excessibility.MCP.Server do
   end
 
   # Initialized notification (no response needed)
-  defp handle_message(%{"jsonrpc" => "2.0", "method" => "notifications/initialized"}) do
+  defp handle_message(%{"jsonrpc" => "2.0", "method" => "notifications/initialized"}, _state) do
     nil
   end
 
   # Tools list
-  defp handle_message(%{"jsonrpc" => "2.0", "id" => id, "method" => "tools/list"}) do
+  defp handle_message(%{"jsonrpc" => "2.0", "id" => id, "method" => "tools/list"}, _state) do
+    tools =
+      Enum.map(Registry.discover_tools(), &Tool.to_mcp_definition/1)
+
     %{
       "jsonrpc" => "2.0",
       "id" => id,
       "result" => %{
-        "tools" => @tools
+        "tools" => tools
       }
     }
   end
 
   # Tools call
-  defp handle_message(%{"jsonrpc" => "2.0", "id" => id, "method" => "tools/call", "params" => params}) do
+  defp handle_message(%{"jsonrpc" => "2.0", "id" => id, "method" => "tools/call", "params" => params}, _state) do
     tool_name = Map.get(params, "name")
     arguments = Map.get(params, "arguments", %{})
 
@@ -179,8 +176,62 @@ defmodule Excessibility.MCP.Server do
     }
   end
 
+  # Resources list
+  defp handle_message(%{"jsonrpc" => "2.0", "id" => id, "method" => "resources/list"}, _state) do
+    resources =
+      Enum.flat_map(Registry.discover_resources(), & &1.list())
+
+    %{
+      "jsonrpc" => "2.0",
+      "id" => id,
+      "result" => %{
+        "resources" => resources
+      }
+    }
+  end
+
+  # Resources read
+  defp handle_message(%{"jsonrpc" => "2.0", "id" => id, "method" => "resources/read", "params" => params}, _state) do
+    uri = Map.get(params, "uri")
+    result = read_resource(uri)
+
+    %{
+      "jsonrpc" => "2.0",
+      "id" => id,
+      "result" => result
+    }
+  end
+
+  # Prompts list
+  defp handle_message(%{"jsonrpc" => "2.0", "id" => id, "method" => "prompts/list"}, _state) do
+    prompts =
+      Enum.map(Registry.discover_prompts(), &Prompt.to_mcp_definition/1)
+
+    %{
+      "jsonrpc" => "2.0",
+      "id" => id,
+      "result" => %{
+        "prompts" => prompts
+      }
+    }
+  end
+
+  # Prompts get
+  defp handle_message(%{"jsonrpc" => "2.0", "id" => id, "method" => "prompts/get", "params" => params}, _state) do
+    prompt_name = Map.get(params, "name")
+    arguments = Map.get(params, "arguments", %{})
+
+    result = get_prompt(prompt_name, arguments)
+
+    %{
+      "jsonrpc" => "2.0",
+      "id" => id,
+      "result" => result
+    }
+  end
+
   # Ping
-  defp handle_message(%{"jsonrpc" => "2.0", "id" => id, "method" => "ping"}) do
+  defp handle_message(%{"jsonrpc" => "2.0", "id" => id, "method" => "ping"}, _state) do
     %{
       "jsonrpc" => "2.0",
       "id" => id,
@@ -189,7 +240,7 @@ defmodule Excessibility.MCP.Server do
   end
 
   # Unknown method
-  defp handle_message(%{"jsonrpc" => "2.0", "id" => id, "method" => method}) do
+  defp handle_message(%{"jsonrpc" => "2.0", "id" => id, "method" => method}, _state) do
     %{
       "jsonrpc" => "2.0",
       "id" => id,
@@ -201,182 +252,70 @@ defmodule Excessibility.MCP.Server do
   end
 
   # Notifications (no id) - ignore
-  defp handle_message(%{"jsonrpc" => "2.0", "method" => _method}) do
+  defp handle_message(%{"jsonrpc" => "2.0", "method" => _method}, _state) do
     nil
   end
 
-  defp handle_message(_) do
+  defp handle_message(_other, _state) do
     nil
   end
 
-  # Tool implementations
+  # ============================================================================
+  # Private - Tool Execution
+  # ============================================================================
 
-  defp call_tool("e11y_check", args) do
-    test_args = Map.get(args, "test_args", "")
-
-    {output, exit_code} =
-      if test_args == "" do
-        System.cmd("mix", ["excessibility"], stderr_to_stdout: true)
-      else
-        cmd_args = String.split(test_args)
-        System.cmd("mix", ["excessibility" | cmd_args], stderr_to_stdout: true)
-      end
-
-    %{
-      "content" => [
+  defp call_tool(name, args) do
+    case Registry.get_tool(name) do
+      nil ->
         %{
-          "type" => "text",
-          "text" =>
-            Jason.encode!(%{
-              "status" => if(exit_code == 0, do: "success", else: "failure"),
-              "exit_code" => exit_code,
-              "output" => output
-            })
-        }
-      ]
-    }
-  end
-
-  defp call_tool("e11y_debug", args) do
-    test_args = Map.get(args, "test_args", "")
-    analyzers = Map.get(args, "analyzers")
-
-    cmd_args = String.split(test_args)
-    cmd_args = if analyzers, do: cmd_args ++ ["--analyze=#{analyzers}"], else: cmd_args
-
-    {output, exit_code} =
-      System.cmd("mix", ["excessibility.debug" | cmd_args], stderr_to_stdout: true)
-
-    base_path = Application.get_env(:excessibility, :excessibility_output_path, "test/excessibility")
-    timeline_path = Path.join(base_path, "timeline.json")
-
-    timeline =
-      if File.exists?(timeline_path) do
-        case File.read(timeline_path) do
-          {:ok, content} -> Jason.decode!(content)
-          _ -> nil
-        end
-      end
-
-    %{
-      "content" => [
-        %{
-          "type" => "text",
-          "text" =>
-            Jason.encode!(%{
-              "status" => if(exit_code == 0, do: "success", else: "failure"),
-              "exit_code" => exit_code,
-              "output" => output,
-              "timeline_path" => timeline_path,
-              "timeline" => timeline
-            })
-        }
-      ]
-    }
-  end
-
-  defp call_tool("get_timeline", args) do
-    base_path = Application.get_env(:excessibility, :excessibility_output_path, "test/excessibility")
-    timeline_path = Map.get(args, "path") || Path.join(base_path, "timeline.json")
-
-    result =
-      if File.exists?(timeline_path) do
-        case File.read(timeline_path) do
-          {:ok, content} ->
+          "content" => [
             %{
-              "status" => "success",
-              "path" => timeline_path,
-              "timeline" => Jason.decode!(content)
+              "type" => "text",
+              "text" => Jason.encode!(%{"error" => "Unknown tool: #{name}"})
             }
-
-          {:error, reason} ->
-            %{
-              "status" => "error",
-              "error" => "Failed to read file: #{inspect(reason)}",
-              "path" => timeline_path
-            }
-        end
-      else
-        %{
-          "status" => "not_found",
-          "error" => "Timeline file not found",
-          "path" => timeline_path
+          ],
+          "isError" => true
         }
-      end
 
-    %{
-      "content" => [
-        %{
-          "type" => "text",
-          "text" => Jason.encode!(result)
-        }
-      ]
-    }
-  end
-
-  defp call_tool("get_snapshots", args) do
-    base_path = Application.get_env(:excessibility, :excessibility_output_path, "test/excessibility")
-    snapshots_dir = Path.join(base_path, "html_snapshots")
-    filter = Map.get(args, "filter", "*.html")
-    include_content? = Map.get(args, "include_content", false)
-
-    result =
-      if File.dir?(snapshots_dir) do
-        pattern = Path.join(snapshots_dir, filter)
-
-        snapshots =
-          pattern
-          |> Path.wildcard()
-          |> Enum.map(&build_snapshot(&1, include_content?))
-
-        %{
-          "status" => "success",
-          "count" => length(snapshots),
-          "snapshots" => snapshots
-        }
-      else
-        %{
-          "status" => "not_found",
-          "error" => "Snapshots directory not found",
-          "path" => snapshots_dir
-        }
-      end
-
-    %{
-      "content" => [
-        %{
-          "type" => "text",
-          "text" => Jason.encode!(result)
-        }
-      ]
-    }
-  end
-
-  defp call_tool(name, _args) do
-    %{
-      "content" => [
-        %{
-          "type" => "text",
-          "text" => Jason.encode!(%{"error" => "Unknown tool: #{name}"})
-        }
-      ],
-      "isError" => true
-    }
-  end
-
-  defp build_snapshot(path, include_content?) do
-    snapshot = %{
-      "filename" => Path.basename(path),
-      "path" => path,
-      "size" => File.stat!(path).size
-    }
-
-    if include_content? do
-      Map.put(snapshot, "content", File.read!(path))
-    else
-      snapshot
+      tool_module ->
+        result = tool_module.execute(args, [])
+        Tool.format_result(result)
     end
   end
+
+  # ============================================================================
+  # Private - Resource Reading
+  # ============================================================================
+
+  defp read_resource(uri) do
+    case Registry.get_resource_for_uri(uri) do
+      nil ->
+        %{"error" => "Resource not found: #{uri}"}
+
+      resource_module ->
+        result = resource_module.read(uri)
+        Resource.format_result(result, uri, resource_module.mime_type())
+    end
+  end
+
+  # ============================================================================
+  # Private - Prompt Getting
+  # ============================================================================
+
+  defp get_prompt(name, args) do
+    case Registry.get_prompt(name) do
+      nil ->
+        %{"error" => "Prompt not found: #{name}"}
+
+      prompt_module ->
+        result = prompt_module.get(args)
+        Prompt.format_result(result)
+    end
+  end
+
+  # ============================================================================
+  # Private - Response Sending
+  # ============================================================================
 
   defp send_response(response) do
     json = Jason.encode!(response)
