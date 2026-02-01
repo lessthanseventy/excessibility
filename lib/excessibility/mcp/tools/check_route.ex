@@ -10,13 +10,15 @@ defmodule Excessibility.MCP.Tools.CheckRoute do
 
   @behaviour Excessibility.MCP.Tool
 
+  alias Excessibility.MCP.Subprocess
+
   @impl true
   def name, do: "check_route"
 
   @impl true
   def description do
-    "Check a URL for accessibility issues without needing a test file. " <>
-      "Requires the Phoenix app to be running. Returns structured violations."
+    "FAST: Check a running Phoenix app for accessibility issues. " <>
+      "Use this FIRST before slower test-based tools. Requires app running on localhost."
   end
 
   @impl true
@@ -38,7 +40,7 @@ defmodule Excessibility.MCP.Tools.CheckRoute do
         },
         "timeout" => %{
           "type" => "integer",
-          "description" => "Timeout in milliseconds (default: 30000)"
+          "description" => "Timeout in ms (default: 30000). Increase for slow pages."
         }
       },
       "required" => ["url"]
@@ -107,7 +109,7 @@ defmodule Excessibility.MCP.Tools.CheckRoute do
 
     pa11y_args = build_pa11y_args(url, wait_for, timeout)
 
-    case run_pa11y(pa11y_args) do
+    case run_pa11y(pa11y_args, timeout) do
       {:ok, output} ->
         if progress_callback, do: progress_callback.("Parsing results...", 80)
 
@@ -152,14 +154,14 @@ defmodule Excessibility.MCP.Tools.CheckRoute do
     end
   end
 
-  defp run_pa11y(args) do
+  defp run_pa11y(args, timeout) do
     case find_pa11y() do
       nil ->
         {:error, "Pa11y not found. Install with: npm install -g pa11y"}
 
       pa11y_path ->
         {cmd, cmd_args} = build_pa11y_command(pa11y_path, args)
-        {output, _exit_code} = System.cmd(cmd, cmd_args, stderr_to_stdout: true)
+        {output, _exit_code} = Subprocess.run(cmd, cmd_args, timeout: timeout, stderr_to_stdout: true)
         {:ok, output}
     end
   end

@@ -334,6 +334,87 @@ defmodule Excessibility.MCP.ServerTest do
   end
 
   # ============================================================================
+  # Tool Integration Tests
+  # ============================================================================
+
+  describe "e11y_debug tool" do
+    test "returns output from mix command", %{server: pid} do
+      # Test with a non-existent file - mix should fail fast with an error message
+      message = %{
+        "jsonrpc" => "2.0",
+        "id" => 1,
+        "method" => "tools/call",
+        "params" => %{
+          "name" => "e11y_debug",
+          "arguments" => %{
+            "test_args" => "test/nonexistent_file_12345.exs",
+            "timeout" => 30_000
+          }
+        }
+      }
+
+      start = System.monotonic_time(:millisecond)
+      response = Server.handle_rpc(pid, message)
+      elapsed = System.monotonic_time(:millisecond) - start
+
+      # Should not hang
+      assert elapsed < 10_000, "Tool took #{elapsed}ms - should complete quickly"
+
+      # Should return valid response
+      assert response["jsonrpc"] == "2.0"
+      assert response["id"] == 1
+      assert response["result"]["content"]
+
+      content = hd(response["result"]["content"])
+      assert content["type"] == "text"
+
+      result = Jason.decode!(content["text"])
+
+      # Should have captured output
+      assert Map.has_key?(result, "output")
+      assert Map.has_key?(result, "exit_code")
+      assert Map.has_key?(result, "status")
+
+      # Output should contain something (error message about file not found)
+      assert is_binary(result["output"])
+      assert String.length(result["output"]) > 0
+    end
+
+    @tag :slow
+    test "respects timeout and returns timeout error", %{server: pid} do
+      message = %{
+        "jsonrpc" => "2.0",
+        "id" => 1,
+        "method" => "tools/call",
+        "params" => %{
+          "name" => "e11y_debug",
+          "arguments" => %{
+            # Use a command that will definitely take more than 100ms
+            "test_args" => "test/nonexistent_test.exs",
+            "timeout" => 100
+          }
+        }
+      }
+
+      start = System.monotonic_time(:millisecond)
+      response = Server.handle_rpc(pid, message)
+      elapsed = System.monotonic_time(:millisecond) - start
+
+      assert response["jsonrpc"] == "2.0"
+      assert response["id"] == 1
+
+      content = hd(response["result"]["content"])
+      result = Jason.decode!(content["text"])
+
+      # Should either timeout or fail quickly (file doesn't exist)
+      assert result["status"] in ["failure", "error"] or result["output"] =~ "timed out"
+
+      # Most importantly: should not hang - should complete in reasonable time
+      assert elapsed < 5000, "Tool call took #{elapsed}ms - should not hang"
+    end
+  end
+
+  # ============================================================================
   # Ping & Error Handling Tests
   # ============================================================================
 

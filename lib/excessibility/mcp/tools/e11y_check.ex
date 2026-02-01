@@ -6,13 +6,15 @@ defmodule Excessibility.MCP.Tools.E11yCheck do
   @behaviour Excessibility.MCP.Tool
 
   alias Excessibility.MCP.ClientContext
+  alias Excessibility.MCP.Subprocess
 
   @impl true
   def name, do: "e11y_check"
 
   @impl true
   def description do
-    "Run Pa11y accessibility checks on HTML snapshots. Without args: check existing snapshots. With test_args: run tests first, then check."
+    "Run Pa11y on snapshots. FAST without test_args. SLOW with test_args (runs tests first). " <>
+      "When using test_args: single files only, pass timeout: 300000."
   end
 
   @impl true
@@ -22,12 +24,11 @@ defmodule Excessibility.MCP.Tools.E11yCheck do
       "properties" => %{
         "test_args" => %{
           "type" => "string",
-          "description" => "Arguments to pass to mix test (optional). Use a single test file, not a directory."
+          "description" => "Optional. If provided, runs tests first. Use SINGLE test file path only!"
         },
         "timeout" => %{
           "type" => "integer",
-          "description" =>
-            "Optional timeout in milliseconds. No timeout by default. Recommended: 300000 (5 min) for CI/automation."
+          "description" => "REQUIRED when using test_args: 300000 (5 min). Prevents indefinite hangs."
         }
       }
     }
@@ -55,30 +56,24 @@ defmodule Excessibility.MCP.Tools.E11yCheck do
      }}
   end
 
-  defp run_with_optional_timeout(test_args, cmd_opts, nil) do
-    # No timeout - run directly
-    if test_args == "" do
-      System.cmd("mix", ["excessibility"], cmd_opts)
-    else
-      cmd_args = String.split(test_args)
-      System.cmd("mix", ["excessibility" | cmd_args], cmd_opts)
-    end
+  defp run_with_optional_timeout(test_args, cmd_opts, timeout) do
+    mix_args =
+      if test_args == "" do
+        ["excessibility"]
+      else
+        ["excessibility" | String.split(test_args)]
+      end
+
+    subprocess_opts = build_subprocess_opts(cmd_opts, timeout)
+    Subprocess.run("mix", mix_args, subprocess_opts)
   end
 
-  defp run_with_optional_timeout(test_args, cmd_opts, timeout) when is_integer(timeout) do
-    task =
-      Task.async(fn ->
-        if test_args == "" do
-          System.cmd("mix", ["excessibility"], cmd_opts)
-        else
-          cmd_args = String.split(test_args)
-          System.cmd("mix", ["excessibility" | cmd_args], cmd_opts)
-        end
-      end)
-
-    case Task.yield(task, timeout) || Task.shutdown(task, :brutal_kill) do
-      {:ok, result} -> result
-      nil -> {"Error: Command timed out after #{div(timeout, 1000)} seconds", 124}
-    end
+  defp build_subprocess_opts(cmd_opts, timeout) do
+    opts = []
+    opts = if Keyword.get(cmd_opts, :stderr_to_stdout), do: [{:stderr_to_stdout, true} | opts], else: opts
+    opts = if cd = Keyword.get(cmd_opts, :cd), do: [{:cd, cd} | opts], else: opts
+    opts = if env = Keyword.get(cmd_opts, :env), do: [{:env, env} | opts], else: opts
+    opts = if timeout, do: [{:timeout, timeout} | opts], else: opts
+    opts
   end
 end

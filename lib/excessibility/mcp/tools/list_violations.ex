@@ -7,13 +7,15 @@ defmodule Excessibility.MCP.Tools.ListViolations do
 
   @behaviour Excessibility.MCP.Tool
 
+  alias Excessibility.MCP.Subprocess
+
   @impl true
   def name, do: "list_violations"
 
   @impl true
   def description do
-    "Parse Pa11y results into structured accessibility violations with summary. " <>
-      "Returns violations grouped by rule with fix hints."
+    "Parse Pa11y results into structured violations. FAST with existing results. " <>
+      "SLOW if run_pa11y=true (runs Pa11y first). Pass timeout: 300000 when running Pa11y."
   end
 
   @impl true
@@ -28,6 +30,10 @@ defmodule Excessibility.MCP.Tools.ListViolations do
         "run_pa11y" => %{
           "type" => "boolean",
           "description" => "Run Pa11y first and parse the results (default: false)"
+        },
+        "timeout" => %{
+          "type" => "integer",
+          "description" => "REQUIRED when run_pa11y=true: 300000 (5 min). Prevents indefinite hangs."
         }
       }
     }
@@ -37,11 +43,16 @@ defmodule Excessibility.MCP.Tools.ListViolations do
   def execute(args, opts) do
     progress_callback = Keyword.get(opts, :progress_callback)
     run_pa11y? = Map.get(args, "run_pa11y", false)
+    timeout = Map.get(args, "timeout")
 
     output =
       if run_pa11y? do
         if progress_callback, do: progress_callback.("Running Pa11y...", 0)
-        {output, _exit_code} = System.cmd("mix", ["excessibility", "--json"], stderr_to_stdout: true)
+
+        subprocess_opts = [stderr_to_stdout: true]
+        subprocess_opts = if timeout, do: [{:timeout, timeout} | subprocess_opts], else: subprocess_opts
+
+        {output, _exit_code} = Subprocess.run("mix", ["excessibility", "--json"], subprocess_opts)
         output
       else
         load_pa11y_output(args)

@@ -71,7 +71,9 @@ defmodule Excessibility.MCP.Server do
   Useful for testing.
   """
   def handle_rpc(pid \\ __MODULE__, message) do
-    GenServer.call(pid, {:handle_rpc, message})
+    # Use :infinity since tools have their own timeout handling
+    # The MCP client controls overall request timeout
+    GenServer.call(pid, {:handle_rpc, message}, :infinity)
   end
 
   # ============================================================================
@@ -115,7 +117,7 @@ defmodule Excessibility.MCP.Server do
   defp handle_line(line, pid) do
     case Jason.decode(line) do
       {:ok, message} ->
-        response = handle_rpc(pid, message)
+        response = safe_handle_rpc(pid, message)
 
         if response do
           send_response(response)
@@ -124,6 +126,22 @@ defmodule Excessibility.MCP.Server do
       {:error, _} ->
         send_error(-32_700, "Parse error", nil)
     end
+  end
+
+  defp safe_handle_rpc(pid, message) do
+    handle_rpc(pid, message)
+  rescue
+    e ->
+      id = Map.get(message, "id")
+
+      %{
+        "jsonrpc" => "2.0",
+        "id" => id,
+        "error" => %{
+          "code" => -32_603,
+          "message" => "Internal error: #{Exception.message(e)}"
+        }
+      }
   end
 
   # ============================================================================
