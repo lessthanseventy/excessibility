@@ -21,6 +21,11 @@ defmodule Excessibility.MCP.Tools.GetTimeline do
         "path" => %{
           "type" => "string",
           "description" => "Custom path to timeline.json (optional)"
+        },
+        "cwd" => %{
+          "type" => "string",
+          "description" =>
+            "Working directory to look for timeline in (defaults to current directory). Required when testing projects other than excessibility itself."
         }
       }
     }
@@ -28,8 +33,17 @@ defmodule Excessibility.MCP.Tools.GetTimeline do
 
   @impl true
   def execute(args, _opts) do
+    cwd = Map.get(args, "cwd")
     base_path = Application.get_env(:excessibility, :excessibility_output_path, "test/excessibility")
-    timeline_path = Map.get(args, "path") || Path.join(base_path, "timeline.json")
+
+    default_path =
+      if cwd && File.dir?(cwd) do
+        Path.join([cwd, base_path, "timeline.json"])
+      else
+        Path.join(base_path, "timeline.json")
+      end
+
+    timeline_path = Map.get(args, "path") || default_path
 
     result =
       if File.exists?(timeline_path) do

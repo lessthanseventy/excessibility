@@ -132,20 +132,6 @@ defmodule Excessibility.MCP.Tools.CheckRoute do
     args ++ [url]
   end
 
-  defp run_pa11y(args) do
-    pa11y_path = find_pa11y()
-
-    if pa11y_path do
-      case System.cmd(pa11y_path, args, stderr_to_stdout: true) do
-        {output, 0} -> {:ok, output}
-        {output, 2} -> {:ok, output}
-        {output, _} -> {:ok, output}
-      end
-    else
-      {:error, "Pa11y not found. Install with: npm install -g pa11y"}
-    end
-  end
-
   defp find_pa11y do
     configured = Application.get_env(:excessibility, :pa11y_path)
 
@@ -153,17 +139,32 @@ defmodule Excessibility.MCP.Tools.CheckRoute do
       configured && File.exists?(configured) ->
         configured
 
-      File.exists?("assets/node_modules/.bin/pa11y") ->
-        "assets/node_modules/.bin/pa11y"
+      true ->
+        # Always use system pa11y for MCP since we run from a different directory
+        System.find_executable("pa11y") || System.find_executable("npx")
+    end
+  end
 
-      File.exists?("node_modules/.bin/pa11y") ->
-        "node_modules/.bin/pa11y"
+  defp run_pa11y(args) do
+    pa11y_path = find_pa11y()
+
+    cond do
+      pa11y_path && String.ends_with?(pa11y_path, "npx") ->
+        case System.cmd(pa11y_path, ["pa11y" | args], stderr_to_stdout: true) do
+          {output, 0} -> {:ok, output}
+          {output, 2} -> {:ok, output}
+          {output, _} -> {:ok, output}
+        end
+
+      pa11y_path ->
+        case System.cmd(pa11y_path, args, stderr_to_stdout: true) do
+          {output, 0} -> {:ok, output}
+          {output, 2} -> {:ok, output}
+          {output, _} -> {:ok, output}
+        end
 
       true ->
-        case System.find_executable("pa11y") do
-          nil -> nil
-          path -> path
-        end
+        {:error, "Pa11y not found. Install with: npm install -g pa11y"}
     end
   end
 

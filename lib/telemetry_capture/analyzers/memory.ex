@@ -15,7 +15,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Memory do
   2. Calculate median delta between events
   3. Detect outliers:
      - Warning: Growth > 3x median delta
-     - Critical: Growth > 10x median delta OR size > mean + 2σ
+     - Critical: Growth > 10x median delta OR size > mean + 2std_dev
   4. Detect leaks: 3+ consecutive increases
 
   ## Output
@@ -134,7 +134,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Memory do
       multiplier = if prev.memory_size > 0, do: delta / prev.memory_size, else: 0
 
       cond do
-        # Critical: 10x growth, or 10x median delta, or > mean + 2σ
+        # Critical: 10x growth, or 10x median delta, or > mean + 2std_dev
         multiplier >= 10 or delta > stats.median_delta * 10 or
             curr.memory_size > stats.avg + 2 * stats.std_dev ->
           [

@@ -21,6 +21,11 @@ defmodule Excessibility.MCP.Tools.E11yCheck do
         "test_args" => %{
           "type" => "string",
           "description" => "Arguments to pass to mix test (optional)"
+        },
+        "cwd" => %{
+          "type" => "string",
+          "description" =>
+            "Working directory to run tests from (defaults to current directory). Required when testing projects other than excessibility itself."
         }
       }
     }
@@ -29,16 +34,20 @@ defmodule Excessibility.MCP.Tools.E11yCheck do
   @impl true
   def execute(args, opts) do
     test_args = Map.get(args, "test_args", "")
+    cwd = Map.get(args, "cwd")
     progress_callback = Keyword.get(opts, :progress_callback)
 
     if progress_callback, do: progress_callback.("Starting Pa11y check...", 0)
 
+    cmd_opts = [stderr_to_stdout: true]
+    cmd_opts = if cwd && File.dir?(cwd), do: [{:cd, cwd} | cmd_opts], else: cmd_opts
+
     {output, exit_code} =
       if test_args == "" do
-        System.cmd("mix", ["excessibility"], stderr_to_stdout: true)
+        System.cmd("mix", ["excessibility"], cmd_opts)
       else
         cmd_args = String.split(test_args)
-        System.cmd("mix", ["excessibility" | cmd_args], stderr_to_stdout: true)
+        System.cmd("mix", ["excessibility" | cmd_args], cmd_opts)
       end
 
     if progress_callback, do: progress_callback.("Pa11y check complete", 100)
