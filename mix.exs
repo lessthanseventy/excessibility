@@ -2,7 +2,7 @@ defmodule Excessibility.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/lessthanseventy/excessibility"
-  @version "0.10.0"
+  @version "0.10.1"
 
   def project do
     [
@@ -52,7 +52,7 @@ defmodule Excessibility.MixProject do
 
   defp package do
     [
-      files: ["lib", "assets", "mix.exs", "README*", "LICENSE*"],
+      files: ["lib", "assets", "bin", "mix.exs", "README*", "LICENSE*"],
       maintainers: ["Andrew Moore"],
       licenses: ["MIT"],
       links: %{"GitHub" => "https://github.com/lessthanseventy/excessibility"}
