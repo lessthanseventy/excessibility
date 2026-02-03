@@ -211,6 +211,7 @@ defmodule Mix.Tasks.Excessibility.Install do
     else
       igniter
       |> install_mcp_server()
+      |> create_mcp_json()
       |> install_skills_plugin()
     end
   end
@@ -270,6 +271,52 @@ defmodule Mix.Tasks.Excessibility.Install do
           )
         end
     end
+  end
+
+  defp create_mcp_json(igniter) do
+    mcp_json_path = ".mcp.json"
+    mcp_config = mcp_json_content()
+
+    if File.exists?(mcp_json_path) do
+      update_existing_mcp_json(igniter, mcp_json_path, mcp_config)
+    else
+      Igniter.create_or_update_file(igniter, mcp_json_path, mcp_config, fn source -> source end)
+    end
+  end
+
+  defp update_existing_mcp_json(igniter, path, _new_config) do
+    with {:ok, content} <- File.read(path),
+         {:ok, existing} <- Jason.decode(content) do
+      maybe_add_excessibility_server(igniter, path, existing)
+    else
+      {:error, %Jason.DecodeError{}} ->
+        Igniter.add_warning(igniter, "Could not parse existing .mcp.json - skipping MCP config")
+
+      {:error, _} ->
+        igniter
+    end
+  end
+
+  defp maybe_add_excessibility_server(igniter, path, existing) do
+    servers = Map.get(existing, "mcpServers", %{})
+
+    if Map.has_key?(servers, "excessibility") do
+      igniter
+    else
+      updated = Map.put(existing, "mcpServers", Map.put(servers, "excessibility", mcp_server_entry()))
+      Igniter.create_or_update_file(igniter, path, Jason.encode!(updated, pretty: true), fn source -> source end)
+    end
+  end
+
+  defp mcp_server_entry do
+    %{
+      "command" => "deps/excessibility/bin/mcp-server",
+      "args" => []
+    }
+  end
+
+  defp mcp_json_content do
+    Jason.encode!(%{"mcpServers" => %{"excessibility" => mcp_server_entry()}}, pretty: true)
   end
 
   defp install_skills_plugin(igniter) do

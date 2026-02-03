@@ -1,12 +1,13 @@
 #!/bin/bash
-# Capture the client's working directory before switching to excessibility
+# MCP server wrapper for excessibility
+# Run this from your Phoenix project directory (where excessibility is a dependency)
+
 export MCP_CLIENT_CWD="$PWD"
-cd /home/andrew/projects/excessibility
 export TERM=dumb
 export NO_COLOR=1
 export ELIXIR_CLI_ECHO=false
 
-# Debug logging enabled - check /tmp/excessibility_mcp.log
-export MCP_LOG_FILE=/tmp/excessibility_mcp.log
+# Optional: enable debug logging
+# export MCP_LOG_FILE=/tmp/excessibility_mcp.log
 
 exec mix run --no-halt -e "Excessibility.MCP.Server.start()" 2>/dev/null
