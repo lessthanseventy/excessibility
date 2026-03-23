@@ -1,0 +1,17 @@
+{
+  "planPath": "docs/plans/2026-03-23-axe-core-migration.md",
+  "tasks": [
+    {"id": 8, "subject": "Task 1: Create axe-runner.js and update package.json", "status": "pending"},
+    {"id": 9, "subject": "Task 2: Create Elixir AxeRunner wrapper", "status": "pending", "blockedBy": [8]},
+    {"id": 10, "subject": "Task 3: Rewrite mix excessibility to use AxeRunner", "status": "pending", "blockedBy": [8, 9]},
+    {"id": 11, "subject": "Task 4: Add mix excessibility.check for arbitrary URLs", "status": "pending", "blockedBy": [10]},
+    {"id": 12, "subject": "Task 5: Add mix excessibility.snapshots", "status": "pending", "blockedBy": [8]},
+    {"id": 13, "subject": "Task 6: Remove ChromicPDF dependency and screenshot code", "status": "pending", "blockedBy": [9]},
+    {"id": 14, "subject": "Task 7: Remove Pa11y references", "status": "pending", "blockedBy": [10, 13]},
+    {"id": 15, "subject": "Task 8: Delete removed MCP tools, prompts, resources", "status": "pending", "blockedBy": [14]},
+    {"id": 16, "subject": "Task 9: Create new MCP tools (a11y_check, debug)", "status": "pending", "blockedBy": [15]},
+    {"id": 17, "subject": "Task 10: Update docs and plugin files", "status": "pending", "blockedBy": [14, 15, 16]},
+    {"id": 18, "subject": "Task 11: Full integration test and cleanup", "status": "pending", "blockedBy": [17]}
+  ],
+  "lastUpdated": "2026-03-23T01:15:00Z"
+}
