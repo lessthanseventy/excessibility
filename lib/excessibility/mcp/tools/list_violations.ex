@@ -1,8 +1,8 @@
 defmodule Excessibility.MCP.Tools.ListViolations do
   @moduledoc """
-  MCP tool for listing structured accessibility violations from Pa11y output.
+  MCP tool for listing structured accessibility violations from axe-core output.
 
-  Parses Pa11y JSON output into structured violations with summary statistics.
+  Parses axe-core JSON output into structured violations with summary statistics.
   """
 
   @behaviour Excessibility.MCP.Tool
@@ -14,8 +14,8 @@ defmodule Excessibility.MCP.Tools.ListViolations do
 
   @impl true
   def description do
-    "Parse Pa11y results into structured violations. FAST with existing results. " <>
-      "SLOW if run_pa11y=true (runs Pa11y first). Pass timeout: 300000 when running Pa11y."
+    "Parse axe-core results into structured violations. FAST with existing results. " <>
+      "SLOW if run_check=true (runs checks first). Pass timeout: 300000 when running checks."
   end
 
   @impl true
@@ -25,15 +25,19 @@ defmodule Excessibility.MCP.Tools.ListViolations do
       "properties" => %{
         "path" => %{
           "type" => "string",
-          "description" => "Path to Pa11y JSON output file (optional, defaults to last run)"
+          "description" => "Path to axe-core JSON output file (optional, defaults to last run)"
         },
         "run_pa11y" => %{
           "type" => "boolean",
-          "description" => "Run Pa11y first and parse the results (default: false)"
+          "description" => "Run accessibility check first and parse the results (default: false). Also accepts 'run_check'."
+        },
+        "run_check" => %{
+          "type" => "boolean",
+          "description" => "Run accessibility check first and parse the results (default: false)"
         },
         "timeout" => %{
           "type" => "integer",
-          "description" => "REQUIRED when run_pa11y=true: 300000 (5 min). Prevents indefinite hangs."
+          "description" => "REQUIRED when run_check=true: 300000 (5 min). Prevents indefinite hangs."
         }
       }
     }
@@ -42,12 +46,12 @@ defmodule Excessibility.MCP.Tools.ListViolations do
   @impl true
   def execute(args, opts) do
     progress_callback = Keyword.get(opts, :progress_callback)
-    run_pa11y? = Map.get(args, "run_pa11y", false)
+    run_check? = Map.get(args, "run_check", Map.get(args, "run_pa11y", false))
     timeout = Map.get(args, "timeout")
 
     output =
-      if run_pa11y? do
-        if progress_callback, do: progress_callback.("Running Pa11y...", 0)
+      if run_check? do
+        if progress_callback, do: progress_callback.("Running accessibility check...", 0)
 
         subprocess_opts = [stderr_to_stdout: true]
         subprocess_opts = if timeout, do: [{:timeout, timeout} | subprocess_opts], else: subprocess_opts
@@ -55,7 +59,7 @@ defmodule Excessibility.MCP.Tools.ListViolations do
         {output, _exit_code} = Subprocess.run("mix", ["excessibility", "--json"], subprocess_opts)
         output
       else
-        load_pa11y_output(args)
+        load_violations_output(args)
       end
 
     if progress_callback, do: progress_callback.("Parsing violations...", 50)
@@ -72,19 +76,19 @@ defmodule Excessibility.MCP.Tools.ListViolations do
      }}
   end
 
-  defp load_pa11y_output(%{"path" => path}) when is_binary(path) do
+  defp load_violations_output(%{"path" => path}) when is_binary(path) do
     case File.read(path) do
       {:ok, content} -> content
       {:error, _} -> ""
     end
   end
 
-  defp load_pa11y_output(_args) do
-    # Try to find most recent Pa11y output
+  defp load_violations_output(_args) do
+    # Try to find most recent axe-core output
     base_path = Application.get_env(:excessibility, :excessibility_output_path, "test/excessibility")
-    pa11y_output_path = Path.join(base_path, "pa11y_results.json")
+    results_path = Path.join(base_path, "axe_results.json")
 
-    case File.read(pa11y_output_path) do
+    case File.read(results_path) do
       {:ok, content} -> content
       {:error, _} -> ""
     end

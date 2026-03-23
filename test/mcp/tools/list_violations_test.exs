@@ -15,13 +15,13 @@ defmodule Excessibility.MCP.Tools.ListViolationsTest do
 
       assert schema["type"] == "object"
       assert Map.has_key?(schema["properties"], "path")
-      assert Map.has_key?(schema["properties"], "run_pa11y")
+      assert Map.has_key?(schema["properties"], "run_check")
     end
   end
 
   describe "execute/2 with JSON array input" do
     test "parses JSON issue array" do
-      pa11y_output =
+      violations_output =
         Jason.encode!([
           %{
             "code" => "WCAG2AA.Principle1.Guideline1_1.1_1_1.H37",
@@ -39,8 +39,8 @@ defmodule Excessibility.MCP.Tools.ListViolationsTest do
         ])
 
       # Write temp file
-      path = Path.join(System.tmp_dir!(), "pa11y_test_#{:rand.uniform(10_000)}.json")
-      File.write!(path, pa11y_output)
+      path = Path.join(System.tmp_dir!(), "axe_test_#{:rand.uniform(10_000)}.json")
+      File.write!(path, violations_output)
 
       {:ok, result} = ListViolations.execute(%{"path" => path}, [])
 
@@ -60,7 +60,7 @@ defmodule Excessibility.MCP.Tools.ListViolationsTest do
 
   describe "execute/2 with issues key format" do
     test "parses JSON with issues key" do
-      pa11y_output =
+      violations_output =
         Jason.encode!(%{
           "issues" => [
             %{
@@ -71,8 +71,8 @@ defmodule Excessibility.MCP.Tools.ListViolationsTest do
           ]
         })
 
-      path = Path.join(System.tmp_dir!(), "pa11y_test_#{:rand.uniform(10_000)}.json")
-      File.write!(path, pa11y_output)
+      path = Path.join(System.tmp_dir!(), "axe_test_#{:rand.uniform(10_000)}.json")
+      File.write!(path, violations_output)
 
       {:ok, result} = ListViolations.execute(%{"path" => path}, [])
 
@@ -86,7 +86,7 @@ defmodule Excessibility.MCP.Tools.ListViolationsTest do
 
   describe "execute/2 with results format" do
     test "parses JSON with results key containing file map" do
-      pa11y_output =
+      violations_output =
         Jason.encode!(%{
           "results" => %{
             "test_snapshot.html" => [
@@ -106,8 +106,8 @@ defmodule Excessibility.MCP.Tools.ListViolationsTest do
           }
         })
 
-      path = Path.join(System.tmp_dir!(), "pa11y_test_#{:rand.uniform(10_000)}.json")
-      File.write!(path, pa11y_output)
+      path = Path.join(System.tmp_dir!(), "axe_test_#{:rand.uniform(10_000)}.json")
+      File.write!(path, violations_output)
 
       {:ok, result} = ListViolations.execute(%{"path" => path}, [])
 
@@ -126,7 +126,7 @@ defmodule Excessibility.MCP.Tools.ListViolationsTest do
 
   describe "execute/2 summary statistics" do
     test "calculates summary by type and rule" do
-      pa11y_output =
+      violations_output =
         Jason.encode!([
           %{"code" => "H37", "type" => "error", "message" => "Missing alt"},
           %{"code" => "H37", "type" => "error", "message" => "Missing alt"},
@@ -134,8 +134,8 @@ defmodule Excessibility.MCP.Tools.ListViolationsTest do
           %{"code" => "contrast", "type" => "notice", "message" => "Low contrast"}
         ])
 
-      path = Path.join(System.tmp_dir!(), "pa11y_test_#{:rand.uniform(10_000)}.json")
-      File.write!(path, pa11y_output)
+      path = Path.join(System.tmp_dir!(), "axe_test_#{:rand.uniform(10_000)}.json")
+      File.write!(path, violations_output)
 
       {:ok, result} = ListViolations.execute(%{"path" => path}, [])
 
@@ -179,9 +179,9 @@ defmodule Excessibility.MCP.Tools.ListViolationsTest do
         %{"code" => "UNKNOWN", "message" => "test"}
       ]
 
-      pa11y_output = Jason.encode!(violations)
-      path = Path.join(System.tmp_dir!(), "pa11y_test_#{:rand.uniform(10_000)}.json")
-      File.write!(path, pa11y_output)
+      violations_output = Jason.encode!(violations)
+      path = Path.join(System.tmp_dir!(), "axe_test_#{:rand.uniform(10_000)}.json")
+      File.write!(path, violations_output)
 
       {:ok, result} = ListViolations.execute(%{"path" => path}, [])
 

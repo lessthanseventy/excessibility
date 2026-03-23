@@ -74,7 +74,7 @@ defmodule Mix.Tasks.Excessibility.SetupClaudeDocs do
     - **Debugging LiveView test failures or state issues**
       → Use `/e11y-debug` skill for timeline analysis and state inspection
 
-    - **Fixing Pa11y or WCAG accessibility violations**
+    - **Fixing WCAG accessibility violations**
       → Use `/e11y-fix` skill for Phoenix-specific accessibility patterns
 
     **When these patterns match, using the skill is not optional** - it provides the workflow and tools to see actual rendered HTML and LiveView state, not just guesses.
@@ -247,7 +247,7 @@ defmodule Mix.Tasks.Excessibility.SetupClaudeDocs do
     **Fast (instant):**
     - `check_route(url, port)` - Check running app for a11y issues. Use this first!
     - `explain_issue(issue)` - Explain WCAG codes with Phoenix examples
-    - `suggest_fixes(run_pa11y)` - Get Phoenix-specific fix suggestions
+    - `suggest_fixes(violations_output)` - Get Phoenix-specific fix suggestions
     - `generate_test(route)` - Generate test code with `html_snapshot()` calls
     - `get_timeline()` - Read captured timeline data
     - `get_snapshots()` - List HTML snapshots from tests
@@ -255,7 +255,7 @@ defmodule Mix.Tasks.Excessibility.SetupClaudeDocs do
     - `list_analyzers()` - List available analyzers
 
     **Slow (run tests):**
-    - `e11y_check(test_args)` - Run Pa11y on snapshots
+    - `e11y_check(test_args)` - Run axe-core on snapshots
     - `e11y_debug(test_args)` - Run tests with telemetry capture (requires `html_snapshot()` calls in tests)
 
     ### Important: Timeouts for Slow Tools

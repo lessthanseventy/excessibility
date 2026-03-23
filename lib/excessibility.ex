@@ -2,7 +2,7 @@ defmodule Excessibility do
   @moduledoc """
   Accessibility snapshot testing for Phoenix applications.
 
-  Excessibility captures HTML snapshots during tests and runs them through Pa11y
+  Excessibility captures HTML snapshots during tests and runs them through axe-core
   for WCAG compliance checking.
 
   ## Usage

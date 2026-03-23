@@ -1,6 +1,6 @@
 defmodule Excessibility.MCP.Tools.E11yCheck do
   @moduledoc """
-  MCP tool for running Pa11y accessibility checks on HTML snapshots.
+  MCP tool for running axe-core accessibility checks on HTML snapshots.
   """
 
   @behaviour Excessibility.MCP.Tool
@@ -13,7 +13,7 @@ defmodule Excessibility.MCP.Tools.E11yCheck do
 
   @impl true
   def description do
-    "Run Pa11y on snapshots. FAST without test_args. SLOW with test_args (runs tests first). " <>
+    "Run axe-core on snapshots. FAST without test_args. SLOW with test_args (runs tests first). " <>
       "When using test_args: single files only, pass timeout: 300000."
   end
 
@@ -40,13 +40,13 @@ defmodule Excessibility.MCP.Tools.E11yCheck do
     timeout = Map.get(args, "timeout")
     progress_callback = Keyword.get(opts, :progress_callback)
 
-    if progress_callback, do: progress_callback.("Starting Pa11y check...", 0)
+    if progress_callback, do: progress_callback.("Starting accessibility check...", 0)
 
     cmd_opts = ClientContext.cmd_opts(stderr_to_stdout: true)
 
     {output, exit_code} = run_with_optional_timeout(test_args, cmd_opts, timeout)
 
-    if progress_callback, do: progress_callback.("Pa11y check complete", 100)
+    if progress_callback, do: progress_callback.("Accessibility check complete", 100)
 
     {:ok,
      %{

@@ -5,7 +5,7 @@ defmodule Mix.Tasks.Excessibility.Install do
 
   This task can be invoked directly or via `mix igniter.install excessibility`. It adds the
   recommended configuration to the target project's `config/test.exs` and (by default) runs
-  `npm install` inside the vendored Excessibility assets directory to fetch Pa11y.
+  `npm install` inside the vendored Excessibility assets directory to fetch axe-core dependencies.
 
   Requires Igniter to be installed in the host project.
   """
@@ -45,8 +45,7 @@ defmodule Mix.Tasks.Excessibility.Install do
     igniter
     |> ensure_test_config(endpoint, head_render_path)
     |> ensure_test_helper()
-    |> ensure_pa11y_config()
-    |> maybe_install_pa11y(assets_dir, skip_npm?)
+    |> maybe_install_deps(assets_dir, skip_npm?)
     |> maybe_create_claude_docs()
     |> maybe_setup_mcp(skip_mcp?)
   end
@@ -103,26 +102,9 @@ defmodule Mix.Tasks.Excessibility.Install do
     end
   end
 
-  defp ensure_pa11y_config(igniter) do
-    Igniter.create_or_update_file(igniter, "pa11y.json", pa11y_config(), fn source ->
-      # Don't overwrite existing config
-      source
-    end)
-  end
+  defp maybe_install_deps(igniter, assets_dir, true), do: add_npm_notice(igniter, assets_dir)
 
-  defp pa11y_config do
-    """
-    {
-      "ignore": [
-        "WCAG2AA.Principle3.Guideline3_2.3_2_2.H32.2"
-      ]
-    }
-    """
-  end
-
-  defp maybe_install_pa11y(igniter, assets_dir, true), do: add_npm_notice(igniter, assets_dir)
-
-  defp maybe_install_pa11y(igniter, assets_dir, _skip?) do
+  defp maybe_install_deps(igniter, assets_dir, _skip?) do
     package_json = Path.join(assets_dir, "package.json")
 
     cond do
@@ -136,26 +118,50 @@ defmodule Mix.Tasks.Excessibility.Install do
         )
 
       true ->
-        Mix.shell().info("Installing npm packages in #{assets_dir}...")
+        install_npm_and_playwright(igniter, assets_dir)
+    end
+  end
 
-        case System.cmd("npm", ["install"], cd: assets_dir, into: IO.stream(:stdio, :line)) do
-          {_, 0} ->
-            Mix.shell().info("✔ Pa11y installed under #{assets_dir}")
-            igniter
+  defp install_npm_and_playwright(igniter, assets_dir) do
+    Mix.shell().info("Installing npm packages in #{assets_dir}...")
 
-          {_, status} ->
-            Igniter.add_warning(
-              igniter,
-              "npm install exited with status #{status}. Run it manually in #{assets_dir}."
-            )
-        end
+    case System.cmd("npm", ["install"], cd: assets_dir, into: IO.stream(:stdio, :line)) do
+      {_, 0} ->
+        Mix.shell().info("✔ axe-core dependencies installed under #{assets_dir}")
+        install_playwright_browser(igniter, assets_dir)
+
+      {_, status} ->
+        Igniter.add_warning(
+          igniter,
+          "npm install exited with status #{status}. Run it manually in #{assets_dir}."
+        )
+    end
+  end
+
+  defp install_playwright_browser(igniter, assets_dir) do
+    Mix.shell().info("Installing Playwright Chromium browser...")
+
+    case System.cmd("npx", ["playwright", "install", "chromium"],
+           cd: assets_dir,
+           into: IO.stream(:stdio, :line)
+         ) do
+      {_, 0} ->
+        Mix.shell().info("✔ Playwright Chromium browser installed")
+        igniter
+
+      {_, status} ->
+        Igniter.add_warning(
+          igniter,
+          "npx playwright install chromium exited with status #{status}. " <>
+            "Run `npx playwright install chromium` manually in #{assets_dir}."
+        )
     end
   end
 
   defp add_npm_notice(igniter, assets_dir) do
     Igniter.add_notice(
       igniter,
-      "Run `npm install` inside #{assets_dir} to install Pa11y dependencies."
+      "Run `npm install && npx playwright install chromium` inside #{assets_dir} to install axe-core dependencies."
     )
   end
 
@@ -414,7 +420,7 @@ defmodule Mix.Tasks.Excessibility.Install do
     - **Debugging LiveView test failures or state issues**
       → Use `/e11y-debug` skill for timeline analysis and state inspection
 
-    - **Fixing Pa11y or WCAG accessibility violations**
+    - **Fixing WCAG accessibility violations**
       → Use `/e11y-fix` skill for Phoenix-specific accessibility patterns
 
     **When these patterns match, using the skill is not optional** - it provides the workflow and tools to see actual rendered HTML and LiveView state, not just guesses.

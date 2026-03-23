@@ -14,14 +14,14 @@ defmodule Excessibility.MCP.Tools.SuggestFixesTest do
       schema = SuggestFixes.input_schema()
 
       assert schema["type"] == "object"
-      assert Map.has_key?(schema["properties"], "pa11y_output")
-      assert Map.has_key?(schema["properties"], "run_pa11y")
+      assert Map.has_key?(schema["properties"], "violations_output")
+      assert Map.has_key?(schema["properties"], "run_check")
     end
   end
 
   describe "execute/2 with JSON input" do
     test "parses JSON issue array" do
-      pa11y_output =
+      violations_output =
         Jason.encode!([
           %{
             "code" => "WCAG2AA.Principle1.Guideline1_1.1_1_1.H37",
@@ -31,7 +31,7 @@ defmodule Excessibility.MCP.Tools.SuggestFixesTest do
           }
         ])
 
-      {:ok, result} = SuggestFixes.execute(%{"pa11y_output" => pa11y_output}, [])
+      {:ok, result} = SuggestFixes.execute(%{"violations_output" => violations_output}, [])
 
       assert result["status"] == "success"
       assert result["issues_found"] == 1
@@ -43,7 +43,7 @@ defmodule Excessibility.MCP.Tools.SuggestFixesTest do
     end
 
     test "parses JSON with issues key" do
-      pa11y_output =
+      violations_output =
         Jason.encode!(%{
           "issues" => [
             %{
@@ -53,7 +53,7 @@ defmodule Excessibility.MCP.Tools.SuggestFixesTest do
           ]
         })
 
-      {:ok, result} = SuggestFixes.execute(%{"pa11y_output" => pa11y_output}, [])
+      {:ok, result} = SuggestFixes.execute(%{"violations_output" => violations_output}, [])
 
       assert result["issues_found"] == 1
       [suggestion] = result["suggestions"]
@@ -64,12 +64,12 @@ defmodule Excessibility.MCP.Tools.SuggestFixesTest do
 
   describe "execute/2 with text input" do
     test "parses text output with Error:" do
-      pa11y_output = """
+      violations_output = """
       Error: WCAG2AA.Principle1.Guideline1_1.1_1_1.H37 - Img element missing an alt attribute
       Warning: WCAG2AA.Principle1.Guideline1_3.1_3_1.H44 - Form input missing label
       """
 
-      {:ok, result} = SuggestFixes.execute(%{"pa11y_output" => pa11y_output}, [])
+      {:ok, result} = SuggestFixes.execute(%{"violations_output" => violations_output}, [])
 
       assert result["status"] == "success"
       assert result["issues_found"] == 2
@@ -78,9 +78,9 @@ defmodule Excessibility.MCP.Tools.SuggestFixesTest do
 
   describe "execute/2 fix suggestions" do
     test "suggests fix for H37 (alt text)" do
-      pa11y_output = Jason.encode!([%{"code" => "H37", "message" => "Missing alt"}])
+      violations_output = Jason.encode!([%{"code" => "H37", "message" => "Missing alt"}])
 
-      {:ok, result} = SuggestFixes.execute(%{"pa11y_output" => pa11y_output}, [])
+      {:ok, result} = SuggestFixes.execute(%{"violations_output" => violations_output}, [])
 
       [suggestion] = result["suggestions"]
       assert suggestion["suggestion"]["rule"] == "H37"
@@ -89,9 +89,9 @@ defmodule Excessibility.MCP.Tools.SuggestFixesTest do
     end
 
     test "suggests fix for H44 (form labels)" do
-      pa11y_output = Jason.encode!([%{"code" => "H44", "message" => "Missing label"}])
+      violations_output = Jason.encode!([%{"code" => "H44", "message" => "Missing label"}])
 
-      {:ok, result} = SuggestFixes.execute(%{"pa11y_output" => pa11y_output}, [])
+      {:ok, result} = SuggestFixes.execute(%{"violations_output" => violations_output}, [])
 
       [suggestion] = result["suggestions"]
       assert suggestion["suggestion"]["rule"] == "H44"
@@ -100,9 +100,9 @@ defmodule Excessibility.MCP.Tools.SuggestFixesTest do
     end
 
     test "suggests fix for H32 (submit buttons)" do
-      pa11y_output = Jason.encode!([%{"code" => "H32", "message" => "No submit button"}])
+      violations_output = Jason.encode!([%{"code" => "H32", "message" => "No submit button"}])
 
-      {:ok, result} = SuggestFixes.execute(%{"pa11y_output" => pa11y_output}, [])
+      {:ok, result} = SuggestFixes.execute(%{"violations_output" => violations_output}, [])
 
       [suggestion] = result["suggestions"]
       assert suggestion["suggestion"]["rule"] == "H32"
@@ -110,9 +110,9 @@ defmodule Excessibility.MCP.Tools.SuggestFixesTest do
     end
 
     test "suggests fix for H57 (language attribute)" do
-      pa11y_output = Jason.encode!([%{"code" => "H57", "message" => "Missing lang"}])
+      violations_output = Jason.encode!([%{"code" => "H57", "message" => "Missing lang"}])
 
-      {:ok, result} = SuggestFixes.execute(%{"pa11y_output" => pa11y_output}, [])
+      {:ok, result} = SuggestFixes.execute(%{"violations_output" => violations_output}, [])
 
       [suggestion] = result["suggestions"]
       assert suggestion["suggestion"]["rule"] == "H57"
@@ -120,9 +120,9 @@ defmodule Excessibility.MCP.Tools.SuggestFixesTest do
     end
 
     test "suggests fix for F65 (iframe titles)" do
-      pa11y_output = Jason.encode!([%{"code" => "F65", "message" => "iframe without title"}])
+      violations_output = Jason.encode!([%{"code" => "F65", "message" => "iframe without title"}])
 
-      {:ok, result} = SuggestFixes.execute(%{"pa11y_output" => pa11y_output}, [])
+      {:ok, result} = SuggestFixes.execute(%{"violations_output" => violations_output}, [])
 
       [suggestion] = result["suggestions"]
       assert suggestion["suggestion"]["rule"] == "F65"
@@ -130,10 +130,10 @@ defmodule Excessibility.MCP.Tools.SuggestFixesTest do
     end
 
     test "suggests fix for contrast issues" do
-      pa11y_output =
+      violations_output =
         Jason.encode!([%{"code" => "contrast", "message" => "Color contrast is insufficient"}])
 
-      {:ok, result} = SuggestFixes.execute(%{"pa11y_output" => pa11y_output}, [])
+      {:ok, result} = SuggestFixes.execute(%{"violations_output" => violations_output}, [])
 
       [suggestion] = result["suggestions"]
       assert suggestion["suggestion"]["rule"] == "Color Contrast"
@@ -141,9 +141,9 @@ defmodule Excessibility.MCP.Tools.SuggestFixesTest do
     end
 
     test "provides generic suggestion for unknown codes" do
-      pa11y_output = Jason.encode!([%{"code" => "UNKNOWN", "message" => "Some issue"}])
+      violations_output = Jason.encode!([%{"code" => "UNKNOWN", "message" => "Some issue"}])
 
-      {:ok, result} = SuggestFixes.execute(%{"pa11y_output" => pa11y_output}, [])
+      {:ok, result} = SuggestFixes.execute(%{"violations_output" => violations_output}, [])
 
       [suggestion] = result["suggestions"]
       assert suggestion["suggestion"]["phoenix_fix"] =~ "WCAG guidelines"
@@ -152,18 +152,29 @@ defmodule Excessibility.MCP.Tools.SuggestFixesTest do
 
   describe "execute/2 with empty input" do
     test "handles empty string" do
-      {:ok, result} = SuggestFixes.execute(%{"pa11y_output" => ""}, [])
+      {:ok, result} = SuggestFixes.execute(%{"violations_output" => ""}, [])
 
       assert result["status"] == "success"
       assert result["issues_found"] == 0
       assert result["suggestions"] == []
     end
 
-    test "handles missing pa11y_output" do
+    test "handles missing violations_output" do
       {:ok, result} = SuggestFixes.execute(%{}, [])
 
       assert result["status"] == "success"
       assert result["issues_found"] == 0
+    end
+  end
+
+  describe "execute/2 backwards compatibility" do
+    test "accepts pa11y_output key for backwards compatibility" do
+      violations_output = Jason.encode!([%{"code" => "H37", "message" => "Missing alt"}])
+
+      {:ok, result} = SuggestFixes.execute(%{"pa11y_output" => violations_output}, [])
+
+      assert result["status"] == "success"
+      assert result["issues_found"] == 1
     end
   end
 end

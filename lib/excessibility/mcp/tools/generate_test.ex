@@ -154,7 +154,7 @@ defmodule Excessibility.MCP.Tools.GenerateTest do
         test "page is accessible", %{conn: conn} do
           {:ok, view, _html} = live(conn, "#{route}")
 
-          # Capture snapshot for Pa11y accessibility check
+          # Capture snapshot for accessibility check
           html_snapshot(view)
 
           # Add your functional assertions here
@@ -177,7 +177,7 @@ defmodule Excessibility.MCP.Tools.GenerateTest do
         test "page is accessible", %{conn: conn} do
           conn = get(conn, "#{route}")
 
-          # Capture snapshot for Pa11y accessibility check
+          # Capture snapshot for accessibility check
           html_snapshot(conn)
 
           # Add your functional assertions here

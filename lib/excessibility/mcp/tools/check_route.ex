@@ -5,7 +5,7 @@ defmodule Excessibility.MCP.Tools.CheckRoute do
   This tool can check a running Phoenix app's routes directly by:
   1. Checking if the app is running on the configured port
   2. Rendering the route and capturing HTML
-  3. Running Pa11y on the captured HTML
+  3. Running axe-core on the captured HTML
   """
 
   @behaviour Excessibility.MCP.Tool
@@ -105,15 +105,13 @@ defmodule Excessibility.MCP.Tools.CheckRoute do
   end
 
   defp run_check(url, wait_for, timeout, progress_callback) do
-    if progress_callback, do: progress_callback.("Running Pa11y...", 20)
+    if progress_callback, do: progress_callback.("Running accessibility check...", 20)
 
-    pa11y_args = build_pa11y_args(url, wait_for, timeout)
-
-    case run_pa11y(pa11y_args, timeout) do
+    case run_axe_check(url, timeout) do
       {:ok, output} ->
         if progress_callback, do: progress_callback.("Parsing results...", 80)
 
-        violations = parse_pa11y_output(output)
+        violations = parse_axe_output(output)
         summary = build_summary(violations)
 
         if progress_callback, do: progress_callback.("Complete", 100)
@@ -130,51 +128,33 @@ defmodule Excessibility.MCP.Tools.CheckRoute do
     end
   end
 
-  defp build_pa11y_args(url, wait_for, timeout) do
-    base_args = ["--reporter", "json", "--timeout", to_string(timeout)]
+  defp run_axe_check(url, timeout) do
+    axe_runner_path = find_axe_runner()
 
-    args =
-      if wait_for do
-        base_args ++ ["--wait-for-selector", wait_for]
-      else
-        base_args
-      end
+    if axe_runner_path do
+      {output, _exit_code} =
+        Subprocess.run("node", [axe_runner_path, url], timeout: timeout, stderr_to_stdout: true)
 
-    args ++ [url]
+      {:ok, output}
+    else
+      {:error, "axe-runner.js not found. Run: mix excessibility.install"}
+    end
   end
 
-  defp find_pa11y do
-    configured = Application.get_env(:excessibility, :pa11y_path)
+  defp find_axe_runner do
+    configured = Application.get_env(:excessibility, :axe_runner_path)
 
     if configured && File.exists?(configured) do
       configured
     else
-      # Always use system pa11y for MCP since we run from a different directory
-      System.find_executable("pa11y") || System.find_executable("npx")
+      # Look in the dep's assets directory
+      dep_path = Mix.Project.deps_paths()[:excessibility] || File.cwd!()
+      runner = Path.join([dep_path, "assets", "axe-runner.js"])
+      if File.exists?(runner), do: runner
     end
   end
 
-  defp run_pa11y(args, timeout) do
-    case find_pa11y() do
-      nil ->
-        {:error, "Pa11y not found. Install with: npm install -g pa11y"}
-
-      pa11y_path ->
-        {cmd, cmd_args} = build_pa11y_command(pa11y_path, args)
-        {output, _exit_code} = Subprocess.run(cmd, cmd_args, timeout: timeout, stderr_to_stdout: true)
-        {:ok, output}
-    end
-  end
-
-  defp build_pa11y_command(pa11y_path, args) do
-    if String.ends_with?(pa11y_path, "npx") do
-      {pa11y_path, ["pa11y" | args]}
-    else
-      {pa11y_path, args}
-    end
-  end
-
-  defp parse_pa11y_output(output) when is_binary(output) do
+  defp parse_axe_output(output) when is_binary(output) do
     case Jason.decode(output) do
       {:ok, data} when is_list(data) ->
         Enum.map(data, &parse_issue/1)

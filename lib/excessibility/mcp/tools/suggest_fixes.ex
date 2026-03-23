@@ -1,6 +1,6 @@
 defmodule Excessibility.MCP.Tools.SuggestFixes do
   @moduledoc """
-  MCP tool for parsing Pa11y output and suggesting Phoenix-specific fixes.
+  MCP tool for parsing accessibility violation output and suggesting Phoenix-specific fixes.
   """
 
   @behaviour Excessibility.MCP.Tool
@@ -12,8 +12,8 @@ defmodule Excessibility.MCP.Tools.SuggestFixes do
 
   @impl true
   def description do
-    "Suggest Phoenix/LiveView fixes for a11y violations. FAST with pa11y_output provided. " <>
-      "SLOW if run_pa11y=true. Pass timeout: 300000 when running Pa11y."
+    "Suggest Phoenix/LiveView fixes for a11y violations. FAST with violations_output provided. " <>
+      "SLOW if run_check=true. Pass timeout: 300000 when running checks."
   end
 
   @impl true
@@ -23,15 +23,23 @@ defmodule Excessibility.MCP.Tools.SuggestFixes do
       "properties" => %{
         "pa11y_output" => %{
           "type" => "string",
-          "description" => "Raw Pa11y output or JSON results to parse"
+          "description" => "Raw violation output or JSON results to parse (also accepts 'violations_output')"
+        },
+        "violations_output" => %{
+          "type" => "string",
+          "description" => "Raw violation output or JSON results to parse"
         },
         "run_pa11y" => %{
           "type" => "boolean",
-          "description" => "Run Pa11y first and analyze the results (default: false)"
+          "description" => "Run accessibility check first and analyze the results (default: false). Also accepts 'run_check'."
+        },
+        "run_check" => %{
+          "type" => "boolean",
+          "description" => "Run accessibility check first and analyze the results (default: false)"
         },
         "timeout" => %{
           "type" => "integer",
-          "description" => "REQUIRED when run_pa11y=true: 300000 (5 min). Prevents indefinite hangs."
+          "description" => "REQUIRED when run_check=true: 300000 (5 min). Prevents indefinite hangs."
         }
       }
     }
@@ -40,12 +48,12 @@ defmodule Excessibility.MCP.Tools.SuggestFixes do
   @impl true
   def execute(args, opts) do
     progress_callback = Keyword.get(opts, :progress_callback)
-    run_pa11y? = Map.get(args, "run_pa11y", false)
+    run_check? = Map.get(args, "run_check", Map.get(args, "run_pa11y", false))
     timeout = Map.get(args, "timeout")
 
-    pa11y_output =
-      if run_pa11y? do
-        if progress_callback, do: progress_callback.("Running Pa11y...", 0)
+    violations_output =
+      if run_check? do
+        if progress_callback, do: progress_callback.("Running accessibility check...", 0)
 
         subprocess_opts = [stderr_to_stdout: true]
         subprocess_opts = if timeout, do: [{:timeout, timeout} | subprocess_opts], else: subprocess_opts
@@ -53,12 +61,12 @@ defmodule Excessibility.MCP.Tools.SuggestFixes do
         {output, _exit_code} = Subprocess.run("mix", ["excessibility"], subprocess_opts)
         output
       else
-        Map.get(args, "pa11y_output", "")
+        Map.get(args, "violations_output", Map.get(args, "pa11y_output", ""))
       end
 
     if progress_callback, do: progress_callback.("Parsing issues...", 50)
 
-    issues = parse_pa11y_output(pa11y_output)
+    issues = parse_violations_output(violations_output)
     suggestions = Enum.map(issues, &suggest_fix/1)
 
     if progress_callback, do: progress_callback.("Complete", 100)
@@ -75,7 +83,7 @@ defmodule Excessibility.MCP.Tools.SuggestFixes do
   # Parsing
   # ============================================================================
 
-  defp parse_pa11y_output(output) when is_binary(output) do
+  defp parse_violations_output(output) when is_binary(output) do
     case Jason.decode(output) do
       {:ok, data} when is_list(data) ->
         Enum.map(data, &parse_json_issue/1)
@@ -247,10 +255,8 @@ defmodule Excessibility.MCP.Tools.SuggestFixes do
         <button type="submit">Save</button>
       </form>
 
-      <!-- If Pa11y still flags this, add to pa11y.json ignore list:
-      {
-        "ignore": ["WCAG2AA.Principle1.Guideline1_3.1_3_1.H32.2"]
-      }
+      <!-- If axe-core still flags this, add to :axe_disable_rules config:
+      config :excessibility, axe_disable_rules: ["form-submit"]
       -->
       """,
       "wcag" => "WCAG 2.1 Level A - 1.3.1 Info and Relationships"
