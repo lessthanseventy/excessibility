@@ -30,6 +30,10 @@ defprotocol Excessibility.Source do
   def to_html(source)
 end
 
+defimpl Excessibility.Source, for: BitString do
+  def to_html(html), do: html
+end
+
 defimpl Excessibility.Source, for: Plug.Conn do
   def to_html(conn), do: Phoenix.ConnTest.html_response(conn, 200)
 end

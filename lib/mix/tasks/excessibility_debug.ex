@@ -142,6 +142,8 @@ defmodule Mix.Tasks.Excessibility.Debug do
       _ ->
         output_markdown(report_data)
     end
+
+    if exit_code != 0, do: exit({:shutdown, exit_code})
   end
 
   defp build_filter_opts(opts) do
@@ -183,10 +185,9 @@ defmodule Mix.Tasks.Excessibility.Debug do
     # Run the test with all args passed through
     Mix.shell().info("Running: mix test #{Enum.join(test_args, " ")}\n")
 
-    result =
+    {output, exit_code} =
       System.cmd("mix", ["test" | test_args],
         stderr_to_stdout: true,
-        into: IO.stream(:stdio, :line),
         env: [
           {"MIX_ENV", "test"},
           {"EXCESSIBILITY_TELEMETRY_CAPTURE", "true"},
@@ -194,7 +195,10 @@ defmodule Mix.Tasks.Excessibility.Debug do
         ]
       )
 
-    result
+    # Print output to console as it was before, but now we also have the string
+    Mix.shell().info(output)
+
+    {output, exit_code}
   end
 
   defp gather_snapshots do
