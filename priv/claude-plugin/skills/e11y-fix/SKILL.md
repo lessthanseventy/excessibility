@@ -1,15 +1,15 @@
 ---
 name: e11y-fix
-description: Reference guide for fixing Pa11y/WCAG errors in Phoenix LiveView - maps common violations to Phoenix-specific fixes
+description: Reference guide for fixing axe-core/WCAG errors in Phoenix LiveView - maps common violations to Phoenix-specific fixes
 ---
 
-# Excessibility Fix - Pa11y Error Reference
+# Excessibility Fix - axe-core Error Reference
 
-Quick reference for fixing Pa11y/WCAG errors in Phoenix LiveView applications.
+Quick reference for fixing axe-core/WCAG errors in Phoenix LiveView applications.
 
 ## Debugging Workflow
 
-1. Run `mix excessibility` to see Pa11y errors
+1. Run `mix excessibility` to see axe-core errors
 2. Use `html_snapshot(view)` to capture the problematic state
 3. Read snapshot file to see exact HTML
 4. Apply fix from reference below
@@ -17,7 +17,7 @@ Quick reference for fixing Pa11y/WCAG errors in Phoenix LiveView applications.
 
 ## Quick Reference
 
-| Pa11y Error | WCAG Rule | Phoenix Fix |
+| axe-core Error | WCAG Rule | Phoenix Fix |
 |-------------|-----------|-------------|
 | Form input without label | 1.3.1 | Add `<.label>` or `aria-label` |
 | Missing alt text | 1.1.1 | Add `alt` attribute to `<img>` |
@@ -52,10 +52,10 @@ Quick reference for fixing Pa11y/WCAG errors in Phoenix LiveView applications.
 
 #### Form without submit button
 
-**Note:** LiveView forms using `phx-submit` often don't need a visible submit button. Pa11y may flag this. You can:
+**Note:** LiveView forms using `phx-submit` often don't need a visible submit button. axe-core may flag this. You can:
 
 1. Add a submit button (even if styled invisibly)
-2. Configure pa11y.json to ignore this rule for specific forms
+2. Configure axe-core rules to ignore this rule for specific forms
 3. Use `aria-label` on the form to explain the interaction
 
 ```heex
@@ -307,20 +307,14 @@ Default Phoenix flashes are accessible. Don't break them:
 <.flash_group flash={@flash} />
 ```
 
-## pa11y.json Configuration
+## axe-core Configuration
 
-For legitimate false positives, configure `pa11y.json`:
+axe-core violations include structured data with `id`, `impact`, `description`, `helpUrl`, and `nodes`. Each node contains the failing HTML element and fix suggestions.
 
-```json
-{
-  "defaults": {
-    "standard": "WCAG2AA",
-    "runners": ["htmlcs"],
-    "ignore": [
-      "WCAG2AA.Principle1.Guideline1_3.1_3_1.H44.NotFormControl"
-    ]
-  }
-}
+For legitimate false positives, you can configure axe-core rule disabling in your test setup or via the `--disable-rules` flag:
+
+```bash
+mix excessibility --disable-rules=color-contrast,form-field-multiple-labels
 ```
 
 Common ignore patterns for LiveView:
@@ -332,7 +326,7 @@ Common ignore patterns for LiveView:
 After fixing:
 
 ```bash
-# Run Pa11y on all snapshots
+# Run axe-core on all snapshots
 mix excessibility
 
 # Check specific test

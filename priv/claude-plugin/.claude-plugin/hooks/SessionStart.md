@@ -9,7 +9,7 @@ When working with Phoenix LiveView in this project, you have access to specializ
 1. **Implementing Phoenix LiveView features** (forms, modals, dynamic content)
    → Use `/e11y-tdd` skill
    - Guides TDD with `html_snapshot()` for state inspection
-   - Integrates Pa11y accessibility checks
+   - Integrates axe-core accessibility checks
    - Shows you exactly what's rendered at each step
 
 2. **Debugging LiveView test failures or state issues**
@@ -18,10 +18,10 @@ When working with Phoenix LiveView in this project, you have access to specializ
    - Correlates state changes with behavior
    - Uses MCP tools to inspect snapshots and timeline
 
-3. **Fixing Pa11y or WCAG accessibility violations**
+3. **Fixing axe-core or WCAG accessibility violations**
    → Use `/e11y-fix` skill
    - Reference guide for common Phoenix/LiveView a11y patterns
-   - Maps Pa11y errors to specific fixes
+   - Maps axe-core violations to specific fixes
 
 ## Detection Rules
 
@@ -30,16 +30,17 @@ When working with Phoenix LiveView in this project, you have access to specializ
 - Debugging test failures in LiveView tests
 - Understanding what HTML is being rendered
 - Fixing accessibility violations
-- Pa11y errors or WCAG compliance
+- axe-core errors or WCAG compliance
 
 **The skills are not optional when these patterns match** - they provide specialized workflows that prevent common mistakes and give you visibility into actual rendered HTML and LiveView state.
 
 ## MCP Tools Available
 
 You also have MCP tools for direct access:
-- `e11y_check` - Run Pa11y on existing snapshots
-- `e11y_debug` - Run tests with telemetry capture
+- `a11y_check` - Run axe-core on snapshots or URLs
+- `debug` - Run tests with telemetry capture
 - `get_timeline` - Read state evolution timeline
 - `get_snapshots` - List/read HTML snapshots
+- `generate_test` - Generate test code with html_snapshot() calls
 
 Use skills for guided workflows, MCP tools for direct inspection.

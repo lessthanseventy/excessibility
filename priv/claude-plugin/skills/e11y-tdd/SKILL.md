@@ -1,6 +1,6 @@
 ---
 name: e11y-tdd
-description: Use when implementing Phoenix LiveView features - TDD with html_snapshot for state inspection and Pa11y for accessibility. Sprinkle snapshots to see what's rendered, delete when done.
+description: Use when implementing Phoenix LiveView features - TDD with html_snapshot for state inspection and axe-core for accessibility. Sprinkle snapshots to see what's rendered, delete when done.
 ---
 
 # Excessibility TDD - Build with Inspection
@@ -10,7 +10,7 @@ Build Phoenix LiveView features with full visibility into rendered HTML and stat
 ## Core Powers
 
 - **`html_snapshot(view)`** - Capture HTML at any point (sprinkle liberally while building)
-- **Pa11y checks** - Ensure accessibility (WCAG compliance)
+- **axe-core checks** - Ensure accessibility (WCAG compliance)
 - **Timeline analysis** - See state evolution across events
 
 ## The e11y-TDD Cycle
@@ -19,7 +19,7 @@ Build Phoenix LiveView features with full visibility into rendered HTML and stat
 1. EXPLORE   - Add html_snapshot(view) calls to see what's rendered
 2. RED       - Write test with snapshot at key moment
 3. GREEN     - Implement feature, use snapshots to debug
-4. CHECK     - Run `mix excessibility` for Pa11y/a11y validation
+4. CHECK     - Run `mix excessibility` for axe-core/a11y validation
 5. CLEAN     - Remove temporary snapshots, keep essential ones
 ```
 
@@ -48,14 +48,14 @@ end
 
 ### Permanent Snapshots (for regression testing)
 
-Keep these - Pa11y will check them on every run.
+Keep these - axe-core will check them on every run.
 
 ```elixir
 test "feature works and is accessible" do
   {:ok, view, _html} = live(conn, "/page")
   view |> element("button") |> render_click()
 
-  # Keep this - Pa11y will check it on every run
+  # Keep this - axe-core will check it on every run
   html_snapshot(view)
 end
 ```
@@ -64,7 +64,7 @@ end
 
 - **Building any LiveView feature** - snapshots show you what's rendered
 - **Debugging state issues** - sprinkle snapshots, inspect, delete
-- **Accessibility compliance** - Pa11y catches WCAG violations
+- **Accessibility compliance** - axe-core catches WCAG violations
 - **Form implementations** - see validation errors, field states
 - **Modals/dialogs** - verify focus management, aria attributes
 - **Dynamic content** - check aria-live regions render correctly
@@ -109,7 +109,7 @@ test "form shows validation errors accessibly" do
   # Submit empty form
   view |> form("#register-form") |> render_submit(%{})
 
-  # Snapshot captures error state - Pa11y will check:
+  # Snapshot captures error state - axe-core will check:
   # - Error messages are associated with inputs (aria-describedby)
   # - Required fields are marked (aria-required)
   # - Invalid fields have aria-invalid
@@ -126,7 +126,7 @@ test "modal is accessible" do
   # Open modal
   view |> element("#open-modal") |> render_click()
 
-  # Snapshot captures modal state - Pa11y will check:
+  # Snapshot captures modal state - axe-core will check:
   # - role="dialog" or aria-modal
   # - aria-labelledby for title
   # - Focus trapped inside modal
@@ -143,7 +143,7 @@ test "loading state is accessible" do
   # Trigger async load
   view |> element("#refresh") |> render_click()
 
-  # Snapshot during loading - Pa11y will check:
+  # Snapshot during loading - axe-core will check:
   # - aria-busy on loading container
   # - Loading indicator has appropriate role
   html_snapshot(view)
@@ -163,7 +163,7 @@ end
    mix excessibility.debug test/my_test.exs
    ```
 
-3. **Pa11y error unclear?** Check the snapshot HTML directly:
+3. **axe-core error unclear?** Check the snapshot HTML directly:
    ```bash
    open test/excessibility/html_snapshots/MyModule_42.html
    ```
@@ -178,5 +178,5 @@ end
 
 This skill works well with:
 - **test-driven-development** - TDD discipline for implementation
-- **systematic-debugging** - When Pa11y errors are unclear
-- **verification-before-completion** - Verify Pa11y passes before claiming done
+- **systematic-debugging** - When axe-core errors are unclear
+- **verification-before-completion** - Verify axe-core passes before claiming done

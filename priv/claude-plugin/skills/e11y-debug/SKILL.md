@@ -127,7 +127,7 @@ mix excessibility.debug test/my_test.exs --highlight=user,cart,items
 
 ## Accessibility Debugging
 
-For Pa11y/WCAG issues specifically:
+For axe-core/WCAG issues specifically:
 
 ```bash
 mix excessibility.debug test/file.exs --analyze=accessibility_correlation
