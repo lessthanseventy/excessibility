@@ -12,27 +12,45 @@ defmodule Excessibility.AxeRunner do
   @doc """
   Runs axe-core against the given URL.
 
+  If Playwright fails (timeout, WAF block, protocol error), automatically
+  falls back to fetching the HTML via curl and scanning it as a local file.
+  The fallback won't execute JavaScript, so SPA content may be missing,
+  but server-rendered pages get full results.
+
   ## Options
 
     * `:screenshot` - Path to save a PNG screenshot
     * `:wait_for` - CSS selector to wait for before running axe
     * `:disable_rules` - List of axe rule IDs to disable
-    * `:timeout` - Timeout in ms (default: 30_000)
+    * `:fallback` - Fall back to curl if Playwright fails (default: `true`)
 
   Returns `{:ok, result}` where result has `:violations`, `:passes`, `:incomplete` keys,
-  or `{:error, reason}`.
+  or `{:error, reason}`. When curl fallback is used, result also has `:fallback` key.
   """
   def run(url, opts \\ []) do
     runner_path = axe_runner_path()
 
     if File.exists?(runner_path) do
-      run_axe(runner_path, url, opts)
+      case run_playwright(runner_path, url, opts) do
+        {:ok, result} ->
+          {:ok, result}
+
+        {:error, reason} = error ->
+          fallback? = Keyword.get(opts, :fallback, true)
+          remote_url? = String.starts_with?(url, "http")
+
+          if fallback? and remote_url? do
+            run_curl_fallback(runner_path, url, opts, reason)
+          else
+            error
+          end
+      end
     else
       {:error, "axe-runner.js not found at #{runner_path}. Run `mix excessibility.install` first."}
     end
   end
 
-  defp run_axe(runner_path, url, opts) do
+  defp run_playwright(runner_path, url, opts) do
     args = build_args(url, opts)
 
     case System.cmd("node", [runner_path | args],
@@ -44,6 +62,51 @@ defmodule Excessibility.AxeRunner do
 
       {_output, _code} ->
         {:error, "axe-core check failed for #{url}"}
+    end
+  end
+
+  defp run_curl_fallback(runner_path, url, opts, original_error) do
+    tmp_path = Path.join(System.tmp_dir!(), "axe_fallback_#{System.unique_integer([:positive])}.html")
+
+    curl_args = [
+      "-sL",
+      "--max-time", "15",
+      "-H", "User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+      "-H", "Accept: text/html,application/xhtml+xml",
+      "-o", tmp_path,
+      "-w", "%{http_code}",
+      url
+    ]
+
+    case System.cmd("curl", curl_args, stderr_to_stdout: false) do
+      {status_code, 0} ->
+        code = String.trim(status_code)
+
+        if code in ["200", "301", "302"] and File.exists?(tmp_path) do
+          file_url = "file://" <> tmp_path
+          # Don't fallback again, no screenshots for curl-fetched pages
+          fallback_opts = Keyword.drop(opts, [:screenshot, :fallback])
+
+          result = run_playwright(runner_path, file_url, fallback_opts)
+
+          File.rm(tmp_path)
+
+          case result do
+            {:ok, data} ->
+              {:ok, Map.put(data, :fallback, %{method: :curl, original_error: original_error})}
+
+            _ ->
+              File.rm(tmp_path)
+              {:error, "Playwright failed (#{original_error}), curl fallback also failed"}
+          end
+        else
+          File.rm(tmp_path)
+          {:error, "Playwright failed (#{original_error}), curl got HTTP #{code}"}
+        end
+
+      _ ->
+        File.rm(tmp_path)
+        {:error, "Playwright failed (#{original_error}), curl also failed"}
     end
   end
 
