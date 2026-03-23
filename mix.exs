@@ -46,7 +46,7 @@ defmodule Excessibility.MixProject do
 
   defp description do
     """
-    Library to aid in testing your application for WCAG compliance automatically using axe-core and Wallaby.
+    Library for accessibility snapshot testing in Phoenix applications using axe-core and Playwright.
     """
   end
 

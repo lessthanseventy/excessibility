@@ -8,30 +8,30 @@
 
 **Accessibility Snapshot Testing for Elixir + Phoenix**
 
-Excessibility helps you test your Phoenix apps for accessibility (WCAG compliance) by taking HTML snapshots during tests and running them through [Pa11y](https://pa11y.org/).
+Excessibility helps you test your Phoenix apps for accessibility (WCAG compliance) by taking HTML snapshots during tests and running them through [axe-core](https://github.com/dequelabs/axe-core) via [Playwright](https://playwright.dev/).
 
 ## Why Excessibility?
 
 - **Keep accessibility in your existing test feedback loop.** Snapshots are captured inside ExUnit, Wallaby, and LiveView tests, so regressions surface together with your functional failures.
 - **Ship safer refactors.** Explicit baseline locking and comparison lets reviewers see exactly what changed and approve intentionally.
-- **Debug CI-only failures quickly.** Pa11y output points to the failing snapshot, and the saved artifacts make it easy to reproduce locally.
+- **Debug CI-only failures quickly.** axe-core output points to the failing snapshot, and the saved artifacts make it easy to reproduce locally.
 
 ## How It Works
 
 1. **During tests**, call `html_snapshot(conn)` to capture HTML from your Phoenix responses, LiveViews, or Wallaby sessions
-2. **After tests**, run `mix excessibility` to check all snapshots with Pa11y for WCAG violations
+2. **After tests**, run `mix excessibility` to check all snapshots with axe-core for WCAG violations
 3. **Lock baselines** with `mix excessibility.baseline` when snapshots represent a known-good state
 4. **Compare changes** with `mix excessibility.compare` to review what changed and approve/reject
-5. **In CI**, Pa11y reports accessibility violations alongside your test failures
+5. **In CI**, axe-core reports accessibility violations alongside your test failures
 
 ## Features
 
 - Snapshot HTML from `Plug.Conn`, `Wallaby.Session`, `Phoenix.LiveViewTest.View`, and `Phoenix.LiveViewTest.Element`
 - Explicit baseline locking and comparison workflow
 - Interactive good/bad approval when comparing snapshots
-- Optional PNG screenshots via ChromicPDF
+- Screenshots via Playwright
 - Mockable system/browser calls for CI
-- Pa11y configuration with sensible LiveView defaults
+- axe-core accessibility checking with sensible LiveView defaults
 
 ## LLM Development Features
 
@@ -192,25 +192,19 @@ The MCP server provides tools for AI assistants to run accessibility checks and 
 
 | Tool | Speed | Description |
 |------|-------|-------------|
-| `check_route` | Fast | Run Pa11y on a live route (requires app running) |
-| `explain_issue` | Fast | Get explanation and fix suggestions for a WCAG violation code |
-| `suggest_fixes` | Fast | Get Phoenix-specific code fixes for accessibility issues |
-| `generate_test` | Fast | Generate test code with `html_snapshot()` calls for a route |
-| `list_analyzers` | Fast | List available timeline analyzers |
-| `get_timeline` | Fast | Read captured timeline showing LiveView state evolution |
+| `a11y_check` | Slow | Run axe-core accessibility checks on snapshots or URLs |
+| `debug` | Slow | Run tests with telemetry capture - returns timeline for analysis |
 | `get_snapshots` | Fast | List or read HTML snapshots captured during tests |
-| `analyze_timeline` | Fast | Run analyzers on captured timeline data |
-| `list_violations` | Fast | List recent Pa11y violations from snapshots |
-| `e11y_check` | Slow | Run tests and/or Pa11y accessibility checks on HTML snapshots |
-| `e11y_debug` | Slow | Run tests with telemetry capture - returns timeline for analysis |
+| `get_timeline` | Fast | Read captured timeline showing LiveView state evolution |
+| `generate_test` | Fast | Generate test code with `html_snapshot()` calls for a route |
 
 **Recommended workflow:**
 
-1. `check_route` - Quick accessibility check on running app
-2. `explain_issue` - Understand what violations mean
-3. `generate_test` - Create test with `html_snapshot()` calls
-4. `e11y_debug` - Run test to capture timeline
-5. `analyze_timeline` - Find performance issues
+1. `a11y_check` - Run axe-core accessibility check on snapshots or live URL
+2. `generate_test` - Create test with `html_snapshot()` calls
+3. `debug` - Run test to capture timeline
+4. `get_timeline` - Inspect LiveView state evolution
+5. `get_snapshots` - Read captured HTML snapshots
 
 **Automatic Setup:**
 
@@ -253,9 +247,9 @@ claude plugins add /path/to/excessibility/priv/claude-plugin
 
 | Skill | Description |
 |-------|-------------|
-| `/e11y-tdd` | TDD workflow with html_snapshot and Pa11y - sprinkle snapshots to see what's rendered, delete when done |
-| `/e11y-debug` | Debug workflow with timeline analysis - inspect state at each event, correlate with Pa11y failures |
-| `/e11y-fix` | Reference guide for fixing Pa11y/WCAG errors with Phoenix-specific patterns |
+| `/e11y-tdd` | TDD workflow with html_snapshot and axe-core - sprinkle snapshots to see what's rendered, delete when done |
+| `/e11y-debug` | Debug workflow with timeline analysis - inspect state at each event, correlate with axe-core failures |
+| `/e11y-fix` | Reference guide for fixing axe-core/WCAG errors with Phoenix-specific patterns |
 
 **Example workflow:**
 
@@ -266,7 +260,7 @@ claude plugins add /path/to/excessibility/priv/claude-plugin
 # 1. EXPLORE - Add html_snapshot() calls to see what's rendered
 # 2. RED - Write test with snapshot at key moment
 # 3. GREEN - Implement feature, use snapshots to debug
-# 4. CHECK - Run mix excessibility for Pa11y validation
+# 4. CHECK - Run mix excessibility for axe-core validation
 # 5. CLEAN - Remove temporary snapshots
 ```
 
@@ -297,8 +291,7 @@ mix excessibility.install --head-render-path /login
 
 The installer will:
 - Add configuration to `config/test.exs`
-- Create a `pa11y.json` with sensible defaults for Phoenix/LiveView
-- Install Pa11y via npm in your assets directory
+- Install Playwright and axe-core via npm in your assets directory
 
 ## Quick Start
 
@@ -331,14 +324,14 @@ The installer will:
 3. **Typical workflow:**
 
     ```bash
-    # Run specific test + Pa11y in one command
+    # Run specific test + axe-core in one command
     mix excessibility test/my_test.exs
     mix excessibility test/my_test.exs:42
     mix excessibility --only a11y
 
     # Or run tests separately, then check all snapshots
     mix test                    # Generates snapshots in test/excessibility/
-    mix excessibility           # Runs Pa11y against all snapshots
+    mix excessibility           # Runs axe-core against all snapshots
 
     # Lock current snapshots as known-good baseline
     mix excessibility.baseline
@@ -372,7 +365,7 @@ It returns the source unchanged, so you can use it in pipelines.
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `:name` | `string` | auto-generated | Custom filename (e.g., `"login_form.html"`). Default is `ModuleName_LineNumber.html` |
-| `:screenshot?` | `boolean` | `false` | Generate PNG screenshots (requires ChromicPDF) |
+| `:screenshot?` | `boolean` | `false` | Generate PNG screenshots (via Playwright) |
 | `:open_browser?` | `boolean` | `false` | Open the snapshot in your browser after writing |
 | `:cleanup?` | `boolean` | `false` | Delete existing snapshots for the current test module before writing |
 
@@ -419,8 +412,7 @@ All configuration goes in `test/test_helper.exs` or `config/test.exs`:
 | `:browser_mod` | No | `Wallaby.Browser` | Module for browser interactions |
 | `:live_view_mod` | No | `Excessibility.LiveView` | Module for LiveView rendering |
 | `:excessibility_output_path` | No | `"test/excessibility"` | Base directory for snapshots |
-| `:pa11y_path` | No | auto-detected | Path to Pa11y executable |
-| `:pa11y_config` | No | `"pa11y.json"` | Path to Pa11y config file |
+| `:axe_runner_path` | No | auto-detected | Path to axe-runner.js script |
 | `:head_render_path` | No | `"/"` | Route used for rendering `<head>` content |
 | `:custom_enrichers` | No | `[]` | List of custom enricher modules (see [Telemetry Analysis](docs/telemetry-analysis.md)) |
 | `:custom_analyzers` | No | `[]` | List of custom analyzer modules (see [Telemetry Analysis](docs/telemetry-analysis.md)) |
@@ -438,57 +430,41 @@ Application.put_env(:excessibility, :excessibility_output_path, "test/accessibil
 ExUnit.start()
 ```
 
-## Pa11y Configuration
+## axe-core Configuration
 
-The installer creates a `pa11y.json` in your project root with sensible defaults for Phoenix/LiveView:
+axe-core runs via Playwright and reports violations with structured data including `id`, `impact` (critical, serious, moderate, minor), `description`, `helpUrl`, and affected `nodes`.
 
-```json
-{
-  "ignore": [
-    "WCAG2AA.Principle3.Guideline3_2.3_2_2.H32.2"
-  ]
-}
+You can disable specific rules via the `--disable-rules` flag:
+
+```bash
+mix excessibility --disable-rules=color-contrast
 ```
 
-The ignored rule (H32.2) is "Form does not contain a submit button" — a common false positive for LiveView forms that use `phx-submit` without traditional submit buttons.
+Or check a specific URL directly:
 
-Add additional rules to ignore as needed for your project:
-
-```json
-{
-  "ignore": [
-    "WCAG2AA.Principle3.Guideline3_2.3_2_2.H32.2",
-    "WCAG2AA.Principle1.Guideline1_4.1_4_3.G18.Fail"
-  ]
-}
+```bash
+mix excessibility.check http://localhost:4000/my-page
 ```
 
 ## Screenshots
 
-To enable PNG screenshots, start ChromicPDF in your test helper:
-
-```elixir
-# test/test_helper.exs
-{:ok, _} = ChromicPDF.start_link(name: ChromicPDF)
-
-ExUnit.start()
-```
-
-Then use `screenshot?: true` in your snapshots:
+Screenshots are captured via Playwright when using `screenshot?: true`:
 
 ```elixir
 html_snapshot(conn, screenshot?: true)
 ```
 
-Screenshots are saved alongside HTML files with `.png` extension.
+Screenshots are saved alongside HTML files with `.png` extension. Playwright is installed automatically as part of the npm dependencies.
 
 ## Mix Tasks
 
 | Task | Description |
 |------|-------------|
-| `mix excessibility.install` | Configure config/test.exs, create pa11y.json, install Pa11y via npm |
-| `mix excessibility` | Run Pa11y against all existing snapshots |
-| `mix excessibility [test args]` | Run tests, then Pa11y on new snapshots (passthrough to mix test) |
+| `mix excessibility.install` | Configure config/test.exs, install Playwright and axe-core via npm |
+| `mix excessibility` | Run axe-core against all existing snapshots |
+| `mix excessibility [test args]` | Run tests, then axe-core on new snapshots (passthrough to mix test) |
+| `mix excessibility.check [url]` | Run axe-core on a live URL via Playwright |
+| `mix excessibility.snapshots` | List and manage HTML snapshots |
 | `mix excessibility.baseline` | Lock current snapshots as baseline |
 | `mix excessibility.compare` | Compare snapshots against baseline, resolve diffs interactively |
 | `mix excessibility.compare --keep good` | Keep all baseline versions (reject changes) |
