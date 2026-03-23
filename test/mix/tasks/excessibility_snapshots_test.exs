@@ -61,7 +61,7 @@ defmodule Mix.Tasks.Excessibility.SnapshotsTest do
         Mix.Tasks.Excessibility.Snapshots.run(["--clean"])
       end)
 
-      assert Path.join(@snapshot_dir, "*.html") |> Path.wildcard() == []
+      assert @snapshot_dir |> Path.join("*.html") |> Path.wildcard() == []
     end
 
     test "reports when no snapshots to clean" do

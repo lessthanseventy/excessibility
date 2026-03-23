@@ -12,7 +12,6 @@ Code.require_file("test/support/test_endpoint.ex", File.cwd!())
 
 ExUnit.start()
 
-
 Mox.defmock(Excessibility.LiveViewMock, for: Excessibility.LiveView.Behaviour)
 Mox.defmock(Excessibility.BrowserMock, for: Excessibility.BrowserBehaviour)
 Mox.defmock(Excessibility.SystemMock, for: Excessibility.SystemBehaviour)

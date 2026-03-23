@@ -49,6 +49,7 @@ defmodule Excessibility.Snapshot do
 
   - `:name` - Custom filename (default: `ModuleName_LineNumber.html`)
 
+  - `:screenshot?` - Generate PNG screenshot via Playwright (default: `false`)
   - `:open_browser?` - Open snapshot in browser after writing (default: `false`)
   - `:cleanup?` - Delete existing snapshots for this module first (default: `false`)
 
@@ -161,9 +162,19 @@ defmodule Excessibility.Snapshot do
     comment <> "\n" <> html
   end
 
-  defp write_snapshot(html, path, _opts) do
+  defp write_snapshot(html, path, opts) do
     File.write!(path, html)
     Logger.info("Snapshot written to #{path}")
+
+    if Keyword.get(opts, :screenshot?, false) do
+      screenshot_path = String.replace(path, ".html", ".png")
+      file_url = "file://" <> Path.expand(path)
+
+      case Excessibility.AxeRunner.run(file_url, screenshot: screenshot_path) do
+        {:ok, _} -> Logger.info("Wrote screenshot: #{screenshot_path}")
+        {:error, reason} -> Logger.error("Screenshot failed: #{reason}")
+      end
+    end
 
     path
   end

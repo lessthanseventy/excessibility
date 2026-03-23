@@ -77,12 +77,13 @@ defmodule Mix.Tasks.Excessibility.CheckTest do
   # --- Mock Helpers ---
 
   defp setup_passing_mock(_context) do
-    mock_path = create_mock_script("""
-    #!/usr/bin/env node
-    const result = JSON.stringify({violations: [], passes: [{id: "test"}], incomplete: []});
-    process.stdout.write(result);
-    process.exit(0);
-    """)
+    mock_path =
+      create_mock_script("""
+      #!/usr/bin/env node
+      const result = JSON.stringify({violations: [], passes: [{id: "test"}], incomplete: []});
+      process.stdout.write(result);
+      process.exit(0);
+      """)
 
     Application.put_env(:excessibility, :axe_runner_path, mock_path)
 
@@ -91,24 +92,25 @@ defmodule Mix.Tasks.Excessibility.CheckTest do
   end
 
   defp setup_failing_mock(_context) do
-    mock_path = create_mock_script("""
-    #!/usr/bin/env node
-    const result = JSON.stringify({
-      violations: [
-        {
-          id: "image-alt",
-          impact: "critical",
-          description: "Images must have alternative text",
-          helpUrl: "https://dequeuniversity.com/rules/axe/4.11/image-alt",
-          nodes: [{html: "<img src='a.png'>"}, {html: "<img src='b.png'>"}]
-        }
-      ],
-      passes: [],
-      incomplete: []
-    });
-    process.stdout.write(result);
-    process.exit(0);
-    """)
+    mock_path =
+      create_mock_script("""
+      #!/usr/bin/env node
+      const result = JSON.stringify({
+        violations: [
+          {
+            id: "image-alt",
+            impact: "critical",
+            description: "Images must have alternative text",
+            helpUrl: "https://dequeuniversity.com/rules/axe/4.11/image-alt",
+            nodes: [{html: "<img src='a.png'>"}, {html: "<img src='b.png'>"}]
+          }
+        ],
+        passes: [],
+        incomplete: []
+      });
+      process.stdout.write(result);
+      process.exit(0);
+      """)
 
     Application.put_env(:excessibility, :axe_runner_path, mock_path)
 
@@ -117,11 +119,12 @@ defmodule Mix.Tasks.Excessibility.CheckTest do
   end
 
   defp setup_error_mock(_context) do
-    mock_path = create_mock_script("""
-    #!/usr/bin/env node
-    process.stderr.write("Something went wrong");
-    process.exit(1);
-    """)
+    mock_path =
+      create_mock_script("""
+      #!/usr/bin/env node
+      process.stderr.write("Something went wrong");
+      process.exit(1);
+      """)
 
     Application.put_env(:excessibility, :axe_runner_path, mock_path)
 

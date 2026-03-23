@@ -8,7 +8,8 @@ defmodule Excessibility.MCP.Tools.Debug do
 
   @behaviour Excessibility.MCP.Tool
 
-  alias Excessibility.MCP.{ClientContext, Subprocess}
+  alias Excessibility.MCP.ClientContext
+  alias Excessibility.MCP.Subprocess
 
   @impl true
   def name, do: "debug"
