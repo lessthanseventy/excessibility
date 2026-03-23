@@ -136,7 +136,7 @@ Automatically captures LiveView state throughout test execution and generates sc
 mix excessibility.debug test/my_test.exs
 ```
 
-See [CLAUDE.md](CLAUDE.md) for detailed usage.
+See the project's `CLAUDE.md` file for detailed usage.
 
 ### Telemetry Implementation
 
@@ -414,8 +414,8 @@ All configuration goes in `test/test_helper.exs` or `config/test.exs`:
 | `:excessibility_output_path` | No | `"test/excessibility"` | Base directory for snapshots |
 | `:axe_runner_path` | No | auto-detected | Path to axe-runner.js script |
 | `:head_render_path` | No | `"/"` | Route used for rendering `<head>` content |
-| `:custom_enrichers` | No | `[]` | List of custom enricher modules (see [Telemetry Analysis](docs/telemetry-analysis.md)) |
-| `:custom_analyzers` | No | `[]` | List of custom analyzer modules (see [Telemetry Analysis](docs/telemetry-analysis.md)) |
+| `:custom_enrichers` | No | `[]` | List of custom enricher modules (see Timeline Analysis section above) |
+| `:custom_analyzers` | No | `[]` | List of custom analyzer modules (see Timeline Analysis section above) |
 
 Example:
 
