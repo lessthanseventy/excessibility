@@ -73,6 +73,8 @@ defmodule Excessibility.LiveView do
     end
   rescue
     error -> {:error, error}
+  catch
+    :exit, _ -> {:error, :unsupported}
   end
 
   def get_assigns(_), do: {:error, :invalid_view}

@@ -80,14 +80,23 @@ defmodule Excessibility.MCP.Tools.AnalyzeTimeline do
     end
   end
 
+  # Maximum timeline file size to process (512 KB)
+  @max_file_size 512 * 1024
+
   defp load_timeline(path) do
     with true <- File.exists?(path),
+         {:ok, %{size: size}} <- File.stat(path),
+         true <-
+           size <= @max_file_size ||
+             {:error,
+              "Timeline file too large (#{div(size, 1024)} KB). Re-run mix excessibility.debug to generate a fresh timeline."},
          {:ok, content} <- File.read(path),
          {:ok, data} <- Jason.decode(content) do
       {:ok, data}
     else
       false -> {:error, "Timeline file not found: #{path}"}
       {:error, %Jason.DecodeError{}} -> {:error, "Invalid JSON in timeline file"}
+      {:error, reason} when is_binary(reason) -> {:error, reason}
       {:error, reason} -> {:error, "Failed to read timeline: #{inspect(reason)}"}
     end
   end
