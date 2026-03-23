@@ -64,32 +64,3 @@ defmodule Excessibility.SnapshotTest do
     File.rm_rf!(snapshot_dir)
   end
 end
-
-defmodule Excessibility.ScreenshotTest do
-  use ExUnit.Case, async: false
-
-  @tag :screenshot
-  test "generates screenshots when screenshot? option is true" do
-    filename = "screenshot_test.html"
-    snapshot_path = Path.join(["test/excessibility/html_snapshots", filename])
-    png_path = String.replace(snapshot_path, ".html", ".png")
-
-    File.mkdir_p!("test/excessibility/html_snapshots")
-
-    conn =
-      :get
-      |> Plug.Test.conn("/")
-      |> Plug.Conn.put_resp_content_type("text/html")
-      |> Plug.Conn.send_resp(200, "<html><body>Screenshot test</body></html>")
-
-    Excessibility.Snapshot.html_snapshot(conn, %{line: 0}, __MODULE__,
-      screenshot?: true,
-      name: filename
-    )
-
-    assert File.exists?(snapshot_path)
-    assert File.exists?(png_path)
-
-    File.rm_rf!("test/excessibility/html_snapshots")
-  end
-end

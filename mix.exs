@@ -69,7 +69,6 @@ defmodule Excessibility.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:chromic_pdf, ">= 1.14.0"},
       {:credo, "~> 1.5", only: [:dev, :test], runtime: false},
       {:ecto, "~> 3.0", only: :test},
       {:ex_doc, "~> 0.18", only: :dev, runtime: false},
