@@ -46,7 +46,7 @@ defmodule Excessibility.MixProject do
 
   defp description do
     """
-    Library to aid in testing your application for WCAG compliance automatically using Pa11y and Wallaby.
+    Library to aid in testing your application for WCAG compliance automatically using axe-core and Wallaby.
     """
   end
 

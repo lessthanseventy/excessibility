@@ -168,7 +168,7 @@ defmodule Excessibility.MCP.Tools.ExplainIssue do
         that pressing Enter submits the form. A visible button provides clear affordance.
         """,
         "phoenix_patterns" => [
-          "Forms with phx-submit are valid (Pa11y may still flag - add to ignore list)",
+          "Forms with phx-submit are valid (axe-core may still flag - add to :axe_disable_rules)",
           "Use <button type=\"submit\"> for explicit submit",
           "For single-input forms, ensure Enter key behavior is clear"
         ],
@@ -184,9 +184,9 @@ defmodule Excessibility.MCP.Tools.ExplainIssue do
             <button type="submit">Search</button>
           </form>
           """,
-          "pa11y_ignore" => """
-          # In pa11y.json, ignore for LiveView forms:
-          { "ignore": ["WCAG2AA.Principle1.Guideline1_3.1_3_1.H32.2"] }
+          "axe_disable" => """
+          # In config/test.exs, disable for LiveView forms:
+          config :excessibility, axe_disable_rules: ["form-submit"]
           """
         },
         "related" => ["G80"],

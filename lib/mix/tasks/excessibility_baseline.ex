@@ -13,7 +13,7 @@ defmodule Mix.Tasks.Excessibility.Baseline do
   ## Workflow
 
   1. Run your tests to generate snapshots
-  2. Verify snapshots are correct (run `mix excessibility` for Pa11y checks)
+  2. Verify snapshots are correct (run `mix excessibility` for accessibility checks)
   3. Run this task to lock them as baseline
   4. After code changes, run `mix excessibility.compare` to see what changed
   """
