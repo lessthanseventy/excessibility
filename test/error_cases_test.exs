@@ -1,7 +1,6 @@
 defmodule Excessibility.ErrorCasesTest do
   use ExUnit.Case
 
-
   describe "Source protocol with invalid data" do
     test "Plug.Conn with non-200 status raises" do
       conn =

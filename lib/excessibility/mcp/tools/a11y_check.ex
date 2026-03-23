@@ -10,7 +10,8 @@ defmodule Excessibility.MCP.Tools.A11yCheck do
 
   @behaviour Excessibility.MCP.Tool
 
-  alias Excessibility.MCP.{ClientContext, Subprocess}
+  alias Excessibility.MCP.ClientContext
+  alias Excessibility.MCP.Subprocess
 
   @impl true
   def name, do: "a11y_check"

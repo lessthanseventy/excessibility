@@ -165,9 +165,7 @@ defmodule Mix.Tasks.Excessibility do
       help_url = violation["helpUrl"] || ""
       nodes = violation["nodes"] || []
 
-      Mix.shell().info(
-        "  [#{String.upcase(impact)}] #{id}: #{description}"
-      )
+      Mix.shell().info("  [#{String.upcase(impact)}] #{id}: #{description}")
 
       if help_url != "" do
         Mix.shell().info("    Help: #{help_url}")

@@ -8,10 +8,11 @@ defmodule Excessibility.AxeRunnerTest do
   describe "run/2" do
     @tag timeout: 60_000
     test "returns violations for inaccessible HTML" do
-      path = write_tmp_html("""
-      <html lang="en"><head><title>Test</title></head>
-      <body><img src="x.png"></body></html>
-      """)
+      path =
+        write_tmp_html("""
+        <html lang="en"><head><title>Test</title></head>
+        <body><img src="x.png"></body></html>
+        """)
 
       on_exit(fn -> File.rm(path) end)
 
@@ -23,10 +24,11 @@ defmodule Excessibility.AxeRunnerTest do
 
     @tag timeout: 60_000
     test "returns no critical violations for accessible HTML" do
-      path = write_tmp_html("""
-      <html lang="en"><head><title>Test</title></head>
-      <body><h1>Hello</h1></body></html>
-      """)
+      path =
+        write_tmp_html("""
+        <html lang="en"><head><title>Test</title></head>
+        <body><h1>Hello</h1></body></html>
+        """)
 
       on_exit(fn -> File.rm(path) end)
 
@@ -37,10 +39,11 @@ defmodule Excessibility.AxeRunnerTest do
 
     @tag timeout: 60_000
     test "captures screenshot when requested" do
-      html_path = write_tmp_html("""
-      <html lang="en"><head><title>Test</title></head>
-      <body><p>Hi</p></body></html>
-      """)
+      html_path =
+        write_tmp_html("""
+        <html lang="en"><head><title>Test</title></head>
+        <body><p>Hi</p></body></html>
+        """)
 
       png_path = Path.join(@tmp_dir, "axe_ss_#{System.unique_integer([:positive])}.png")
 
@@ -56,10 +59,11 @@ defmodule Excessibility.AxeRunnerTest do
 
     @tag timeout: 60_000
     test "respects disable_rules option" do
-      path = write_tmp_html("""
-      <html lang="en"><head><title>Test</title></head>
-      <body><img src="x.png"></body></html>
-      """)
+      path =
+        write_tmp_html("""
+        <html lang="en"><head><title>Test</title></head>
+        <body><img src="x.png"></body></html>
+        """)
 
       on_exit(fn -> File.rm(path) end)
 
