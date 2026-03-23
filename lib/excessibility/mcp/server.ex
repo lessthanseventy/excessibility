@@ -27,7 +27,7 @@ defmodule Excessibility.MCP.Server do
 
   @server_info %{
     "name" => "excessibility",
-    "version" => "0.10.2"
+    "version" => "0.11.0"
   }
 
   @capabilities %{
