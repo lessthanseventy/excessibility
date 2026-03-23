@@ -52,7 +52,7 @@ defmodule Excessibility.MixProject do
 
   defp package do
     [
-      files: ["lib", "assets", "bin", "mix.exs", "README*", "LICENSE*"],
+      files: ["lib", "assets/package.json", "assets/axe-runner.js", "assets/axe-crawl.js", "bin", "mix.exs", "README*", "LICENSE*"],
       maintainers: ["Andrew Moore"],
       licenses: ["MIT"],
       links: %{"GitHub" => "https://github.com/lessthanseventy/excessibility"}
