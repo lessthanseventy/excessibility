@@ -12,23 +12,6 @@ Code.require_file("test/support/test_endpoint.ex", File.cwd!())
 
 ExUnit.start()
 
-# Skip screenshot tests in CI or if ChromicPDF fails to start
-in_ci? = System.get_env("CI") == "true"
-
-if in_ci? do
-  IO.puts("Detected CI environment. Skipping screenshot tests.")
-  ExUnit.configure(exclude: [screenshot: true])
-else
-  # Start ChromicPDF for local testing
-  case ChromicPDF.start_link(name: ChromicPDF) do
-    {:ok, _} ->
-      :ok
-
-    {:error, reason} ->
-      IO.warn("ChromicPDF failed to start: #{inspect(reason)}. Skipping screenshot tests.")
-      ExUnit.configure(exclude: [screenshot: true])
-  end
-end
 
 Mox.defmock(Excessibility.LiveViewMock, for: Excessibility.LiveView.Behaviour)
 Mox.defmock(Excessibility.BrowserMock, for: Excessibility.BrowserBehaviour)

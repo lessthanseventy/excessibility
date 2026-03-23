@@ -6,7 +6,7 @@ defmodule Excessibility.Snapshot do
 
   - Converting test sources to HTML snapshots
   - Writing snapshots to the filesystem
-  - Screenshot generation via ChromicPDF
+
 
   ## File Locations
 
@@ -48,7 +48,7 @@ defmodule Excessibility.Snapshot do
   ## Options
 
   - `:name` - Custom filename (default: `ModuleName_LineNumber.html`)
-  - `:screenshot?` - Generate PNG screenshots (default: `false`)
+
   - `:open_browser?` - Open snapshot in browser after writing (default: `false`)
   - `:cleanup?` - Delete existing snapshots for this module first (default: `false`)
 
@@ -161,46 +161,11 @@ defmodule Excessibility.Snapshot do
     comment <> "\n" <> html
   end
 
-  defp write_snapshot(html, path, opts) do
+  defp write_snapshot(html, path, _opts) do
     File.write!(path, html)
     Logger.info("Snapshot written to #{path}")
 
-    if Keyword.get(opts, :screenshot?, false) do
-      ensure_chromic_pdf_started()
-      screenshot(screenshot_path(path), html)
-    end
-
     path
-  end
-
-  defp screenshot_path(path), do: String.replace(path, ".html", ".png")
-
-  defp screenshot(output_path, html) do
-    ChromicPDF.capture_screenshot({:html, html}, output: output_path)
-    Logger.info("Wrote screenshot: #{output_path}")
-  rescue
-    e -> Logger.error("Screenshot failed: #{inspect(e)}")
-  end
-
-  defp ensure_chromic_pdf_started do
-    case Process.whereis(ChromicPDF) do
-      nil ->
-        case ChromicPDF.start_link(name: ChromicPDF) do
-          {:ok, _pid} ->
-            Logger.info("ChromicPDF process started for Excessibility screenshots")
-
-          {:error, {:already_started, _pid}} ->
-            :ok
-
-          {:error, reason} ->
-            Logger.error("Could not start ChromicPDF: #{inspect(reason)}")
-        end
-
-      _pid ->
-        :ok
-    end
-  rescue
-    exception -> Logger.error("Could not ensure ChromicPDF is running: #{Exception.message(exception)}")
   end
 
   defp maybe_open_browser(path, opts) do
