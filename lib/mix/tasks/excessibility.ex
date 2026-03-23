@@ -2,7 +2,7 @@ defmodule Mix.Tasks.Excessibility do
   @shortdoc "Run accessibility checks on snapshots"
 
   @moduledoc """
-  Runs Pa11y accessibility checks on HTML snapshots.
+  Runs axe-core accessibility checks on HTML snapshots.
 
   ## Usage
 
@@ -26,24 +26,12 @@ defmodule Mix.Tasks.Excessibility do
 
   ## Configuration
 
-  - `:pa11y_path` - Custom path to Pa11y executable (auto-detected by default)
-  - `:pa11y_config` - Path to pa11y.json config file (default: `"pa11y.json"`)
+  - `:axe_disable_rules` - List of axe rule IDs to disable (default: `[]`)
   - `:excessibility_output_path` - Base directory for snapshots (default: `"test/excessibility"`)
-
-  ## Pa11y Configuration
-
-  If a `pa11y.json` file exists in your project root, it will be passed to Pa11y
-  via the `--config` flag. Use this to ignore specific WCAG rules:
-
-      {
-        "ignore": [
-          "WCAG2AA.Principle3.Guideline3_2.3_2_2.H32.2"
-        ]
-      }
 
   ## Prerequisites
 
-  Run `mix excessibility.install` first to install Pa11y via npm.
+  Run `mix excessibility.install` first to install axe-core and Playwright via npm.
   """
 
   use Mix.Task
@@ -53,7 +41,7 @@ defmodule Mix.Tasks.Excessibility do
   @impl Mix.Task
   def run([]) do
     # No args - check all existing snapshots
-    run_pa11y_on_all()
+    run_axe_on_all()
   end
 
   def run(args) do
@@ -61,7 +49,7 @@ defmodule Mix.Tasks.Excessibility do
     run_tests_then_check(args)
   end
 
-  defp run_pa11y_on_all do
+  defp run_axe_on_all do
     files = list_snapshots()
 
     if Enum.empty?(files) do
@@ -81,7 +69,7 @@ defmodule Mix.Tasks.Excessibility do
     end
 
     Mix.shell().info("Checking #{length(files)} snapshot(s)...\n")
-    run_pa11y(files)
+    run_axe(files)
   end
 
   defp run_tests_then_check(args) do
@@ -120,7 +108,7 @@ defmodule Mix.Tasks.Excessibility do
     Mix.shell().info("\n## Accessibility Check\n")
     Mix.shell().info("Checking #{length(new_snapshots)} snapshot(s)...\n")
 
-    run_pa11y(new_snapshots)
+    run_axe(new_snapshots)
   end
 
   defp list_snapshots do
@@ -131,36 +119,35 @@ defmodule Mix.Tasks.Excessibility do
     |> Enum.sort()
   end
 
-  defp run_pa11y(files) do
-    pa11y = pa11y_path()
-
-    unless File.exists?(pa11y) do
-      Mix.shell().error("""
-      Pa11y not found at #{pa11y}.
-
-      Run `mix excessibility.install` first.
-      """)
-
-      exit({:shutdown, 1})
-    end
-
-    config_args = pa11y_config_args()
+  defp run_axe(files) do
+    disable_rules = Application.get_env(:excessibility, :axe_disable_rules, [])
+    opts = if disable_rules == [], do: [], else: [disable_rules: disable_rules]
 
     results =
       Enum.map(files, fn file ->
         file_url = "file://" <> Path.expand(file)
-        {output, status} = System.cmd("node", [pa11y | config_args] ++ [file_url], stderr_to_stdout: true)
-        {file, status, output}
+        result = Excessibility.AxeRunner.run(file_url, opts)
+        {file, result}
       end)
 
-    {passed, failed} = Enum.split_with(results, fn {_file, status, _output} -> status == 0 end)
+    {passed, failed} =
+      Enum.split_with(results, fn
+        {_file, {:ok, %{violations: []}}} -> true
+        {_file, {:ok, _}} -> false
+        {_file, {:error, _}} -> false
+      end)
 
     if length(failed) > 0 do
       Mix.shell().info("### Issues Found\n")
 
-      Enum.each(failed, fn {file, _status, output} ->
-        Mix.shell().info("**#{Path.basename(file)}**")
-        Mix.shell().info(output)
+      Enum.each(failed, fn
+        {file, {:ok, %{violations: violations}}} ->
+          Mix.shell().info("**#{Path.basename(file)}**")
+          format_violations(violations)
+
+        {file, {:error, reason}} ->
+          Mix.shell().info("**#{Path.basename(file)}**")
+          Mix.shell().info("  Error: #{reason}\n")
       end)
 
       Mix.shell().info("\n#{length(failed)} file(s) with issues, #{length(passed)} passed")
@@ -170,30 +157,31 @@ defmodule Mix.Tasks.Excessibility do
     end
   end
 
+  defp format_violations(violations) do
+    Enum.each(violations, fn violation ->
+      impact = violation["impact"] || "unknown"
+      id = violation["id"] || "unknown"
+      description = violation["description"] || ""
+      help_url = violation["helpUrl"] || ""
+      nodes = violation["nodes"] || []
+
+      Mix.shell().info(
+        "  [#{String.upcase(impact)}] #{id}: #{description}"
+      )
+
+      if help_url != "" do
+        Mix.shell().info("    Help: #{help_url}")
+      end
+
+      Mix.shell().info("    #{length(nodes)} element(s) affected\n")
+    end)
+  end
+
   defp snapshot_dir do
     Path.join([output_path(), "html_snapshots"])
   end
 
   defp output_path do
     Application.get_env(:excessibility, :excessibility_output_path, "test/excessibility")
-  end
-
-  defp pa11y_path do
-    Application.get_env(:excessibility, :pa11y_path) ||
-      Path.join([dependency_root(), "assets/node_modules/pa11y/bin/pa11y.js"])
-  end
-
-  defp pa11y_config_args do
-    config_path = Application.get_env(:excessibility, :pa11y_config, "pa11y.json")
-
-    if File.exists?(config_path) do
-      ["--config", config_path]
-    else
-      []
-    end
-  end
-
-  defp dependency_root do
-    Mix.Project.deps_paths()[:excessibility] || File.cwd!()
   end
 end
