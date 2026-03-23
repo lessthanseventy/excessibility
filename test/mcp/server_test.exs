@@ -82,17 +82,14 @@ defmodule Excessibility.MCP.ServerTest do
 
       # Check for expected tools
       tool_names = Enum.map(tools, & &1["name"])
-      assert "e11y_check" in tool_names
-      assert "e11y_debug" in tool_names
       assert "get_timeline" in tool_names
       assert "get_snapshots" in tool_names
-      assert "analyze_timeline" in tool_names
-      assert "suggest_fixes" in tool_names
+      assert "generate_test" in tool_names
 
       # Verify tool structure
-      e11y_check = Enum.find(tools, &(&1["name"] == "e11y_check"))
-      assert e11y_check["description"]
-      assert e11y_check["inputSchema"]["type"] == "object"
+      get_snapshots = Enum.find(tools, &(&1["name"] == "get_snapshots"))
+      assert get_snapshots["description"]
+      assert get_snapshots["inputSchema"]["type"] == "object"
     end
   end
 
@@ -237,7 +234,7 @@ defmodule Excessibility.MCP.ServerTest do
   # ============================================================================
 
   describe "prompts/list" do
-    test "returns list of available prompts", %{server: pid} do
+    test "returns empty list (all prompts removed)", %{server: pid} do
       message = %{
         "jsonrpc" => "2.0",
         "id" => 1,
@@ -251,71 +248,11 @@ defmodule Excessibility.MCP.ServerTest do
 
       prompts = response["result"]["prompts"]
       assert is_list(prompts)
-
-      prompt_names = Enum.map(prompts, & &1["name"])
-      assert "fix-a11y-issue" in prompt_names
-      assert "debug-liveview" in prompt_names
-
-      # Verify prompt structure
-      fix_prompt = Enum.find(prompts, &(&1["name"] == "fix-a11y-issue"))
-      assert fix_prompt["description"]
-      assert is_list(fix_prompt["arguments"])
+      assert prompts == []
     end
   end
 
   describe "prompts/get" do
-    test "gets fix-a11y-issue prompt", %{server: pid} do
-      message = %{
-        "jsonrpc" => "2.0",
-        "id" => 1,
-        "method" => "prompts/get",
-        "params" => %{
-          "name" => "fix-a11y-issue",
-          "arguments" => %{
-            "issue" => "Missing form label",
-            "element" => "<input type='text' />"
-          }
-        }
-      }
-
-      response = Server.handle_rpc(pid, message)
-
-      assert response["jsonrpc"] == "2.0"
-      assert response["id"] == 1
-
-      messages = response["result"]["messages"]
-      assert is_list(messages)
-      assert length(messages) == 1
-
-      user_message = hd(messages)
-      assert user_message["role"] == "user"
-      assert user_message["content"]["type"] == "text"
-      assert user_message["content"]["text"] =~ "Missing form label"
-      assert user_message["content"]["text"] =~ "<input type='text' />"
-    end
-
-    test "gets debug-liveview prompt", %{server: pid} do
-      message = %{
-        "jsonrpc" => "2.0",
-        "id" => 1,
-        "method" => "prompts/get",
-        "params" => %{
-          "name" => "debug-liveview",
-          "arguments" => %{
-            "symptom" => "Form doesn't update",
-            "expected" => "Form should show validation errors"
-          }
-        }
-      }
-
-      response = Server.handle_rpc(pid, message)
-
-      assert response["result"]["messages"]
-      message_text = hd(response["result"]["messages"])["content"]["text"]
-      assert message_text =~ "Form doesn't update"
-      assert message_text =~ "Form should show validation errors"
-    end
-
     test "returns error for unknown prompt", %{server: pid} do
       message = %{
         "jsonrpc" => "2.0",
@@ -330,88 +267,6 @@ defmodule Excessibility.MCP.ServerTest do
       response = Server.handle_rpc(pid, message)
 
       assert response["result"]["error"] =~ "Prompt not found"
-    end
-  end
-
-  # ============================================================================
-  # Tool Integration Tests
-  # ============================================================================
-
-  describe "e11y_debug tool" do
-    test "returns output from mix command", %{server: pid} do
-      # Test with a non-existent file - mix should fail fast with an error message
-      message = %{
-        "jsonrpc" => "2.0",
-        "id" => 1,
-        "method" => "tools/call",
-        "params" => %{
-          "name" => "e11y_debug",
-          "arguments" => %{
-            "test_args" => "test/nonexistent_file_12345.exs",
-            "timeout" => 30_000
-          }
-        }
-      }
-
-      start = System.monotonic_time(:millisecond)
-      response = Server.handle_rpc(pid, message)
-      elapsed = System.monotonic_time(:millisecond) - start
-
-      # Should not hang
-      assert elapsed < 10_000, "Tool took #{elapsed}ms - should complete quickly"
-
-      # Should return valid response
-      assert response["jsonrpc"] == "2.0"
-      assert response["id"] == 1
-      assert response["result"]["content"]
-
-      content = hd(response["result"]["content"])
-      assert content["type"] == "text"
-
-      result = Jason.decode!(content["text"])
-
-      # Should have result fields
-      assert Map.has_key?(result, "output_file")
-      assert Map.has_key?(result, "result_summary")
-      assert Map.has_key?(result, "exit_code")
-      assert Map.has_key?(result, "status")
-
-      # Output file should exist and contain something
-      assert is_binary(result["output_file"])
-      assert File.exists?(result["output_file"])
-    end
-
-    @tag :slow
-    test "respects timeout and returns timeout error", %{server: pid} do
-      message = %{
-        "jsonrpc" => "2.0",
-        "id" => 1,
-        "method" => "tools/call",
-        "params" => %{
-          "name" => "e11y_debug",
-          "arguments" => %{
-            # Use a command that will definitely take more than 100ms
-            "test_args" => "test/nonexistent_test.exs",
-            "timeout" => 100
-          }
-        }
-      }
-
-      start = System.monotonic_time(:millisecond)
-      response = Server.handle_rpc(pid, message)
-      elapsed = System.monotonic_time(:millisecond) - start
-
-      assert response["jsonrpc"] == "2.0"
-      assert response["id"] == 1
-
-      content = hd(response["result"]["content"])
-      result = Jason.decode!(content["text"])
-
-      # Should either timeout or fail quickly (file doesn't exist)
-      assert result["status"] in ["failure", "error"] or result["output"] =~ "timed out"
-
-      # Most importantly: should not hang - should complete in reasonable time
-      assert elapsed < 5000, "Tool call took #{elapsed}ms - should not hang"
     end
   end
 

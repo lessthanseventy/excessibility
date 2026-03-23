@@ -8,15 +8,12 @@ defmodule Excessibility.MCP.RegistryTest do
       tools = Registry.discover_tools()
 
       assert is_list(tools)
-      assert length(tools) >= 6
+      assert length(tools) >= 3
 
       tool_names = Enum.map(tools, & &1.name())
-      assert "e11y_check" in tool_names
-      assert "e11y_debug" in tool_names
       assert "get_timeline" in tool_names
       assert "get_snapshots" in tool_names
-      assert "analyze_timeline" in tool_names
-      assert "suggest_fixes" in tool_names
+      assert "generate_test" in tool_names
     end
 
     test "tools implement Tool behaviour" do
@@ -32,10 +29,10 @@ defmodule Excessibility.MCP.RegistryTest do
 
   describe "get_tool/1" do
     test "finds tool by name" do
-      tool = Registry.get_tool("e11y_check")
+      tool = Registry.get_tool("get_snapshots")
 
       assert tool
-      assert tool.name() == "e11y_check"
+      assert tool.name() == "get_snapshots"
     end
 
     test "returns nil for unknown tool" do
@@ -48,12 +45,11 @@ defmodule Excessibility.MCP.RegistryTest do
       resources = Registry.discover_resources()
 
       assert is_list(resources)
-      assert length(resources) >= 3
+      assert length(resources) >= 2
 
       resource_names = Enum.map(resources, & &1.name())
       assert "config" in resource_names
       assert "snapshot" in resource_names
-      assert "timeline" in resource_names
     end
 
     test "resources implement Resource behaviour" do
@@ -83,13 +79,6 @@ defmodule Excessibility.MCP.RegistryTest do
   end
 
   describe "get_resource_for_uri/1" do
-    test "finds resource for exact URI match" do
-      resource = Registry.get_resource_for_uri("timeline://latest")
-
-      assert resource
-      assert resource.name() == "timeline"
-    end
-
     test "finds resource for pattern URI match" do
       resource = Registry.get_resource_for_uri("snapshot://test.html")
 
@@ -110,36 +99,15 @@ defmodule Excessibility.MCP.RegistryTest do
   end
 
   describe "discover_prompts/0" do
-    test "discovers built-in prompts" do
+    test "returns empty list (all prompts removed)" do
       prompts = Registry.discover_prompts()
 
       assert is_list(prompts)
-      assert length(prompts) >= 2
-
-      prompt_names = Enum.map(prompts, & &1.name())
-      assert "fix-a11y-issue" in prompt_names
-      assert "debug-liveview" in prompt_names
-    end
-
-    test "prompts implement Prompt behaviour" do
-      prompts = Registry.discover_prompts()
-
-      for prompt <- prompts do
-        assert is_binary(prompt.name())
-        assert is_binary(prompt.description())
-        assert is_list(prompt.arguments())
-      end
+      assert prompts == []
     end
   end
 
   describe "get_prompt/1" do
-    test "finds prompt by name" do
-      prompt = Registry.get_prompt("fix-a11y-issue")
-
-      assert prompt
-      assert prompt.name() == "fix-a11y-issue"
-    end
-
     test "returns nil for unknown prompt" do
       assert Registry.get_prompt("nonexistent") == nil
     end
