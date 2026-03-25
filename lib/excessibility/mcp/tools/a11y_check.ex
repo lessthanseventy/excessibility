@@ -13,6 +13,25 @@ defmodule Excessibility.MCP.Tools.A11yCheck do
   alias Excessibility.MCP.ClientContext
   alias Excessibility.MCP.Subprocess
 
+  @critical_impacts ["critical", "serious"]
+
+  @elicitation_schema %{
+    "type" => "object",
+    "properties" => %{
+      "action" => %{
+        "type" => "string",
+        "enum" => ["fix_all", "fix_critical", "show_details", "skip"],
+        "enumNames" => [
+          "Fix all violations now",
+          "Fix critical only",
+          "Show full details",
+          "Skip"
+        ]
+      }
+    },
+    "required" => ["action"]
+  }
+
   @impl true
   def name, do: "a11y_check"
 
@@ -40,13 +59,67 @@ defmodule Excessibility.MCP.Tools.A11yCheck do
   end
 
   @impl true
-  def execute(%{"url" => url}, _opts) when is_binary(url) and url != "" do
-    check_url(url)
+  def execute(%{"url" => url}, opts) when is_binary(url) and url != "" do
+    case check_url(url) do
+      {:ok, data} ->
+        elicit = Keyword.get(opts, :elicit)
+        {:ok, maybe_elicit(data, elicit)}
+
+      error ->
+        error
+    end
   end
 
   def execute(args, _opts) do
     test_args = Map.get(args, "test_args", "")
     run_mix_excessibility(test_args)
+  end
+
+  @doc """
+  Applies threshold-based elicitation to accessibility check results.
+
+  When critical/serious violations are found and an elicit callback is available,
+  prompts the user to choose how to handle them. Returns data unchanged when
+  no elicitation is needed.
+  """
+  def maybe_elicit(data, elicit) do
+    violations = Map.get(data, "violations", [])
+
+    {critical, minor} =
+      Enum.split_with(violations, fn v -> v["impact"] in @critical_impacts end)
+
+    has_critical? = critical != []
+
+    cond do
+      violations == [] ->
+        data
+
+      not has_critical? ->
+        data
+
+      is_nil(elicit) ->
+        data
+
+      true ->
+        message = build_elicitation_message(critical, minor)
+
+        case elicit.(message, @elicitation_schema) do
+          {:accept, %{"action" => "fix_all"}} ->
+            data
+
+          {:accept, %{"action" => "fix_critical"}} ->
+            %{data | "violations" => critical, "violation_count" => length(critical)}
+
+          {:accept, %{"action" => "show_details"}} ->
+            data
+
+          {:accept, %{"action" => "skip"}} ->
+            %{"skipped" => true, "violation_count" => length(violations)}
+
+          _decline_or_cancel ->
+            %{"skipped" => true, "violation_count" => length(violations)}
+        end
+    end
   end
 
   defp check_url(url) do
@@ -67,6 +140,18 @@ defmodule Excessibility.MCP.Tools.A11yCheck do
       {:error, reason} ->
         {:error, reason}
     end
+  end
+
+  defp build_elicitation_message(critical, minor) do
+    critical_summary =
+      Enum.map_join(critical, "\n", &"- #{&1["id"]}: #{length(Map.get(&1, "nodes", []))} element(s)")
+
+    """
+    Found #{length(critical)} critical/serious and #{length(minor)} minor accessibility violations.
+
+    Critical:
+    #{critical_summary}
+    """
   end
 
   defp run_mix_excessibility(test_args) do
