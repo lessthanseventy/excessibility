@@ -20,6 +20,7 @@ defmodule Excessibility.MCP.Server do
 
   use GenServer
 
+  alias Excessibility.MCP.Elicitation
   alias Excessibility.MCP.Prompt
   alias Excessibility.MCP.Registry
   alias Excessibility.MCP.Resource
@@ -36,7 +37,7 @@ defmodule Excessibility.MCP.Server do
     "prompts" => %{"listChanged" => false}
   }
 
-  defstruct [:cache]
+  defstruct [:cache, client_supports_elicitation: false]
 
   # ============================================================================
   # Public API
@@ -88,8 +89,10 @@ defmodule Excessibility.MCP.Server do
 
   @impl true
   def handle_call({:handle_rpc, message}, _from, state) do
-    response = handle_message(message, state)
-    {:reply, response, state}
+    case handle_message(message, state) do
+      {response, new_state} -> {:reply, response, new_state}
+      response -> {:reply, response, state}
+    end
   end
 
   # ============================================================================
@@ -150,19 +153,33 @@ defmodule Excessibility.MCP.Server do
   # ============================================================================
 
   # Initialize request
-  defp handle_message(%{"jsonrpc" => "2.0", "id" => id, "method" => "initialize", "params" => params}, _state) do
+  defp handle_message(%{"jsonrpc" => "2.0", "id" => id, "method" => "initialize", "params" => params}, state) do
     _client_info = Map.get(params, "clientInfo", %{})
     _protocol_version = Map.get(params, "protocolVersion")
+    client_capabilities = Map.get(params, "capabilities", %{})
 
-    %{
+    client_supports_elicitation? = Map.has_key?(client_capabilities, "elicitation")
+
+    capabilities =
+      if client_supports_elicitation? do
+        Map.put(@capabilities, "elicitation", %{})
+      else
+        @capabilities
+      end
+
+    new_state = %{state | client_supports_elicitation: client_supports_elicitation?}
+
+    response = %{
       "jsonrpc" => "2.0",
       "id" => id,
       "result" => %{
         "protocolVersion" => "2024-11-05",
         "serverInfo" => @server_info,
-        "capabilities" => @capabilities
+        "capabilities" => capabilities
       }
     }
+
+    {response, new_state}
   end
 
   # Initialized notification (no response needed)
@@ -185,11 +202,11 @@ defmodule Excessibility.MCP.Server do
   end
 
   # Tools call
-  defp handle_message(%{"jsonrpc" => "2.0", "id" => id, "method" => "tools/call", "params" => params}, _state) do
+  defp handle_message(%{"jsonrpc" => "2.0", "id" => id, "method" => "tools/call", "params" => params}, state) do
     tool_name = Map.get(params, "name")
     arguments = Map.get(params, "arguments", %{})
 
-    result = call_tool(tool_name, arguments)
+    result = call_tool(tool_name, arguments, state)
 
     %{
       "jsonrpc" => "2.0",
@@ -286,7 +303,7 @@ defmodule Excessibility.MCP.Server do
   # Private - Tool Execution
   # ============================================================================
 
-  defp call_tool(name, args) do
+  defp call_tool(name, args, state) do
     debug_log("call_tool: #{name}")
 
     case Registry.get_tool(name) do
@@ -303,13 +320,24 @@ defmodule Excessibility.MCP.Server do
 
       tool_module ->
         debug_log("call_tool: executing #{name}")
-        result = tool_module.execute(args, [])
+        opts = build_tool_opts(state)
+        result = tool_module.execute(args, opts)
         debug_log("call_tool: #{name} returned, formatting result")
         formatted = Tool.format_result(result)
         debug_log("call_tool: #{name} formatted, done")
         formatted
     end
   end
+
+  defp build_tool_opts(%__MODULE__{client_supports_elicitation: true}) do
+    write_fn = fn data -> IO.binwrite(:stdio, data) end
+    read_fn = fn -> IO.read(:stdio, :line) end
+    elicit_fn = Elicitation.build_callback(write_fn, read_fn)
+
+    [elicit: elicit_fn]
+  end
+
+  defp build_tool_opts(_state), do: []
 
   defp debug_log(msg) do
     case System.get_env("MCP_LOG_FILE") do

@@ -307,6 +307,116 @@ defmodule Excessibility.MCP.ServerTest do
     end
   end
 
+  # ============================================================================
+  # Elicitation Capability Tests
+  # ============================================================================
+
+  describe "elicitation capability negotiation" do
+    test "includes elicitation in capabilities when client supports it", %{server: pid} do
+      message = %{
+        "jsonrpc" => "2.0",
+        "id" => 1,
+        "method" => "initialize",
+        "params" => %{
+          "protocolVersion" => "2024-11-05",
+          "clientInfo" => %{"name" => "test"},
+          "capabilities" => %{"elicitation" => %{}}
+        }
+      }
+
+      response = Server.handle_rpc(pid, message)
+
+      assert response["result"]["capabilities"]["elicitation"] == %{}
+    end
+
+    test "omits elicitation from capabilities when client does not support it", %{server: pid} do
+      message = %{
+        "jsonrpc" => "2.0",
+        "id" => 1,
+        "method" => "initialize",
+        "params" => %{
+          "protocolVersion" => "2024-11-05",
+          "clientInfo" => %{"name" => "test"},
+          "capabilities" => %{}
+        }
+      }
+
+      response = Server.handle_rpc(pid, message)
+
+      refute Map.has_key?(response["result"]["capabilities"], "elicitation")
+    end
+
+    test "omits elicitation when no capabilities provided", %{server: pid} do
+      message = %{
+        "jsonrpc" => "2.0",
+        "id" => 1,
+        "method" => "initialize",
+        "params" => %{
+          "protocolVersion" => "2024-11-05",
+          "clientInfo" => %{"name" => "test"}
+        }
+      }
+
+      response = Server.handle_rpc(pid, message)
+
+      refute Map.has_key?(response["result"]["capabilities"], "elicitation")
+    end
+
+    test "stores elicitation support in state for subsequent tool calls", %{server: pid} do
+      # Initialize with elicitation support
+      init_message = %{
+        "jsonrpc" => "2.0",
+        "id" => 1,
+        "method" => "initialize",
+        "params" => %{
+          "protocolVersion" => "2024-11-05",
+          "clientInfo" => %{"name" => "test"},
+          "capabilities" => %{"elicitation" => %{}}
+        }
+      }
+
+      Server.handle_rpc(pid, init_message)
+
+      # Verify state persists by making a tool call (shouldn't crash)
+      tool_message = %{
+        "jsonrpc" => "2.0",
+        "id" => 2,
+        "method" => "tools/call",
+        "params" => %{
+          "name" => "get_snapshots",
+          "arguments" => %{}
+        }
+      }
+
+      response = Server.handle_rpc(pid, tool_message)
+
+      assert response["jsonrpc"] == "2.0"
+      assert response["id"] == 2
+      assert response["result"]["content"]
+    end
+
+    test "preserves other capabilities when elicitation is present", %{server: pid} do
+      message = %{
+        "jsonrpc" => "2.0",
+        "id" => 1,
+        "method" => "initialize",
+        "params" => %{
+          "protocolVersion" => "2024-11-05",
+          "clientInfo" => %{"name" => "test"},
+          "capabilities" => %{"elicitation" => %{}}
+        }
+      }
+
+      response = Server.handle_rpc(pid, message)
+
+      capabilities = response["result"]["capabilities"]
+      assert capabilities["tools"] == %{}
+      assert capabilities["resources"]["subscribe"] == false
+      assert capabilities["prompts"]["listChanged"] == false
+      assert capabilities["elicitation"] == %{}
+    end
+  end
+
   describe "notifications" do
     test "returns nil for initialized notification", %{server: pid} do
       message = %{
