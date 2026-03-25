@@ -70,6 +70,9 @@ defmodule Excessibility.MCP.Tools.A11yCheck do
     end
   end
 
+  # Elicitation is not available for the mix task path because it returns
+  # raw text output, not structured violation data with impact levels.
+  # Threshold-based elicitation requires structured violations to classify severity.
   def execute(args, _opts) do
     test_args = Map.get(args, "test_args", "")
     run_mix_excessibility(test_args)
