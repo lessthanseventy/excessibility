@@ -58,7 +58,7 @@ defmodule Excessibility.MCP.Tools.A11yCheckTest do
 
           {:error, reason} ->
             # AxeRunner may not be installed in test environment
-            assert reason =~ "axe-runner"
+            assert reason =~ "axe-core check failed"
         end
       after
         File.rm(html_path)
