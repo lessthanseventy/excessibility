@@ -31,22 +31,26 @@ defmodule Excessibility.AxeRunner do
     runner_path = axe_runner_path()
 
     if File.exists?(runner_path) do
-      case run_playwright(runner_path, url, opts) do
-        {:ok, result} ->
-          {:ok, result}
-
-        {:error, reason} = error ->
-          fallback? = Keyword.get(opts, :fallback, true)
-          remote_url? = String.starts_with?(url, "http")
-
-          if fallback? and remote_url? do
-            run_curl_fallback(runner_path, url, opts, reason)
-          else
-            error
-          end
-      end
+      run_with_fallback(runner_path, url, opts)
     else
       {:error, "axe-runner.js not found at #{runner_path}. Run `mix excessibility.install` first."}
+    end
+  end
+
+  defp run_with_fallback(runner_path, url, opts) do
+    case run_playwright(runner_path, url, opts) do
+      {:ok, result} ->
+        {:ok, result}
+
+      {:error, reason} = error ->
+        fallback? = Keyword.get(opts, :fallback, true)
+        remote_url? = String.starts_with?(url, "http")
+
+        if fallback? and remote_url? do
+          run_curl_fallback(runner_path, url, opts, reason)
+        else
+          error
+        end
     end
   end
 
@@ -110,33 +114,36 @@ defmodule Excessibility.AxeRunner do
     case System.cmd("curl", curl_args, stderr_to_stdout: false) do
       {status_code, 0} ->
         code = String.trim(status_code)
-
-        if code in ["200", "301", "302"] and File.exists?(tmp_path) do
-          file_url = "file://" <> tmp_path
-          # Don't fallback again, no screenshots for curl-fetched pages
-          fallback_opts = Keyword.drop(opts, [:screenshot, :fallback])
-
-          result = run_playwright(runner_path, file_url, fallback_opts)
-
-          File.rm(tmp_path)
-
-          case result do
-            {:ok, data} ->
-              {:ok, Map.put(data, :fallback, %{method: :curl, original_error: original_error})}
-
-            _ ->
-              File.rm(tmp_path)
-              {:error, "Playwright failed (#{original_error}), curl fallback also failed"}
-          end
-        else
-          File.rm(tmp_path)
-          {:error, "Playwright failed (#{original_error}), curl got HTTP #{code}"}
-        end
+        process_curl_result(code, tmp_path, runner_path, opts, original_error)
 
       _ ->
         File.rm(tmp_path)
         {:error, "Playwright failed (#{original_error}), curl also failed"}
     end
+  end
+
+  defp process_curl_result(code, tmp_path, runner_path, opts, original_error) when code in ["200", "301", "302"] do
+    if File.exists?(tmp_path) do
+      file_url = "file://" <> tmp_path
+      fallback_opts = Keyword.drop(opts, [:screenshot, :fallback])
+      result = run_playwright(runner_path, file_url, fallback_opts)
+      File.rm(tmp_path)
+
+      case result do
+        {:ok, data} ->
+          {:ok, Map.put(data, :fallback, %{method: :curl, original_error: original_error})}
+
+        _ ->
+          {:error, "Playwright failed (#{original_error}), curl fallback also failed"}
+      end
+    else
+      {:error, "Playwright failed (#{original_error}), curl got HTTP #{code}"}
+    end
+  end
+
+  defp process_curl_result(code, tmp_path, _runner_path, _opts, original_error) do
+    File.rm(tmp_path)
+    {:error, "Playwright failed (#{original_error}), curl got HTTP #{code}"}
   end
 
   defp parse_output(output, url) do

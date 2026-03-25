@@ -3,6 +3,8 @@ defmodule Mix.Tasks.Excessibility.SnapshotsTest do
 
   import ExUnit.CaptureIO
 
+  alias Mix.Tasks.Excessibility.Snapshots, as: SnapshotsTask
+
   @snapshot_dir "test/excessibility/html_snapshots"
 
   setup do
@@ -17,7 +19,7 @@ defmodule Mix.Tasks.Excessibility.SnapshotsTest do
 
       output =
         capture_io(fn ->
-          Mix.Tasks.Excessibility.Snapshots.run([])
+          SnapshotsTask.run([])
         end)
 
       assert output =~ "test1.html"
@@ -30,7 +32,7 @@ defmodule Mix.Tasks.Excessibility.SnapshotsTest do
 
       output =
         capture_io(fn ->
-          Mix.Tasks.Excessibility.Snapshots.run([])
+          SnapshotsTask.run([])
         end)
 
       assert output =~ "No snapshots"
@@ -43,7 +45,7 @@ defmodule Mix.Tasks.Excessibility.SnapshotsTest do
 
       output =
         capture_io(fn ->
-          Mix.Tasks.Excessibility.Snapshots.run([])
+          SnapshotsTask.run([])
         end)
 
       assert output =~ "1 snapshot(s)"
@@ -58,7 +60,7 @@ defmodule Mix.Tasks.Excessibility.SnapshotsTest do
       File.write!(Path.join(@snapshot_dir, "test1.html"), "<html></html>")
 
       capture_io([input: "Y\n"], fn ->
-        Mix.Tasks.Excessibility.Snapshots.run(["--clean"])
+        SnapshotsTask.run(["--clean"])
       end)
 
       assert @snapshot_dir |> Path.join("*.html") |> Path.wildcard() == []
@@ -69,7 +71,7 @@ defmodule Mix.Tasks.Excessibility.SnapshotsTest do
 
       output =
         capture_io(fn ->
-          Mix.Tasks.Excessibility.Snapshots.run(["--clean"])
+          SnapshotsTask.run(["--clean"])
         end)
 
       assert output =~ "No snapshots to clean"
@@ -80,7 +82,7 @@ defmodule Mix.Tasks.Excessibility.SnapshotsTest do
     test "reports error for nonexistent snapshot" do
       output =
         capture_io(:stderr, fn ->
-          Mix.Tasks.Excessibility.Snapshots.run(["--open", "nonexistent.html"])
+          SnapshotsTask.run(["--open", "nonexistent.html"])
         end)
 
       assert output =~ "Snapshot not found"
