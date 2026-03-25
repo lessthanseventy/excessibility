@@ -84,43 +84,29 @@ defmodule Excessibility.MCP.Tools.A11yCheck do
   """
   def maybe_elicit(data, elicit) do
     violations = Map.get(data, "violations", [])
+    {critical, minor} = Enum.split_with(violations, fn v -> v["impact"] in @critical_impacts end)
 
-    {critical, minor} =
-      Enum.split_with(violations, fn v -> v["impact"] in @critical_impacts end)
-
-    has_critical? = critical != []
-
-    cond do
-      violations == [] ->
-        data
-
-      not has_critical? ->
-        data
-
-      is_nil(elicit) ->
-        data
-
-      true ->
-        message = build_elicitation_message(critical, minor)
-
-        case elicit.(message, @elicitation_schema) do
-          {:accept, %{"action" => "fix_all"}} ->
-            data
-
-          {:accept, %{"action" => "fix_critical"}} ->
-            %{data | "violations" => critical, "violation_count" => length(critical)}
-
-          {:accept, %{"action" => "show_details"}} ->
-            data
-
-          {:accept, %{"action" => "skip"}} ->
-            %{"skipped" => true, "violation_count" => length(violations)}
-
-          _decline_or_cancel ->
-            %{"skipped" => true, "violation_count" => length(violations)}
-        end
-    end
+    do_elicit(data, violations, critical, minor, elicit)
   end
+
+  defp do_elicit(data, [], _critical, _minor, _elicit), do: data
+  defp do_elicit(data, _violations, [], _minor, _elicit), do: data
+  defp do_elicit(data, _violations, _critical, _minor, nil), do: data
+
+  defp do_elicit(data, violations, critical, minor, elicit) do
+    message = build_elicitation_message(critical, minor)
+    apply_elicitation_choice(elicit.(message, @elicitation_schema), data, violations, critical)
+  end
+
+  defp apply_elicitation_choice({:accept, %{"action" => "fix_all"}}, data, _violations, _critical), do: data
+
+  defp apply_elicitation_choice({:accept, %{"action" => "fix_critical"}}, data, _violations, critical),
+    do: %{data | "violations" => critical, "violation_count" => length(critical)}
+
+  defp apply_elicitation_choice({:accept, %{"action" => "show_details"}}, data, _violations, _critical), do: data
+
+  defp apply_elicitation_choice(_skip_or_decline, _data, violations, _critical),
+    do: %{"skipped" => true, "violation_count" => length(violations)}
 
   defp check_url(url) do
     case Excessibility.AxeRunner.run(url) do
