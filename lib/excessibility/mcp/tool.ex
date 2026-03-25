@@ -43,6 +43,9 @@ defmodule Excessibility.MCP.Tool do
 
   The `opts` keyword list may contain:
   - `:progress_callback` - Function to call with progress updates
+  - `:elicit` - A 2-arity function `fn message, schema -> result` for structured
+    user interaction via the MCP elicitation protocol. Only present when the client
+    supports elicitation. See `Excessibility.MCP.Elicitation` for details.
   """
 
   @callback name() :: String.t()
