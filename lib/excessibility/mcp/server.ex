@@ -37,7 +37,7 @@ defmodule Excessibility.MCP.Server do
     "prompts" => %{"listChanged" => false}
   }
 
-  defstruct [:cache, client_supports_elicitation: false]
+  defstruct [:cache, client_supports_elicitation: false, elicit_callback: nil]
 
   # ============================================================================
   # Public API
@@ -167,7 +167,14 @@ defmodule Excessibility.MCP.Server do
         @capabilities
       end
 
-    new_state = %{state | client_supports_elicitation: client_supports_elicitation?}
+    elicit_callback =
+      if client_supports_elicitation? do
+        write_fn = fn data -> IO.binwrite(:stdio, data) end
+        read_fn = fn -> IO.read(:stdio, :line) end
+        Elicitation.build_callback(write_fn, read_fn)
+      end
+
+    new_state = %{state | client_supports_elicitation: client_supports_elicitation?, elicit_callback: elicit_callback}
 
     response = %{
       "jsonrpc" => "2.0",
@@ -329,11 +336,7 @@ defmodule Excessibility.MCP.Server do
     end
   end
 
-  defp build_tool_opts(%__MODULE__{client_supports_elicitation: true}) do
-    write_fn = fn data -> IO.binwrite(:stdio, data) end
-    read_fn = fn -> IO.read(:stdio, :line) end
-    elicit_fn = Elicitation.build_callback(write_fn, read_fn)
-
+  defp build_tool_opts(%__MODULE__{elicit_callback: elicit_fn}) when not is_nil(elicit_fn) do
     [elicit: elicit_fn]
   end
 

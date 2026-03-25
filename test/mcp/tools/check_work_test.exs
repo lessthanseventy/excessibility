@@ -120,4 +120,51 @@ defmodule Excessibility.MCP.Tools.CheckWorkTest do
       assert summary =~ "Performance"
     end
   end
+
+  describe "extract_violations/1" do
+    test "returns violations list when result has violations key" do
+      violations = [
+        %{"id" => "aria-label", "impact" => "critical"},
+        %{"id" => "color-contrast", "impact" => "minor"}
+      ]
+
+      result = %{"violations" => violations, "status" => "success"}
+
+      assert CheckWork.extract_violations(result) == violations
+    end
+
+    test "returns empty list when violations key is present but empty" do
+      result = %{"violations" => [], "status" => "success"}
+
+      assert CheckWork.extract_violations(result) == []
+    end
+
+    test "returns empty list when status is success and no violations key" do
+      result = %{"status" => "success", "output" => "No violations found"}
+
+      assert CheckWork.extract_violations(result) == []
+    end
+
+    test "returns synthetic violation when status is error and no violations key" do
+      result = %{"status" => "error", "output" => "Pa11y crashed"}
+
+      violations = CheckWork.extract_violations(result)
+
+      assert length(violations) == 1
+      assert [%{"id" => "pa11y-error", "impact" => "unknown", "description" => "Pa11y crashed"}] = violations
+    end
+
+    test "returns empty list for unknown status with no violations key" do
+      result = %{"output" => "something unexpected"}
+
+      assert CheckWork.extract_violations(result) == []
+    end
+
+    test "prefers violations key over status-based inference" do
+      violations = [%{"id" => "image-alt", "impact" => "serious"}]
+      result = %{"violations" => violations, "status" => "error", "output" => "Some error"}
+
+      assert CheckWork.extract_violations(result) == violations
+    end
+  end
 end
