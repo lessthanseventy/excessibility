@@ -1,0 +1,13 @@
+{
+  "planPath": "docs/plans/2026-03-25-mcp-elicitation-autocheck.md",
+  "tasks": [
+    {"id": 1, "subject": "Task 1: Create Elicitation Module", "status": "pending"},
+    {"id": 2, "subject": "Task 2: Wire Elicitation Into Server", "status": "pending", "blockedBy": [1]},
+    {"id": 3, "subject": "Task 3: Threshold-Based Elicitation in a11y_check", "status": "pending", "blockedBy": [1, 2]},
+    {"id": 4, "subject": "Task 4: Create check_work Composite Tool", "status": "pending", "blockedBy": [1, 2, 3]},
+    {"id": 5, "subject": "Task 5: Replace .claude_docs With CLAUDE.md in Installer", "status": "pending"},
+    {"id": 6, "subject": "Task 6: Update README", "status": "pending"},
+    {"id": 7, "subject": "Task 7: Run Full Test Suite and Verify", "status": "pending", "blockedBy": [1, 2, 3, 4, 5, 6]}
+  ],
+  "lastUpdated": "2026-03-25T00:00:00Z"
+}
