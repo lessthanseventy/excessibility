@@ -172,14 +172,6 @@ test "manual capture", %{conn: conn} do
 end
 ```
 
-### Claude Documentation
-
-Create `.claude_docs/excessibility.md` to teach Claude how to use these debugging features:
-
-```bash
-mix excessibility.setup_claude_docs
-```
-
 ## MCP Server & Claude Code Skills
 
 Excessibility includes an MCP (Model Context Protocol) server and Claude Code skills plugin for AI-assisted development.
@@ -193,47 +185,45 @@ The MCP server provides tools for AI assistants to run accessibility checks and 
 | Tool | Speed | Description |
 |------|-------|-------------|
 | `a11y_check` | Slow | Run axe-core accessibility checks on snapshots or URLs |
+| `check_work` | Slow | Run tests + a11y check + optional perf analysis (auto-check) |
 | `debug` | Slow | Run tests with telemetry capture - returns timeline for analysis |
 | `get_snapshots` | Fast | List or read HTML snapshots captured during tests |
 | `get_timeline` | Fast | Read captured timeline showing LiveView state evolution |
 | `generate_test` | Fast | Generate test code with `html_snapshot()` calls for a route |
 
-**Recommended workflow:**
+### Auto-Check Workflow
 
-1. `a11y_check` - Run axe-core accessibility check on snapshots or live URL
-2. `generate_test` - Create test with `html_snapshot()` calls
-3. `debug` - Run test to capture timeline
-4. `get_timeline` - Inspect LiveView state evolution
-5. `get_snapshots` - Read captured HTML snapshots
+The installer adds `CLAUDE.md` instructions that tell Claude to automatically run `check_work` after modifying code. This creates a seamless feedback loop:
+
+1. Claude edits your code
+2. `check_work` runs automatically (tests + a11y + optional perf analysis)
+3. When critical violations are found, MCP elicitation presents a triage form for you to prioritize fixes
+4. Minor issues are returned directly for Claude to fix silently
+5. Clean results return immediately
 
 **Automatic Setup:**
 
-MCP server support is configured automatically when you run the installer:
+The installer configures everything automatically:
 
 ```bash
 mix excessibility.install
-mix deps.get
 ```
 
-This creates `.claude/mcp_servers.json` with the excessibility MCP server configuration.
+This will:
+- Add configuration to `config/test.exs`
+- Install Playwright and axe-core via npm
+- Register the MCP server with Claude Code
+- Install the Claude Code skills plugin
+- Add auto-check instructions to `CLAUDE.md`
 
-Use `--no-mcp` to skip MCP setup if you don't need AI assistant integration.
+Use `--no-mcp` to skip Claude Code integration.
 
 **Manual Setup:**
 
-Configure Claude Code's `mcp_servers.json`:
-
-```json
-{
-  "excessibility": {
-    "command": "mix",
-    "args": ["run", "--no-halt", "-e", "Excessibility.MCP.Server.start()"],
-    "cwd": "/path/to/your/project"
-  }
-}
+```bash
+claude mcp add excessibility -s project -- mix run --no-halt -e "Excessibility.MCP.Server.start()"
+claude plugins add deps/excessibility/priv/claude-plugin
 ```
-
-The MCP server is now available in Claude Code.
 
 ### Claude Code Skills Plugin
 
@@ -263,6 +253,27 @@ claude plugins add /path/to/excessibility/priv/claude-plugin
 # 4. CHECK - Run mix excessibility for axe-core validation
 # 5. CLEAN - Remove temporary snapshots
 ```
+
+### Optional: Hooks for Additional Automation
+
+For belt-and-suspenders automation, you can also configure Claude Code hooks
+to run tests after file edits. Add to your `.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit",
+        "command": "mix test --failed"
+      }
+    ]
+  }
+}
+```
+
+This runs failing tests after each file edit, catching breakage immediately.
+The `check_work` MCP tool handles accessibility and performance checking separately.
 
 ## Installation
 
@@ -474,7 +485,6 @@ Screenshots are saved alongside HTML files with `.png` extension. Playwright is 
 | `mix excessibility.debug [test args] --format=package` | Create debug package directory |
 | `mix excessibility.latest` | Display most recent debug report |
 | `mix excessibility.package [test]` | Create debug package (alias for --format=package) |
-| `mix excessibility.setup_claude_docs` | Create/update .claude_docs/excessibility.md |
 
 ## CI and Non-Interactive Environments
 
