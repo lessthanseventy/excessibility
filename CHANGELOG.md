@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-03-25
+
+### Breaking Changes
+- **Pa11y + ChromicPDF replaced with Playwright + axe-core.** Accessibility checks now use axe-core via Playwright instead of Pa11y. ChromicPDF removed; screenshots now via Playwright.
+- **MCP surface simplified.** Removed 8 tools, 9 prompts, 2 resources. Remaining tools: `a11y_check`, `debug`, `get_snapshots`, `get_timeline`, `generate_test`, `check_work`.
+- **`.claude_docs` approach replaced with `CLAUDE.md`.** Installer now appends an Excessibility section directly to `CLAUDE.md`. The `mix excessibility.setup_claude_docs` task has been removed.
+
+### Added
+- `AxeRunner` Elixir wrapper for axe-core with Playwright
+- `mix excessibility.check` for checking arbitrary URLs
+- `mix excessibility.snapshots` for snapshot management
+- Automatic curl fallback when Playwright fails on remote URLs, with browser-like headers to bypass WAFs
+- **MCP elicitation support** — tools can request structured input from the user mid-execution via forms
+- **`check_work` composite MCP tool** — runs tests + a11y check + optional perf analysis in one call, with threshold-based elicitation for triage
+- **Auto-check workflow** — installer adds CLAUDE.md instructions so Claude automatically runs `check_work` after modifying code
+- MCP server negotiates elicitation capability with clients and caches callback in state
+- Threshold-based elicitation in `a11y_check` — only interrupts for critical/serious violations; minor issues returned silently
+- Playwright and Node.js setup in CI workflow
+
+### Fixed
+- IO.Stream crash in `build_markdown_report` ([#84](https://github.com/lessthanseventy/excessibility/issues/84))
+- LiveView `get_assigns` crash on unsupported `:get_state` calls ([#83](https://github.com/lessthanseventy/excessibility/issues/83))
+- MCP timeline tools crash on large files ([#80](https://github.com/lessthanseventy/excessibility/issues/80))
+- Added `BitString` implementation for `Excessibility.Source` protocol ([#85](https://github.com/lessthanseventy/excessibility/issues/85))
+- Broken doc links in README
+- `node_modules` excluded from hex package
+- Credo `--strict` compliance for Elixir 1.19
+
+### Changed
+- Installer creates/appends `CLAUDE.md` instead of `.claude_docs/excessibility.md`
+- README updated with auto-check workflow, `check_work` tool docs, and optional hooks guidance
+
 ## [0.10.2] - 2026-02-03
 
 ### Fixed
