@@ -37,9 +37,9 @@ jobs:
             _build
             ~/.hex
             ~/.mix
-          key: ${{ runner.os }}-mix-${{ matrix.elixir }}-${{ matrix.otp }}-${{ hashFiles('**/mix.lock') }}
+          key: ${{ runner.os }}-mix-${{ matrix.elixir }}-${{ matrix.otp }}-${{ hashFiles('**/mix.lock') }}-${{ hashFiles('lib/**/*.ex') }}
           restore-keys: |
-            ${{ runner.os }}-mix-${{ matrix.elixir }}-${{ matrix.otp }}-
+            ${{ runner.os }}-mix-${{ matrix.elixir }}-${{ matrix.otp }}-${{ hashFiles('**/mix.lock') }}-
 
       - name: Install dependencies
         if: steps.cache-deps.outputs.cache-hit != 'true'
