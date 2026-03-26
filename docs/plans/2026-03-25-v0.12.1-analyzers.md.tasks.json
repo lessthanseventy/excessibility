@@ -1,0 +1,18 @@
+{
+  "planPath": "docs/plans/2026-03-25-v0.12.1-analyzers.md",
+  "tasks": [
+    {"id": 3, "subject": "Task 1: Replace memory enricher with assign_sizes", "status": "pending"},
+    {"id": 4, "subject": "Task 2: Update memory analyzer to use assign_sizes", "status": "pending", "blockedBy": [3]},
+    {"id": 5, "subject": "Task 3: Create assign_diff analyzer (#93)", "status": "pending", "blockedBy": [3, 4]},
+    {"id": 6, "subject": "Task 4: Enhance data_growth with temporary_assigns/Streams (#94)", "status": "pending"},
+    {"id": 7, "subject": "Task 5: Create ecto_queries enricher (#95)", "status": "pending"},
+    {"id": 8, "subject": "Task 6: Replace n_plus_one with ecto_query_analysis (#95)", "status": "pending", "blockedBy": [7]},
+    {"id": 9, "subject": "Task 7: Create component_rerender analyzer (#96)", "status": "pending"},
+    {"id": 10, "subject": "Task 8: Create message_flooding analyzer (#97)", "status": "pending"},
+    {"id": 11, "subject": "Task 9: Create push_events enricher (#98)", "status": "pending"},
+    {"id": 12, "subject": "Task 10: Create push_event_volume analyzer (#98)", "status": "pending", "blockedBy": [11]},
+    {"id": 13, "subject": "Task 11: Update profiles and run full test suite", "status": "pending", "blockedBy": [3, 4, 5, 6, 7, 8, 9, 10, 11, 12]},
+    {"id": 14, "subject": "Task 12: Update CLAUDE.md and bump version to 0.12.1", "status": "pending", "blockedBy": [13]}
+  ],
+  "lastUpdated": "2026-03-25T00:00:00Z"
+}
