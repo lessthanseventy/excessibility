@@ -20,9 +20,9 @@ defmodule Excessibility.TelemetryCapture.Analyzers.HypothesisTest do
     test "generates hypothesis for memory growth" do
       timeline = %{
         timeline: [
-          %{event: "mount", sequence: 1, memory_size: 1000, list_sizes: %{}},
-          %{event: "render", sequence: 2, memory_size: 5000, list_sizes: %{items: 50}},
-          %{event: "render", sequence: 3, memory_size: 10_000, list_sizes: %{items: 100}}
+          %{event: "mount", sequence: 1, total_memory: 1000, list_sizes: %{}},
+          %{event: "render", sequence: 2, total_memory: 5000, list_sizes: %{items: 50}},
+          %{event: "render", sequence: 3, total_memory: 10_000, list_sizes: %{items: 100}}
         ]
       }
 
@@ -53,9 +53,9 @@ defmodule Excessibility.TelemetryCapture.Analyzers.HypothesisTest do
     test "no hypotheses for healthy timeline" do
       timeline = %{
         timeline: [
-          %{event: "mount", sequence: 1, memory_size: 1000},
-          %{event: "render", sequence: 2, memory_size: 1100},
-          %{event: "render", sequence: 3, memory_size: 1050}
+          %{event: "mount", sequence: 1, total_memory: 1000},
+          %{event: "render", sequence: 2, total_memory: 1100},
+          %{event: "render", sequence: 3, total_memory: 1050}
         ]
       }
 
@@ -67,8 +67,8 @@ defmodule Excessibility.TelemetryCapture.Analyzers.HypothesisTest do
     test "includes investigation steps" do
       timeline = %{
         timeline: [
-          %{event: "mount", sequence: 1, memory_size: 1000},
-          %{event: "render", sequence: 2, memory_size: 50_000}
+          %{event: "mount", sequence: 1, total_memory: 1000},
+          %{event: "render", sequence: 2, total_memory: 50_000}
         ]
       }
 

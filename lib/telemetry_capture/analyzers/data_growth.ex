@@ -140,27 +140,54 @@ defmodule Excessibility.TelemetryCapture.Analyzers.DataGrowth do
 
   defp build_finding(severity, path, sizes, growth_multiplier, last_size, sequences) do
     suggest_pagination? = severity == :critical and last_size > 100
+    growth_pattern = detect_growth_pattern(sizes)
+    suggestion = build_suggestion(growth_pattern, last_size, suggest_pagination?)
 
     %{
       severity: severity,
-      message: build_growth_message(path, sizes, growth_multiplier, suggest_pagination?),
+      message: build_growth_message(path, sizes, growth_multiplier, suggestion),
       events: sequences,
-      metadata: build_metadata(path, sizes, growth_multiplier, suggest_pagination?)
+      metadata: build_metadata(path, sizes, growth_multiplier, suggest_pagination?, suggestion)
     }
   end
 
-  defp build_metadata(path, sizes, growth_multiplier, suggest_pagination?) do
+  defp detect_growth_pattern(sizes) do
+    monotonic? =
+      sizes
+      |> Enum.chunk_every(2, 1, :discard)
+      |> Enum.all?(fn [a, b] -> b >= a end)
+
+    if monotonic?, do: :append_only, else: :mixed
+  end
+
+  defp build_suggestion(growth_pattern, last_size, suggest_pagination?) do
+    cond do
+      suggest_pagination? and growth_pattern == :append_only ->
+        "consider `temporary_assigns` if items are rendered once, or Streams for individual updates, or pagination"
+
+      growth_pattern == :append_only and last_size > 50 ->
+        "consider `temporary_assigns` if items are rendered once, or Streams for individual updates"
+
+      growth_pattern == :append_only ->
+        "consider `temporary_assigns` if items are rendered once"
+
+      suggest_pagination? ->
+        "consider pagination or lazy loading"
+
+      true ->
+        nil
+    end
+  end
+
+  defp build_metadata(path, sizes, growth_multiplier, suggest_pagination?, suggestion) do
     base = %{
       list_name: path,
       sizes: sizes,
       growth_multiplier: format_growth_multiplier(growth_multiplier)
     }
 
-    if suggest_pagination? do
-      Map.put(base, :suggest_pagination?, true)
-    else
-      base
-    end
+    base = if suggest_pagination?, do: Map.put(base, :suggest_pagination?, true), else: base
+    if suggestion, do: Map.put(base, :suggestion, suggestion), else: base
   end
 
   defp calculate_max_step_growth([_single]), do: 1.0
@@ -190,15 +217,15 @@ defmodule Excessibility.TelemetryCapture.Analyzers.DataGrowth do
     Float.round(multiplier, 1)
   end
 
-  defp build_growth_message(path, sizes, multiplier, suggest_pagination?) do
+  defp build_growth_message(path, sizes, multiplier, suggestion) do
     path_str = to_string(path)
     sizes_str = Enum.map_join(sizes, " → ", &to_string/1)
     multiplier_str = format_growth_multiplier(multiplier)
 
     base = "List '#{path_str}' growing: #{sizes_str} (#{multiplier_str}x)"
 
-    if suggest_pagination? do
-      base <> " - consider pagination or lazy loading"
+    if suggestion do
+      base <> " — " <> suggestion
     else
       base
     end

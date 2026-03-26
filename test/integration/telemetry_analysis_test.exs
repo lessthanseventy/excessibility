@@ -15,11 +15,11 @@ defmodule Integration.TelemetryAnalysisTest do
       timeline = Timeline.build_timeline(snapshots, "test", [])
 
       # Verify enrichments are present
-      assert Enum.all?(timeline.timeline, &Map.has_key?(&1, :memory_size))
+      assert Enum.all?(timeline.timeline, &Map.has_key?(&1, :total_memory))
 
       # Second event should have larger memory
       [event1, event2] = timeline.timeline
-      assert event2.memory_size > event1.memory_size
+      assert event2.total_memory > event1.total_memory
     end
 
     test "analyzers detect issues in timeline" do

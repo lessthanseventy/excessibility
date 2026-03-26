@@ -16,9 +16,9 @@ defmodule Excessibility.TelemetryCapture.Profiles do
   alias Excessibility.TelemetryCapture.Registry
 
   @profiles %{
-    quick: [:event_pattern],
-    memory: [:memory, :data_growth],
-    performance: [:performance, :event_pattern],
+    quick: [:event_pattern, :message_flooding],
+    memory: [:memory, :data_growth, :assign_diff],
+    performance: [:performance, :event_pattern, :ecto_query_analysis, :message_flooding],
     full: :all
   }
 

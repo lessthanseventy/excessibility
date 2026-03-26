@@ -49,7 +49,7 @@ defmodule Mix.Tasks.Excessibility.Debug do
 
   ## Analysis Options
 
-  - `--analyze=NAMES` - Run specific analyzers (comma-separated). Available: memory, performance, data_growth, event_pattern, n_plus_one, state_machine
+  - `--analyze=NAMES` - Run specific analyzers (comma-separated). Available: memory, performance, data_growth, event_pattern, ecto_query_analysis, state_machine
   - `--analyze=all` - Run all available analyzers
   - `--profile=NAME` - Use a predefined profile (quick, memory, performance, full)
   - `--no-analyze` - Skip analysis, show timeline only

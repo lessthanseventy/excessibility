@@ -57,9 +57,9 @@ defmodule Excessibility.TelemetryCapture.Analyzers.SummaryTest do
         test: "test.exs",
         duration_ms: 100,
         timeline: [
-          %{event: "mount", sequence: 1, memory_size: 1000},
-          %{event: "render", sequence: 2, memory_size: 2000},
-          %{event: "render", sequence: 3, memory_size: 3000}
+          %{event: "mount", sequence: 1, total_memory: 1000},
+          %{event: "render", sequence: 2, total_memory: 2000},
+          %{event: "render", sequence: 3, total_memory: 3000}
         ]
       }
 
