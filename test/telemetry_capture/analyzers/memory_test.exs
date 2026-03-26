@@ -17,7 +17,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.MemoryTest do
 
   describe "requires_enrichers/0" do
     test "declares memory enricher dependency" do
-      assert Memory.requires_enrichers() == [:memory]
+      assert Memory.requires_enrichers() == [:assign_sizes]
     end
   end
 
@@ -94,7 +94,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.MemoryTest do
         %{
           sequence: seq,
           event: "test_event",
-          memory_size: size
+          total_memory: size
         }
       end)
 

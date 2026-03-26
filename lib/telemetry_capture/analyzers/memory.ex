@@ -39,7 +39,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Memory do
 
   def name, do: :memory
   def default_enabled?, do: true
-  def requires_enrichers, do: [:memory]
+  def requires_enrichers, do: [:assign_sizes]
 
   def analyze(%{timeline: []}, _opts) do
     %{findings: [], stats: %{}}
@@ -58,7 +58,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Memory do
   end
 
   defp extract_memory_sizes(timeline) do
-    Enum.map(timeline, & &1.memory_size)
+    Enum.map(timeline, & &1.total_memory)
   end
 
   defp calculate_stats([]), do: %{}
@@ -130,18 +130,18 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Memory do
     timeline
     |> Enum.chunk_every(2, 1, :discard)
     |> Enum.flat_map(fn [prev, curr] ->
-      delta = curr.memory_size - prev.memory_size
-      multiplier = if prev.memory_size > 0, do: delta / prev.memory_size, else: 0
+      delta = curr.total_memory - prev.total_memory
+      multiplier = if prev.total_memory > 0, do: delta / prev.total_memory, else: 0
 
       cond do
         # Critical: 10x growth, or 10x median delta, or > mean + 2std_dev
         multiplier >= 10 or delta > stats.median_delta * 10 or
-            curr.memory_size > stats.avg + 2 * stats.std_dev ->
+            curr.total_memory > stats.avg + 2 * stats.std_dev ->
           [
             %{
               severity: :critical,
               message:
-                "Memory grew #{format_multiplier(multiplier)}x between events (#{format_bytes(prev.memory_size)} → #{format_bytes(curr.memory_size)})",
+                "Memory grew #{format_multiplier(multiplier)}x between events (#{format_bytes(prev.total_memory)} → #{format_bytes(curr.total_memory)})",
               events: [prev.sequence, curr.sequence],
               metadata: %{growth_multiplier: Float.round(multiplier, 1), delta_bytes: delta}
             }
@@ -153,7 +153,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Memory do
             %{
               severity: :warning,
               message:
-                "Memory grew #{format_multiplier(multiplier)}x between events (#{format_bytes(prev.memory_size)} → #{format_bytes(curr.memory_size)})",
+                "Memory grew #{format_multiplier(multiplier)}x between events (#{format_bytes(prev.total_memory)} → #{format_bytes(curr.total_memory)})",
               events: [prev.sequence, curr.sequence],
               metadata: %{growth_multiplier: Float.round(multiplier, 1), delta_bytes: delta}
             }
@@ -171,7 +171,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Memory do
     |> Enum.flat_map(fn chunk ->
       if significant_consecutive_increases?(chunk, stats) do
         sequences = Enum.map(chunk, & &1.sequence)
-        sizes = Enum.map(chunk, & &1.memory_size)
+        sizes = Enum.map(chunk, & &1.total_memory)
 
         [
           %{
@@ -190,12 +190,12 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Memory do
 
   defp significant_consecutive_increases?([a, b, c], stats) do
     # All must be increasing
-    increasing? = a.memory_size < b.memory_size and b.memory_size < c.memory_size
+    increasing? = a.total_memory < b.total_memory and b.total_memory < c.total_memory
 
     if increasing? do
       # At least one increase must be > median_delta to avoid flagging tiny healthy growth
-      delta1 = b.memory_size - a.memory_size
-      delta2 = c.memory_size - b.memory_size
+      delta1 = b.total_memory - a.total_memory
+      delta2 = c.total_memory - b.total_memory
       threshold = stats.median_delta
 
       delta1 > threshold or delta2 > threshold
