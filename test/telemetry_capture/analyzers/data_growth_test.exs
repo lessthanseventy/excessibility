@@ -201,6 +201,41 @@ defmodule Excessibility.TelemetryCapture.Analyzers.DataGrowthTest do
       assert finding.metadata.growth_multiplier == 5.0
     end
 
+    test "suggests temporary_assigns for append-only growth" do
+      timeline = %{
+        timeline: [
+          %{sequence: 1, event: "mount", list_sizes: %{deleted_tasks: 0}},
+          %{sequence: 2, event: "handle_event:delete", list_sizes: %{deleted_tasks: 5}},
+          %{sequence: 3, event: "handle_event:delete", list_sizes: %{deleted_tasks: 12}},
+          %{sequence: 4, event: "handle_event:delete", list_sizes: %{deleted_tasks: 20}},
+          %{sequence: 5, event: "handle_event:delete", list_sizes: %{deleted_tasks: 47}}
+        ]
+      }
+
+      result = DataGrowth.analyze(timeline, [])
+
+      assert length(result.findings) > 0
+      finding = List.first(result.findings)
+      assert finding.message =~ "temporary_assigns"
+      assert finding.metadata.suggestion =~ "temporary_assigns"
+    end
+
+    test "suggests Streams for large collections" do
+      timeline = %{
+        timeline: [
+          %{sequence: 1, event: "mount", list_sizes: %{items: 50}},
+          %{sequence: 2, event: "handle_event:load", list_sizes: %{items: 150}},
+          %{sequence: 3, event: "handle_event:load", list_sizes: %{items: 300}}
+        ]
+      }
+
+      result = DataGrowth.analyze(timeline, [])
+
+      assert length(result.findings) > 0
+      finding = List.first(result.findings)
+      assert finding.message =~ "Streams"
+    end
+
     test "handles list growing from zero without ArithmeticError" do
       # Reproduces GitHub issue #58
       timeline = %{

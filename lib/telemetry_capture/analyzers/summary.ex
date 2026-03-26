@@ -85,7 +85,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Summary do
   defp analyze_memory_trend(timeline) do
     sizes =
       timeline
-      |> Enum.map(&Map.get(&1, :memory_size, 0))
+      |> Enum.map(&Map.get(&1, :total_memory, 0))
       |> Enum.filter(&(&1 > 0))
 
     if length(sizes) < 2 do

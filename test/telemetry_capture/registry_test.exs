@@ -21,7 +21,7 @@ defmodule Excessibility.TelemetryCapture.RegistryTest do
 
     test "includes built-in enrichers" do
       enrichers = Registry.discover_enrichers()
-      assert Excessibility.TelemetryCapture.Enrichers.Memory in enrichers
+      assert Excessibility.TelemetryCapture.Enrichers.AssignSizes in enrichers
     end
 
     test "includes custom enrichers from config" do
@@ -141,7 +141,7 @@ defmodule Excessibility.TelemetryCapture.RegistryTest do
     end
 
     test "finds built-in enricher by name" do
-      assert Registry.get_enricher(:memory) == Excessibility.TelemetryCapture.Enrichers.Memory
+      assert Registry.get_enricher(:assign_sizes) == Excessibility.TelemetryCapture.Enrichers.AssignSizes
     end
 
     test "finds custom enricher by name" do
@@ -155,7 +155,7 @@ defmodule Excessibility.TelemetryCapture.RegistryTest do
     test "returns enrichers needed by given analyzer names" do
       enrichers = Registry.resolve_enrichers([:memory, :performance])
 
-      assert :memory in enrichers
+      assert :assign_sizes in enrichers
       assert :duration in enrichers
     end
 
@@ -163,7 +163,7 @@ defmodule Excessibility.TelemetryCapture.RegistryTest do
       # If two analyzers needed the same enricher, only include once
       enrichers = Registry.resolve_enrichers([:memory, :memory])
 
-      assert length(Enum.filter(enrichers, &(&1 == :memory))) == 1
+      assert length(Enum.filter(enrichers, &(&1 == :assign_sizes))) == 1
     end
 
     test "returns empty list for analyzers with no dependencies" do
@@ -175,7 +175,7 @@ defmodule Excessibility.TelemetryCapture.RegistryTest do
     test "handles unknown analyzer names gracefully" do
       enrichers = Registry.resolve_enrichers([:memory, :nonexistent])
 
-      assert :memory in enrichers
+      assert :assign_sizes in enrichers
     end
 
     test "returns empty list for empty input" do

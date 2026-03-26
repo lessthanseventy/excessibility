@@ -111,12 +111,12 @@ defmodule Excessibility.TelemetryCapture.TimelineTest do
         view_module: TestModule
       }
 
-      entry = Timeline.build_timeline_entry(snapshot, nil, 1, enrichers: [:memory])
+      entry = Timeline.build_timeline_entry(snapshot, nil, 1, enrichers: [:assign_sizes])
 
-      # Should have memory_size from Memory enricher
-      assert Map.has_key?(entry, :memory_size)
-      assert is_integer(entry.memory_size)
-      assert entry.memory_size > 0
+      # Should have total_memory from AssignSizes enricher
+      assert Map.has_key?(entry, :total_memory)
+      assert is_integer(entry.total_memory)
+      assert entry.total_memory > 0
     end
 
     test "enrichments are merged with timeline entry" do
@@ -127,7 +127,7 @@ defmodule Excessibility.TelemetryCapture.TimelineTest do
         view_module: TestModule
       }
 
-      entry = Timeline.build_timeline_entry(snapshot, nil, 2, enrichers: [:memory])
+      entry = Timeline.build_timeline_entry(snapshot, nil, 2, enrichers: [:assign_sizes])
 
       # Original fields still present
       assert entry.sequence == 2
@@ -135,7 +135,7 @@ defmodule Excessibility.TelemetryCapture.TimelineTest do
       assert entry.view_module == TestModule
 
       # Enriched field added
-      assert Map.has_key?(entry, :memory_size)
+      assert Map.has_key?(entry, :total_memory)
     end
   end
 
@@ -143,10 +143,10 @@ defmodule Excessibility.TelemetryCapture.TimelineTest do
     test "only runs specified enrichers" do
       snapshot = build_snapshot(%{count: 1})
 
-      # Only request memory enricher
-      entry = Timeline.build_timeline_entry(snapshot, nil, 1, enrichers: [:memory])
+      # Only request assign_sizes enricher
+      entry = Timeline.build_timeline_entry(snapshot, nil, 1, enrichers: [:assign_sizes])
 
-      assert Map.has_key?(entry, :memory_size)
+      assert Map.has_key?(entry, :total_memory)
       refute Map.has_key?(entry, :event_duration_ms)
       refute Map.has_key?(entry, :list_sizes)
     end
@@ -156,7 +156,7 @@ defmodule Excessibility.TelemetryCapture.TimelineTest do
 
       entry = Timeline.build_timeline_entry(snapshot, nil, 1, enrichers: [])
 
-      refute Map.has_key?(entry, :memory_size)
+      refute Map.has_key?(entry, :total_memory)
       refute Map.has_key?(entry, :event_duration_ms)
     end
 
@@ -166,17 +166,17 @@ defmodule Excessibility.TelemetryCapture.TimelineTest do
       entry = Timeline.build_timeline_entry(snapshot, nil, 1, enrichers: :all)
 
       # Should have data from multiple enrichers
-      assert Map.has_key?(entry, :memory_size)
+      assert Map.has_key?(entry, :total_memory)
       assert Map.has_key?(entry, :list_sizes)
     end
 
     test "build_timeline passes enrichers option through" do
       snapshots = [build_snapshot(%{count: 1})]
 
-      timeline = Timeline.build_timeline(snapshots, "test", enrichers: [:memory])
+      timeline = Timeline.build_timeline(snapshots, "test", enrichers: [:assign_sizes])
       event = hd(timeline.timeline)
 
-      assert Map.has_key?(event, :memory_size)
+      assert Map.has_key?(event, :total_memory)
       refute Map.has_key?(event, :event_duration_ms)
     end
 

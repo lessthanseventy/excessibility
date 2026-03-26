@@ -10,7 +10,7 @@ defmodule Excessibility.TelemetryCapture.AnalyzerTest do
 
       def name, do: :with_deps
       def default_enabled?, do: true
-      def requires_enrichers, do: [:memory, :duration]
+      def requires_enrichers, do: [:assign_sizes, :duration]
       def analyze(_timeline, _opts), do: %{findings: [], stats: %{}}
     end
 
@@ -33,7 +33,7 @@ defmodule Excessibility.TelemetryCapture.AnalyzerTest do
     end
 
     test "get_required_enrichers/1 returns declared enrichers when defined" do
-      assert Analyzer.get_required_enrichers(AnalyzerWithDeps) == [:memory, :duration]
+      assert Analyzer.get_required_enrichers(AnalyzerWithDeps) == [:assign_sizes, :duration]
     end
 
     test "get_required_enrichers/1 returns empty list when not defined" do

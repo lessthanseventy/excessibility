@@ -8,7 +8,7 @@ defmodule Excessibility.TelemetryCapture.IntegrationTest do
       enrichers = Registry.discover_enrichers()
 
       expected =
-        ~w(binary_content changeset collection_size component_tree duration memory query staleness state)a
+        ~w(assign_sizes binary_content changeset collection_size component_tree duration query staleness state)a
 
       actual = enrichers |> Enum.map(& &1.name()) |> Enum.sort()
 
@@ -42,7 +42,7 @@ defmodule Excessibility.TelemetryCapture.IntegrationTest do
         ~w(
           accessibility_correlation assign_lifecycle cascade_effect code_pointer
           data_growth event_pattern form_validation handle_event_noop hypothesis
-          memory n_plus_one performance render_efficiency state_machine summary
+          memory performance render_efficiency state_machine summary
         )a
 
       actual = analyzers |> Enum.map(& &1.name()) |> Enum.sort()
@@ -60,7 +60,7 @@ defmodule Excessibility.TelemetryCapture.IntegrationTest do
           %{
             sequence: 1,
             event: "mount",
-            memory_size: 1000,
+            total_memory: 1000,
             changes: nil,
             key_state: %{a: 1},
             view_module: TestModule,
@@ -123,7 +123,7 @@ defmodule Excessibility.TelemetryCapture.IntegrationTest do
 
       # Verify timeline has enrichment fields
       first_entry = List.first(timeline.timeline)
-      assert Map.has_key?(first_entry, :memory_size), "Missing memory_size enrichment"
+      assert Map.has_key?(first_entry, :total_memory), "Missing total_memory enrichment"
       assert Map.has_key?(first_entry, :state_keys), "Missing state_keys enrichment"
 
       # Run all analyzers on enriched timeline

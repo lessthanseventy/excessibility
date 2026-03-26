@@ -53,7 +53,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Hypothesis do
   defp check_memory_growth(timeline) do
     sizes =
       timeline
-      |> Enum.map(&Map.get(&1, :memory_size, 0))
+      |> Enum.map(&Map.get(&1, :total_memory, 0))
       |> Enum.filter(&(&1 > 0))
 
     check_memory_growth_sizes(sizes, timeline)

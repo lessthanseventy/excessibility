@@ -118,14 +118,14 @@ defmodule Excessibility.TelemetryCaptureIntegrationTest do
     assert second_event["event"] == "handle_event:add_product"
     assert second_event["changes"] != nil
 
-    # Verify enrichments are present (memory_size from Memory enricher)
-    assert Map.has_key?(first_event, "memory_size")
-    assert is_integer(first_event["memory_size"])
-    assert first_event["memory_size"] > 0
+    # Verify enrichments are present (total_memory from AssignSizes enricher)
+    assert Map.has_key?(first_event, "total_memory")
+    assert is_integer(first_event["total_memory"])
+    assert first_event["total_memory"] > 0
 
-    assert Map.has_key?(second_event, "memory_size")
-    assert is_integer(second_event["memory_size"])
-    assert second_event["memory_size"] > 0
+    assert Map.has_key?(second_event, "total_memory")
+    assert is_integer(second_event["total_memory"])
+    assert second_event["total_memory"] > 0
 
     # Cleanup
     TelemetryCapture.detach()
@@ -237,10 +237,10 @@ defmodule Excessibility.TelemetryCaptureIntegrationTest do
     assert render3["sequence"] == 4
     assert render3["key_state"]["quantity"] == 3
 
-    # Verify enrichments work on render events (memory_size from Memory enricher)
-    assert Map.has_key?(render1, "memory_size")
-    assert is_integer(render1["memory_size"])
-    assert render1["memory_size"] > 0
+    # Verify enrichments work on render events (total_memory from AssignSizes enricher)
+    assert Map.has_key?(render1, "total_memory")
+    assert is_integer(render1["total_memory"])
+    assert render1["total_memory"] > 0
 
     # Verify duration enrichment (from Duration enricher)
     assert Map.has_key?(render1, "event_duration_ms")
