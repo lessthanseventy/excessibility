@@ -49,28 +49,25 @@ defmodule Excessibility.TelemetryCapture.Analyzers.PushEventVolume do
     else
       push_events
       |> Enum.group_by(& &1.event_name)
-      |> Enum.flat_map(fn {event_name, events} ->
-        count = length(events)
-
-        if count > @push_threshold do
-          [
-            %{
-              severity: :warning,
-              message:
-                "#{event.event} called push_event(\"#{event_name}\") #{count} times — consider batching into a single push_event with collected data",
-              events: [event.sequence],
-              metadata: %{
-                event_name: event_name,
-                count: count,
-                handler: event.event
-              }
-            }
-          ]
-        else
-          []
-        end
+      |> Enum.filter(fn {_name, events} -> length(events) > @push_threshold end)
+      |> Enum.map(fn {event_name, events} ->
+        build_push_finding(event, event_name, length(events))
       end)
     end
+  end
+
+  defp build_push_finding(event, event_name, count) do
+    %{
+      severity: :warning,
+      message:
+        "#{event.event} called push_event(\"#{event_name}\") #{count} times — consider batching into a single push_event with collected data",
+      events: [event.sequence],
+      metadata: %{
+        event_name: event_name,
+        count: count,
+        handler: event.event
+      }
+    }
   end
 
   defp calculate_stats(timeline) do

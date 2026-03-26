@@ -100,43 +100,45 @@ defmodule Excessibility.TelemetryCapture.Analyzers.AssignDiff do
     events_with_changes = Enum.filter(events, &has_changes?/1)
     total = length(events_with_changes)
 
-    Enum.flat_map(assign_names, fn name ->
-      ratio = Map.get(diff_ratios, name, 0)
-      avg_size = Map.get(avg_sizes, name, 0)
+    assign_names
+    |> Enum.filter(&flaggable_assign?(&1, diff_ratios, avg_sizes))
+    |> Enum.map(&build_assign_finding(&1, diff_ratios, avg_sizes, events_with_changes, total))
+  end
 
-      if ratio >= @diff_ratio_threshold and avg_size >= @size_warning_threshold do
-        diff_sequences =
-          events_with_changes
-          |> Enum.filter(&changed_assign?(&1, name))
-          |> Enum.map(& &1.sequence)
+  defp flaggable_assign?(name, diff_ratios, avg_sizes) do
+    Map.get(diff_ratios, name, 0) >= @diff_ratio_threshold and
+      Map.get(avg_sizes, name, 0) >= @size_warning_threshold
+  end
 
-        diff_count = length(diff_sequences)
-        severity = if avg_size >= @size_critical_threshold, do: :critical, else: :warning
+  defp build_assign_finding(name, diff_ratios, avg_sizes, events_with_changes, total) do
+    avg_size = Map.get(avg_sizes, name, 0)
+    ratio = Map.get(diff_ratios, name, 0)
 
-        suggestion =
-          if severity == :critical,
-            do: " — consider extracting to a LiveComponent or reducing struct size",
-            else: " — consider reducing struct size or using a LiveComponent"
+    diff_sequences =
+      events_with_changes
+      |> Enum.filter(&changed_assign?(&1, name))
+      |> Enum.map(& &1.sequence)
 
-        [
-          %{
-            severity: severity,
-            message:
-              "`#{name}` is #{format_bytes(avg_size)} and was re-diffed in #{diff_count}/#{total} events#{suggestion}",
-            events: diff_sequences,
-            metadata: %{
-              assign_name: name,
-              size_bytes: avg_size,
-              diff_count: diff_count,
-              total_events: total,
-              diff_ratio: Float.round(ratio * 1.0, 2)
-            }
-          }
-        ]
-      else
-        []
-      end
-    end)
+    diff_count = length(diff_sequences)
+    severity = if avg_size >= @size_critical_threshold, do: :critical, else: :warning
+
+    suggestion =
+      if severity == :critical,
+        do: " — consider extracting to a LiveComponent or reducing struct size",
+        else: " — consider reducing struct size or using a LiveComponent"
+
+    %{
+      severity: severity,
+      message: "`#{name}` is #{format_bytes(avg_size)} and was re-diffed in #{diff_count}/#{total} events#{suggestion}",
+      events: diff_sequences,
+      metadata: %{
+        assign_name: name,
+        size_bytes: avg_size,
+        diff_count: diff_count,
+        total_events: total,
+        diff_ratio: Float.round(ratio * 1.0, 2)
+      }
+    }
   end
 
   defp format_bytes(bytes) when bytes < 1024, do: "#{bytes} B"

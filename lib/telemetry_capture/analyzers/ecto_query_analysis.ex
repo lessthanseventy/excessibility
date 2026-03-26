@@ -154,8 +154,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EctoQueryAnalysis do
         total_queries: length(all_queries),
         total_query_ms: Float.round(total_ms * 1.0, 2),
         max_queries_per_event: Enum.max(query_counts, fn -> 0 end),
-        queries_by_source:
-          all_queries |> Enum.group_by(& &1.source) |> Map.new(fn {k, v} -> {k, length(v)} end)
+        queries_by_source: all_queries |> Enum.group_by(& &1.source) |> Map.new(fn {k, v} -> {k, length(v)} end)
       }
     end
   end

@@ -35,9 +35,9 @@ defmodule Excessibility.TelemetryCapture.Analyzers.ComponentRerender do
 
   def analyze(%{timeline: timeline}, _opts) do
     render_events =
-      timeline
-      |> Enum.filter(&String.contains?(&1.event, "render"))
-      |> Enum.filter(&Map.has_key?(&1, :component_count))
+      Enum.filter(timeline, fn event ->
+        String.contains?(event.event, "render") and Map.has_key?(event, :component_count)
+      end)
 
     max_components =
       render_events

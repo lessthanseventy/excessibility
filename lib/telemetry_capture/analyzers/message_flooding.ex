@@ -107,8 +107,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.MessageFlooding do
         [
           %{
             severity: :warning,
-            message:
-              "#{count} handle_info(:#{info_name}) events total — consider reducing frequency or batching",
+            message: "#{count} handle_info(:#{info_name}) events total — consider reducing frequency or batching",
             events: sequences,
             metadata: %{
               event_type: event_type,

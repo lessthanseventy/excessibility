@@ -35,9 +35,24 @@ defmodule Excessibility.TelemetryCapture.Analyzers.AssignDiffTest do
       timeline = %{
         timeline: [
           %{sequence: 1, event: "mount", assign_sizes: %{current_user: 6000, filter: 100}, changes: %{}},
-          %{sequence: 2, event: "handle_event:click", assign_sizes: %{current_user: 6000, filter: 100}, changes: %{current_user: %{}, filter: :new}},
-          %{sequence: 3, event: "handle_event:click", assign_sizes: %{current_user: 6000, filter: 100}, changes: %{current_user: %{}, toggled: true}},
-          %{sequence: 4, event: "handle_event:click", assign_sizes: %{current_user: 6000, filter: 100}, changes: %{current_user: %{}}},
+          %{
+            sequence: 2,
+            event: "handle_event:click",
+            assign_sizes: %{current_user: 6000, filter: 100},
+            changes: %{current_user: %{}, filter: :new}
+          },
+          %{
+            sequence: 3,
+            event: "handle_event:click",
+            assign_sizes: %{current_user: 6000, filter: 100},
+            changes: %{current_user: %{}, toggled: true}
+          },
+          %{
+            sequence: 4,
+            event: "handle_event:click",
+            assign_sizes: %{current_user: 6000, filter: 100},
+            changes: %{current_user: %{}}
+          },
           %{sequence: 5, event: "render", assign_sizes: %{current_user: 6000, filter: 100}, changes: %{current_user: %{}}}
         ]
       }
