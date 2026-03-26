@@ -145,7 +145,9 @@ This generates `timeline.json` with event flow, memory usage, and pattern analys
 - `performance` - Identifies slow events and bottlenecks
 - `data_growth` - Analyzes list growth patterns
 - `event_pattern` - Detects inefficient event patterns
-- `n_plus_one` - Identifies potential N+1 query issues
+- `ecto_query_analysis` - Full Ecto query analysis with N+1 detection
+- `assign_diff` - Detects large assigns re-diffed over the wire
+- `message_flooding` - Detects high-frequency handle_info patterns
 - `state_machine` - Analyzes state transitions
 - `render_efficiency` - Detects wasted renders with no state changes
 - `assign_lifecycle` - Finds dead state (assigns that never change)
@@ -159,12 +161,21 @@ This generates `timeline.json` with event flow, memory usage, and pattern analys
 - `hypothesis` - Root cause suggestions (use `--analyze=hypothesis`)
 - `code_pointer` - Maps events to source locations (use `--analyze=code_pointer`)
 - `accessibility_correlation` - Flags state changes with a11y implications (use `--analyze=accessibility_correlation`)
+- `component_rerender` - Detects unnecessary component re-renders (use `--analyze=component_rerender`)
+- `push_event_volume` - Detects excessive push_event volume to JS hooks (use `--analyze=push_event_volume`)
 
 **Timeline Enrichments:**
 
 Timeline events are automatically enriched with:
-- `memory_size` - Byte size of assigns at each event
+- `assign_sizes` - Per-assign byte sizes (map of assign name to bytes)
+- `total_memory` - Total assigns memory in bytes
+- `largest_assign` - Largest assign name and size tuple
 - `event_duration_ms` - Event duration from telemetry
+- `ecto_queries` - Ecto queries fired during event (list of query maps)
+- `ecto_query_count` - Number of Ecto queries per event
+- `ecto_total_query_ms` - Total Ecto query time per event
+- `push_events` - push_event calls during event
+- `push_event_count` - Number of push_event calls per event
 
 **Captured Events:**
 - `mount` - LiveView mount
