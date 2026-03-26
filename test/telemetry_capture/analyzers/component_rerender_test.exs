@@ -35,7 +35,13 @@ defmodule Excessibility.TelemetryCapture.Analyzers.ComponentRerenderTest do
           %{sequence: 2, event: "render", component_count: 4, component_ids: [1, 2, 3, 4], changes: %{page_title: "new"}},
           %{sequence: 3, event: "render", component_count: 4, component_ids: [1, 2, 3, 4], changes: %{}},
           %{sequence: 4, event: "render", component_count: 4, component_ids: [1, 2, 3, 4], changes: %{}},
-          %{sequence: 5, event: "render", component_count: 4, component_ids: [1, 2, 3, 4], changes: %{page_title: "newer"}},
+          %{
+            sequence: 5,
+            event: "render",
+            component_count: 4,
+            component_ids: [1, 2, 3, 4],
+            changes: %{page_title: "newer"}
+          },
           %{sequence: 6, event: "render", component_count: 4, component_ids: [1, 2, 3, 4], changes: %{}},
           %{sequence: 7, event: "render", component_count: 4, component_ids: [1, 2, 3, 4], changes: %{}},
           %{sequence: 8, event: "render", component_count: 4, component_ids: [1, 2, 3, 4], changes: %{}}

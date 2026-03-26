@@ -73,7 +73,13 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EctoQueryAnalysisTest do
 
       timeline = %{
         timeline: [
-          %{sequence: 1, event: "handle_event:load_items", ecto_queries: queries, ecto_query_count: 15, ecto_total_query_ms: 15.0}
+          %{
+            sequence: 1,
+            event: "handle_event:load_items",
+            ecto_queries: queries,
+            ecto_query_count: 15,
+            ecto_total_query_ms: 15.0
+          }
         ]
       }
 
