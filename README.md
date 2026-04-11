@@ -37,6 +37,10 @@ Built-in rules:
 | Rule | What it flags |
 | --- | --- |
 | `:phx_click_on_non_interactive` | `phx-click` / `phx-click-away` on `<div>`, `<li>`, `<span>`, `<tr>`, etc. without `tabindex` or an interactive `role` — visually clickable but unreachable by keyboard |
+| `:toggle_missing_aria_state` | Elements whose `phx-click` uses `JS.toggle/show/hide` but are missing `aria-expanded` — screen readers can't tell whether the target is open or closed |
+| `:click_away_without_escape` | `phx-click-away` with no matching `phx-window-keydown` + `phx-key="Escape"` (or `role="dialog"`) — keyboard users can't dismiss the overlay |
+| `:debounce_without_live_region` | `<input phx-debounce>` when the page has no `aria-live` / `role="status"` region anywhere — screen readers never hear that results updated |
+| `:hidden_form_control_without_aria` | Visually hidden `<input type="checkbox\|radio">` whose wrapping `<label>` doesn't expose state via `aria-checked` or `role="checkbox"`/`"radio"` |
 
 On non-Phoenix HTML (no `phx-*` attributes) these rules are no-ops, so
 enabling them never adds noise for projects that don't use LiveView.
