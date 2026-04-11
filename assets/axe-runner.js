@@ -1,77 +1,232 @@
+// Runs axe-core against a URL via Playwright and emits a structured JSON
+// report to stdout. On failure, emits {error: <code>, message: <str>, ...}
+// to stdout and exits 1. The Elixir Excessibility.Scanner module parses
+// both shapes.
+
 const path = require("path");
 const modulesDir = path.join(__dirname, "node_modules");
 const { chromium } = require(path.join(modulesDir, "playwright"));
 const { AxeBuilder } = require(path.join(modulesDir, "@axe-core", "playwright"));
 
-async function main() {
-  const args = process.argv.slice(2);
-  const url = args[0];
-  if (!url) {
-    console.error(JSON.stringify({ error: "Usage: node axe-runner.js <url> [--screenshot path] [--wait-for selector] [--disable-rules rule1,rule2]" }));
-    process.exit(1);
-  }
+const USAGE =
+  "Usage: node axe-runner.js <url> " +
+  "[--screenshot path] [--wait-for selector] [--wait-until load|domcontentloaded|networkidle] " +
+  "[--disable-rules r1,r2] [--tags t1,t2] [--timeout ms] [--viewport WxH] [--user-agent ua]";
 
-  let screenshotPath = null;
-  let waitFor = null;
-  let disableRules = [];
+const DEFAULT_UA =
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
 
-  for (let i = 1; i < args.length; i++) {
-    if (args[i] === "--screenshot" && args[i + 1]) screenshotPath = args[++i];
-    else if (args[i] === "--wait-for" && args[i + 1]) waitFor = args[++i];
-    else if (args[i] === "--disable-rules" && args[i + 1]) disableRules = args[++i].split(",");
-  }
+function emitError(code, message, extra = {}) {
+  console.log(JSON.stringify({ error: code, message: message || "", ...extra }));
+}
 
-  const isFileUrl = url.startsWith("file://");
-
-  const browser = await chromium.launch();
-  const context = await browser.newContext({
-    // Look like a real browser for remote URLs
-    ...(!isFileUrl && {
-      userAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-      viewport: { width: 1280, height: 720 },
-      locale: "en-US",
-    }),
-  });
-  const page = await context.newPage();
-
+async function closeQuietly(browser) {
   try {
-    // file:// URLs just need DOM; remote URLs wait for load event then we poll for content
-    const waitUntil = isFileUrl ? "domcontentloaded" : "load";
-    await page.goto(url, { waitUntil, timeout: 30000 });
-
-    if (waitFor) {
-      await page.waitForSelector(waitFor, { timeout: 10000 });
-    } else if (!isFileUrl) {
-      // For SPAs: if body looks empty after load, give it more time
-      await waitForContent(page);
-    }
-
-    let builder = new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]);
-    if (disableRules.length > 0) builder = builder.disableRules(disableRules);
-
-    const results = await builder.analyze();
-
-    if (screenshotPath) await page.screenshot({ path: screenshotPath, fullPage: true });
-
-    console.log(JSON.stringify(results));
-  } catch (err) {
-    console.error(JSON.stringify({ error: err.message }));
-    process.exit(1);
-  } finally {
-    await browser.close();
+    if (browser) await browser.close();
+  } catch {
+    // nothing useful we can do
   }
 }
 
-// Wait for SPA content to render — checks that body has meaningful content
+function parseArgs(argv) {
+  const url = argv[0];
+  const opts = {
+    url,
+    screenshotPath: null,
+    waitFor: null,
+    waitUntil: null,
+    disableRules: [],
+    tags: ["wcag2a", "wcag2aa"],
+    timeout: 30000,
+    viewport: { width: 1280, height: 720 },
+    userAgent: null,
+  };
+
+  for (let i = 1; i < argv.length; i++) {
+    const arg = argv[i];
+    const next = argv[i + 1];
+    switch (arg) {
+      case "--screenshot":
+        opts.screenshotPath = next;
+        i++;
+        break;
+      case "--wait-for":
+        opts.waitFor = next;
+        i++;
+        break;
+      case "--wait-until":
+        opts.waitUntil = next;
+        i++;
+        break;
+      case "--disable-rules":
+        opts.disableRules = next ? next.split(",").filter(Boolean) : [];
+        i++;
+        break;
+      case "--tags":
+        opts.tags = next ? next.split(",").filter(Boolean) : opts.tags;
+        i++;
+        break;
+      case "--timeout": {
+        const n = parseInt(next, 10);
+        if (!Number.isNaN(n) && n > 0) opts.timeout = n;
+        i++;
+        break;
+      }
+      case "--viewport": {
+        if (next) {
+          const [w, h] = next.split("x").map((s) => parseInt(s, 10));
+          if (w > 0 && h > 0) opts.viewport = { width: w, height: h };
+        }
+        i++;
+        break;
+      }
+      case "--user-agent":
+        opts.userAgent = next;
+        i++;
+        break;
+    }
+  }
+
+  return opts;
+}
+
 async function waitForContent(page, maxWait = 8000) {
   const start = Date.now();
   while (Date.now() - start < maxWait) {
-    const bodyText = await page.evaluate(() => document.body?.innerText?.trim() || "");
-    // If body has more than a few chars of text, content has rendered
+    const bodyText = await page
+      .evaluate(() => (document.body && document.body.innerText ? document.body.innerText.trim() : ""))
+      .catch(() => "");
     if (bodyText.length > 50) return;
     await new Promise((r) => setTimeout(r, 500));
   }
-  // Timed out waiting for content — run axe anyway on whatever's there
+}
+
+async function main() {
+  const argv = process.argv.slice(2);
+  if (!argv[0]) {
+    emitError("invalid_args", USAGE);
+    process.exit(1);
+  }
+
+  const opts = parseArgs(argv);
+  const { url, screenshotPath, waitFor, waitUntil, disableRules, tags, timeout, viewport, userAgent } = opts;
+
+  const isFileUrl = url.startsWith("file://");
+  const startTime = Date.now();
+
+  let browser;
+  try {
+    browser = await chromium.launch();
+  } catch (err) {
+    emitError("playwright_error", `failed to launch chromium: ${err.message}`);
+    process.exit(1);
+  }
+
+  const chromiumVersion = browser.version();
+
+  const contextOptions = {
+    viewport,
+    locale: "en-US",
+  };
+  if (!isFileUrl) {
+    contextOptions.userAgent = userAgent || DEFAULT_UA;
+  } else if (userAgent) {
+    contextOptions.userAgent = userAgent;
+  }
+
+  let context;
+  let page;
+  try {
+    context = await browser.newContext(contextOptions);
+    page = await context.newPage();
+  } catch (err) {
+    emitError("playwright_error", `failed to create browser context: ${err.message}`);
+    await closeQuietly(browser);
+    process.exit(1);
+  }
+
+  try {
+    const effectiveWaitUntil = waitUntil || (isFileUrl ? "domcontentloaded" : "load");
+
+    let response;
+    try {
+      response = await page.goto(url, { waitUntil: effectiveWaitUntil, timeout });
+    } catch (err) {
+      if (err.name === "TimeoutError") {
+        emitError("timeout", err.message);
+      } else {
+        emitError("navigation_failed", err.message);
+      }
+      await closeQuietly(browser);
+      process.exit(1);
+    }
+
+    if (response && !isFileUrl) {
+      const status = response.status();
+      if (status >= 400) {
+        emitError("http_error", `HTTP ${status}`, { status });
+        await closeQuietly(browser);
+        process.exit(1);
+      }
+    }
+
+    if (waitFor) {
+      try {
+        await page.waitForSelector(waitFor, { timeout: Math.min(timeout, 10000) });
+      } catch (err) {
+        if (err.name === "TimeoutError") {
+          emitError("timeout", `wait_for '${waitFor}' timed out`);
+        } else {
+          emitError("playwright_error", err.message);
+        }
+        await closeQuietly(browser);
+        process.exit(1);
+      }
+    } else if (!isFileUrl) {
+      await waitForContent(page);
+    }
+
+    let builder = new AxeBuilder({ page }).withTags(tags);
+    if (disableRules.length > 0) builder = builder.disableRules(disableRules);
+
+    let results;
+    try {
+      results = await builder.analyze();
+    } catch (err) {
+      emitError("playwright_error", `axe-core analyze failed: ${err.message}`);
+      await closeQuietly(browser);
+      process.exit(1);
+    }
+
+    if (screenshotPath) {
+      try {
+        await page.screenshot({ path: screenshotPath, fullPage: true });
+      } catch {
+        // screenshot failure is non-fatal
+      }
+    }
+
+    const output = {
+      final_url: page.url(),
+      timestamp: new Date().toISOString(),
+      duration_ms: Date.now() - startTime,
+      engine: {
+        axe_version: results && results.testEngine ? results.testEngine.version || null : null,
+        chromium_version: chromiumVersion,
+      },
+      violations: results.violations || [],
+      incomplete: results.incomplete || [],
+      passes_count: (results.passes || []).length,
+      inapplicable_count: (results.inapplicable || []).length,
+    };
+
+    console.log(JSON.stringify(output));
+    await closeQuietly(browser);
+  } catch (err) {
+    emitError("playwright_error", err.message);
+    await closeQuietly(browser);
+    process.exit(1);
+  }
 }
 
 main();

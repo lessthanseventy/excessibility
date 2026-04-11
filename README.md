@@ -24,6 +24,87 @@ Excessibility helps you test your Phoenix apps for accessibility (WCAG complianc
 4. **Compare changes** with `mix excessibility.compare` to review what changed and approve/reject
 5. **In CI**, axe-core reports accessibility violations alongside your test failures
 
+## LiveView-Aware Rules
+
+axe-core can't catch accessibility issues that depend on Phoenix-specific
+attributes like `phx-click`, `phx-submit`, or `phx-debounce`. Excessibility
+ships a complementary set of **LiveView rules** that inspect snapshot HTML
+for these patterns and run automatically alongside axe-core when you call
+`mix excessibility`.
+
+Built-in rules:
+
+| Rule | What it flags |
+| --- | --- |
+| `:phx_click_on_non_interactive` | `phx-click` / `phx-click-away` on `<div>`, `<li>`, `<span>`, `<tr>`, etc. without `tabindex` or an interactive `role` — visually clickable but unreachable by keyboard |
+
+On non-Phoenix HTML (no `phx-*` attributes) these rules are no-ops, so
+enabling them never adds noise for projects that don't use LiveView.
+
+**Config:**
+
+```elixir
+# config/test.exs
+config :excessibility,
+  lv_rules_enabled?: true,                          # default
+  lv_rules_disabled: [:phx_click_on_non_interactive] # skip specific rules
+```
+
+**Custom rules:** implement `Excessibility.LiveViewRules.Rule` and register:
+
+```elixir
+config :excessibility, custom_live_view_rules: [MyApp.Rules.MyRule]
+```
+
+## Runtime Usage (Scanner API)
+
+In addition to the snapshot-testing workflow, Excessibility exposes
+`Excessibility.Scanner.scan/2` for runtime use — call it from LiveView
+handlers, background jobs, CLI wrappers, or any plain application code
+to scan an arbitrary URL and get a structured axe-core report:
+
+```elixir
+case Excessibility.Scanner.scan("https://example.com") do
+  {:ok, report} ->
+    IO.puts("Found #{length(report.violations)} violations on #{report.final_url}")
+
+    for v <- report.violations do
+      IO.puts("  [#{v.impact}] #{v.id}: #{v.description}")
+      IO.puts("     #{v.help_url}")
+    end
+
+  {:error, :timeout} ->
+    Logger.warning("Scan timed out")
+
+  {:error, {:http_error, status}} ->
+    Logger.warning("Target returned HTTP #{status}")
+
+  {:error, {:navigation_failed, msg}} ->
+    Logger.warning("Navigation failed: #{msg}")
+
+  {:error, {:invalid_url, reason}} ->
+    Logger.warning("Invalid URL: #{reason}")
+end
+```
+
+Pass options to control the scan:
+
+```elixir
+Excessibility.Scanner.scan("https://example.com",
+  timeout: 20_000,
+  wait_for: "#main",
+  tags: ["wcag2a", "wcag2aa", "wcag21aa"],
+  viewport: {1440, 900},
+  screenshot: "/tmp/example.png"
+)
+```
+
+See `Excessibility.Scanner` for the full report type and options list.
+Unlike Mix tasks, the Scanner is safe to call from production Phoenix
+releases, which makes it easy to build things like a public URL
+accessibility scanner, background monitoring jobs, or an internal
+scanning service on top of the library.
+
 ## Features
 
 - Snapshot HTML from `Plug.Conn`, `Wallaby.Session`, `Phoenix.LiveViewTest.View`, and `Phoenix.LiveViewTest.Element`
@@ -282,7 +363,7 @@ Add to `mix.exs`:
 ```elixir
 def deps do
   [
-    {:excessibility, "~> 0.12", only: [:dev, :test]}
+    {:excessibility, "~> 0.13", only: [:dev, :test]}
   ]
 end
 ```
