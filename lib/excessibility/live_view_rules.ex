@@ -43,12 +43,15 @@ defmodule Excessibility.LiveViewRules do
   # ── Compile-time rule discovery ────────────────────────────────────
 
   rules_dir = Path.join([__DIR__, "live_view_rules", "rules"])
+  rule_files = rules_dir |> Path.join("*.ex") |> Path.wildcard()
+
+  # Force recompilation of this module whenever an existing rule file
+  # changes. Note: adding a NEW rule file still requires `mix clean` on
+  # this module (or touching it) so the wildcard re-runs.
+  for path <- rule_files, do: @external_resource(path)
 
   rule_modules =
-    rules_dir
-    |> Path.join("*.ex")
-    |> Path.wildcard()
-    |> Enum.map(fn path ->
+    Enum.map(rule_files, fn path ->
       module_name = path |> Path.basename(".ex") |> Macro.camelize()
       Module.concat([Excessibility.LiveViewRules.Rules, module_name])
     end)
