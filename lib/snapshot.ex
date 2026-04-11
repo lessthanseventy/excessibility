@@ -170,7 +170,7 @@ defmodule Excessibility.Snapshot do
       screenshot_path = String.replace(path, ".html", ".png")
       file_url = "file://" <> Path.expand(path)
 
-      case Excessibility.AxeRunner.run(file_url, screenshot: screenshot_path) do
+      case Excessibility.Scanner.scan(file_url, screenshot: screenshot_path) do
         {:ok, _} -> Logger.info("Wrote screenshot: #{screenshot_path}")
         {:error, reason} -> Logger.error("Screenshot failed: #{reason}")
       end

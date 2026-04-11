@@ -126,10 +126,15 @@ defmodule Excessibility.TelemetryCapture.Enrichers.EctoQueries do
 
   @doc """
   Stops the query store.
+
+  Idempotent and race-safe: safe to call concurrently from multiple
+  `on_exit` callbacks when tests share the globally-named Agent.
   """
   def stop_store do
-    if Process.whereis(__MODULE__), do: Agent.stop(__MODULE__)
+    Agent.stop(__MODULE__)
     :ok
+  catch
+    :exit, _ -> :ok
   end
 
   @doc """

@@ -121,33 +121,35 @@ defmodule Mix.Tasks.Excessibility do
 
   defp run_axe(files) do
     disable_rules = Application.get_env(:excessibility, :axe_disable_rules, [])
-    opts = if disable_rules == [], do: [], else: [disable_rules: disable_rules]
+    scan_opts = if disable_rules == [], do: [], else: [disable_rules: disable_rules]
+    lv_rules_enabled? = Application.get_env(:excessibility, :lv_rules_enabled?, true)
+    lv_disabled = Application.get_env(:excessibility, :lv_rules_disabled, [])
+    lv_opts = [disable: lv_disabled]
 
     results =
       Enum.map(files, fn file ->
         file_url = "file://" <> Path.expand(file)
-        result = Excessibility.AxeRunner.run(file_url, opts)
-        {file, result}
+        axe_result = Excessibility.Scanner.scan(file_url, scan_opts)
+
+        lv_result =
+          if lv_rules_enabled? do
+            Excessibility.LiveViewRules.scan_file(file, lv_opts)
+          else
+            %{findings: []}
+          end
+
+        {file, axe_result, lv_result}
       end)
 
-    {passed, failed} =
-      Enum.split_with(results, fn
-        {_file, {:ok, %{violations: []}}} -> true
-        {_file, {:ok, _}} -> false
-        {_file, {:error, _}} -> false
-      end)
+    {passed, failed} = Enum.split_with(results, &file_passed?/1)
 
     if length(failed) > 0 do
       Mix.shell().info("### Issues Found\n")
 
-      Enum.each(failed, fn
-        {file, {:ok, %{violations: violations}}} ->
-          Mix.shell().info("**#{Path.basename(file)}**")
-          format_violations(violations)
-
-        {file, {:error, reason}} ->
-          Mix.shell().info("**#{Path.basename(file)}**")
-          Mix.shell().info("  Error: #{reason}\n")
+      Enum.each(failed, fn {file, axe_result, lv_result} ->
+        Mix.shell().info("**#{Path.basename(file)}**")
+        print_axe(axe_result)
+        print_lv(lv_result)
       end)
 
       Mix.shell().info("\n#{length(failed)} file(s) with issues, #{length(passed)} passed")
@@ -157,15 +159,35 @@ defmodule Mix.Tasks.Excessibility do
     end
   end
 
-  defp format_violations(violations) do
-    Enum.each(violations, fn violation ->
-      impact = violation["impact"] || "unknown"
-      id = violation["id"] || "unknown"
-      description = violation["description"] || ""
-      help_url = violation["helpUrl"] || ""
-      nodes = violation["nodes"] || []
+  defp file_passed?({_file, {:ok, %{violations: []}}, %{findings: []}}), do: true
+  defp file_passed?(_), do: false
 
-      Mix.shell().info("  [#{String.upcase(impact)}] #{id}: #{description}")
+  defp print_axe({:ok, %{violations: []}}), do: :ok
+  defp print_axe({:ok, %{violations: violations}}), do: format_violations(violations)
+  defp print_axe({:error, reason}), do: Mix.shell().info("  Error: #{format_error(reason)}\n")
+
+  defp print_lv(%{findings: []}), do: :ok
+
+  defp print_lv(%{findings: findings}) do
+    Mix.shell().info("  LiveView rule issues:")
+
+    Enum.each(findings, fn %{rule: rule, severity: severity, message: message, selector: selector} ->
+      label = severity |> Atom.to_string() |> String.upcase()
+      Mix.shell().info("    [#{label}] #{rule} @ #{selector}")
+      Mix.shell().info("      #{message}\n")
+    end)
+  end
+
+  defp format_violations(violations) do
+    Enum.each(violations, fn %{
+                               id: id,
+                               impact: impact,
+                               description: description,
+                               help_url: help_url,
+                               nodes: nodes
+                             } ->
+      impact_label = impact |> impact_label() |> String.upcase()
+      Mix.shell().info("  [#{impact_label}] #{id}: #{description}")
 
       if help_url != "" do
         Mix.shell().info("    Help: #{help_url}")
@@ -174,6 +196,17 @@ defmodule Mix.Tasks.Excessibility do
       Mix.shell().info("    #{length(nodes)} element(s) affected\n")
     end)
   end
+
+  defp impact_label(nil), do: "unknown"
+  defp impact_label(atom) when is_atom(atom), do: Atom.to_string(atom)
+  defp impact_label(other), do: to_string(other)
+
+  defp format_error(:timeout), do: "scan timed out"
+  defp format_error({:http_error, status}), do: "HTTP #{status}"
+  defp format_error({:navigation_failed, msg}), do: "navigation failed: #{msg}"
+  defp format_error({:playwright_error, msg}), do: msg
+  defp format_error({:invalid_url, reason}), do: "invalid URL (#{reason})"
+  defp format_error(other), do: inspect(other)
 
   defp snapshot_dir do
     Path.join([output_path(), "html_snapshots"])

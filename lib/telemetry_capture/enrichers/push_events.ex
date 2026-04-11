@@ -71,8 +71,10 @@ defmodule Excessibility.TelemetryCapture.Enrichers.PushEvents do
   end
 
   def stop_store do
-    if Process.whereis(__MODULE__), do: Agent.stop(__MODULE__)
+    Agent.stop(__MODULE__)
     :ok
+  catch
+    :exit, _ -> :ok
   end
 
   def record_push_event(record) do

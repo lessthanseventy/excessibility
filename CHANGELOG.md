@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] - 2026-04-10
+
+### Added
+- **`Excessibility.Scanner` — public runtime scanning API** ([#107](https://github.com/lessthanseventy/excessibility/issues/107)). Call `Excessibility.Scanner.scan(url, opts)` from LiveViews, Oban jobs, CLI wrappers, or any application code to get a structured axe-core report. Returns `{:ok, report}` with atom-keyed fields (`:violations`, `:final_url`, `:duration_ms`, `:engine`, `:timestamp`, `:passes_count`, `:inapplicable_count`) or `{:error, reason}` with typed tuples (`:timeout`, `{:http_error, status}`, `{:navigation_failed, msg}`, `{:playwright_error, msg}`, `{:invalid_url, reason}`).
+- Scanner options: `:timeout`, `:wait_for`, `:wait_until`, `:viewport`, `:tags`, `:user_agent`, `:screenshot`, `:disable_rules`, `:fallback`.
+- Richer `axe-runner.js` output: `final_url` (after redirects), `duration_ms`, `engine.axe_version`, `engine.chromium_version`, `passes_count`, `inapplicable_count`.
+- `mix excessibility.check` gains `--wait-until`, `--tags`, `--timeout`, `--viewport`, `--user-agent` flags.
+- **`Excessibility.LiveViewRules` — LiveView-aware accessibility rules** that complement axe-core on Phoenix-specific patterns. Rules auto-discovered from `lib/excessibility/live_view_rules/rules/`; custom rules registered via `config :excessibility, custom_live_view_rules: [...]`. `mix excessibility` now runs both axe-core AND these rules on each snapshot and fails if either finds issues. Rules are no-ops on HTML without `phx-*` attributes, so the feature is safe on non-Phoenix snapshots.
+- **Rule: `:phx_click_on_non_interactive`** ([#101](https://github.com/lessthanseventy/excessibility/issues/101)) — flags `phx-click` / `phx-click-away` on elements that are not natively keyboard-accessible (anything other than `<a>`/`<button>`/`<input>`/`<select>`/`<textarea>`/`<summary>`/`<details>`, or elements with `tabindex` or an interactive `role`).
+- Config knobs: `:lv_rules_enabled?` (default `true`) and `:lv_rules_disabled` (list of rule ids to skip).
+
+### Changed
+- **`Excessibility.AxeRunner` removed and folded into `Excessibility.Scanner`.** The old module was an internal helper; all callers (`mix excessibility`, `mix excessibility.check`, the `a11y_check` MCP tool, snapshot screenshotting) now go through `Scanner.scan/2`. No end-user behavior change for existing Mix task users.
+- Violation shape returned from `Scanner.scan/2` is now atom-keyed with normalized `:impact` atoms (`:critical | :serious | :moderate | :minor`), not the raw string-keyed axe-core output.
+
 ## [0.12.0] - 2026-03-25
 
 ### Breaking Changes

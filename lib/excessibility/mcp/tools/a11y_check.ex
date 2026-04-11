@@ -3,7 +3,7 @@ defmodule Excessibility.MCP.Tools.A11yCheck do
   MCP tool for running accessibility checks.
 
   Supports three modes:
-  - With `url`: runs axe-core directly against the URL via AxeRunner
+  - With `url`: runs axe-core directly against the URL via `Excessibility.Scanner`
   - With `test_args`: runs tests then checks snapshots via `mix excessibility`
   - No args: checks existing snapshots via `mix excessibility`
   """
@@ -112,24 +112,54 @@ defmodule Excessibility.MCP.Tools.A11yCheck do
     do: %{"skipped" => true, "violation_count" => length(violations)}
 
   defp check_url(url) do
-    case Excessibility.AxeRunner.run(url) do
-      {:ok, result} ->
-        violation_count = length(result.violations)
+    case Excessibility.Scanner.scan(url) do
+      {:ok, report} ->
+        violations = Enum.map(report.violations, &violation_to_json/1)
 
         {:ok,
          %{
            "status" => "success",
            "url" => url,
-           "violation_count" => violation_count,
-           "violations" => result.violations,
-           "passes" => length(result.passes),
-           "incomplete" => length(result.incomplete)
+           "violation_count" => length(violations),
+           "violations" => violations,
+           "passes" => report.passes_count,
+           "incomplete" => length(report.incomplete)
          }}
 
       {:error, reason} ->
-        {:error, reason}
+        {:error, format_scan_error(reason)}
     end
   end
+
+  defp violation_to_json(v) do
+    %{
+      "id" => v.id,
+      "impact" => impact_to_string(v.impact),
+      "description" => v.description,
+      "help" => v.help,
+      "helpUrl" => v.help_url,
+      "tags" => v.tags,
+      "nodes" =>
+        Enum.map(v.nodes, fn n ->
+          %{
+            "target" => n.target,
+            "html" => n.html,
+            "failureSummary" => n.failure_summary
+          }
+        end)
+    }
+  end
+
+  defp impact_to_string(nil), do: nil
+  defp impact_to_string(atom) when is_atom(atom), do: Atom.to_string(atom)
+  defp impact_to_string(other), do: to_string(other)
+
+  defp format_scan_error(:timeout), do: "scan timed out"
+  defp format_scan_error({:http_error, status}), do: "HTTP #{status}"
+  defp format_scan_error({:navigation_failed, msg}), do: "navigation failed: #{msg}"
+  defp format_scan_error({:playwright_error, msg}), do: msg
+  defp format_scan_error({:invalid_url, reason}), do: "invalid URL (#{reason})"
+  defp format_scan_error(other), do: inspect(other)
 
   defp build_elicitation_message(critical, minor) do
     critical_summary =
