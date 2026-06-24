@@ -12,16 +12,29 @@ defmodule Excessibility.Capture do
   @doc """
   Initializes capture state for a test.
   """
-  def init_capture(test_name, opts \\ []) do
+  def init_capture(test_name, opts \\ [], mode \\ :auto) do
     state = %{
       test_name: test_name,
       sequence: 0,
       events: [],
       opts: opts,
+      mode: mode,
       start_time: DateTime.utc_now()
     }
 
     Process.put(:excessibility_capture_state, state)
+  end
+
+  @doc """
+  Initializes a lightweight `:default`-mode context for a test.
+
+  Unlike `init_capture/3` (`:auto` mode, used by the `capture_snapshots`
+  tag), this only records the test name and a per-call sequence so that
+  every snapshot embeds `Test:`/`Sequence:` metadata for cross-snapshot
+  diffing — the default `Module_line.html` filename scheme is preserved.
+  """
+  def init_default_context(test_name) do
+    init_capture(test_name, [], :default)
   end
 
   @doc """
@@ -67,6 +80,7 @@ defmodule Excessibility.Capture do
           timestamp: event.timestamp,
           assigns: assigns,
           previous: get_previous_snapshot_name(state),
+          mode: Map.get(state, :mode, :auto),
           opts: state.opts
         }
     end
