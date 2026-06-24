@@ -62,7 +62,7 @@ defmodule Excessibility.SnapshotDiff do
 
   @doc """
   Return accessibility findings for content that changed outside any live
-  region, in the `Excessibility.LiveViewRules.Rule.finding/0` shape.
+  region, in the `t:Excessibility.LiveViewRules.Rule.finding/0` shape.
 
   A change is considered *announced* (and therefore not flagged) when the
   changed region or any of its ancestors is an `aria-live` region (a value
