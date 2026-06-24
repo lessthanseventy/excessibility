@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0] - 2026-06-24
+
+### Added
+- **Cross-snapshot diffing — `Excessibility.SnapshotDiff`** ([#104](https://github.com/lessthanseventy/excessibility/issues/104)). Compares consecutive snapshots of the same test to catch content that changed without an `aria-live` region — a WCAG 2.1 SC 4.1.3 (Status Messages) failure that no single-snapshot tool, axe-core included, can detect. Public API: `diff/3` (a content-agnostic semantic DOM diff that localizes each change to the deepest stable container), `live_region_findings/3`, `scan_sequence/2`, and `scan_files/2`. Wired into `mix excessibility`; gated by `:cross_snapshot_enabled?` (default `true`).
+- Default snapshots now embed `Test:`/`Sequence:` capture metadata so cross-snapshot diffing can pair them, **without changing the `Module_line.html` filename scheme** (no baseline churn). Adds `:auto`/`:default` capture modes and `Excessibility.Capture.init_default_context/1`.
+
+### Fixed
+- **`:toggle_missing_aria_state`** ([#110](https://github.com/lessthanseventy/excessibility/issues/110)) no longer fires on dismiss patterns: hide-only actions, and toggles whose target is the element's own ancestor container (e.g. a menu item that dismisses its own menu). `aria-expanded` would be wrong on both.
+- **`:phx_click_on_non_interactive`** ([#110](https://github.com/lessthanseventy/excessibility/issues/110)) ignores `phx-click-away` (dismissal, not activation), removing false positives on the standard dialog `focus_wrap` pattern. Elements with `phx-click` are unchanged.
+- **`:click_away_without_escape`** ([#110](https://github.com/lessthanseventy/excessibility/issues/110)) detects a miscased `phx-key="escape"` (rather than the literal `"Escape"` that matches `KeyboardEvent.key`, which silently never fires) and explains it; the generic message also notes the required capitalization.
+- Corrected the `t:Excessibility.LiveViewRules.Rule.finding/0` type cross-reference so `mix docs` builds without warnings.
+
 ## [0.13.0] - 2026-04-10
 
 ### Added
