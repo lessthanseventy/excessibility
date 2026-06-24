@@ -190,9 +190,9 @@ defmodule Excessibility.SnapshotDiff do
       element: region.element,
       selector: region.selector,
       help:
-        "Wrap dynamically-updated content in a container with aria-live=\"polite\" " <>
-          "(or role=\"status\"/\"alert\"/\"log\", or use <output>) so assistive " <>
-          "technology announces changes made via LiveView patches.",
+        ~s|Wrap dynamically-updated content in a container with aria-live="polite" | <>
+          ~s|(or role="status"/"alert"/"log", or use <output>) so assistive | <>
+          ~s|technology announces changes made via LiveView patches.|,
       help_url: "https://www.w3.org/WAI/WCAG21/Understanding/status-messages.html"
     }
   end
