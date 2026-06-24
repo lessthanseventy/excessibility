@@ -59,4 +59,22 @@ defmodule Excessibility.LiveViewRules.Rules.ClickAwayWithoutEscapeTest do
       assert [] = findings(html)
     end
   end
+
+  describe "phx-key case-sensitivity (issue #110)" do
+    # phx-key matches KeyboardEvent.key literally, so "escape" (lowercase)
+    # silently never fires. Still a finding, but with a targeted message.
+    test "miscased escape with a keydown handler is flagged with a capitalization hint" do
+      html = ~s(<div phx-click-away="close" phx-window-keydown="close" phx-key="escape">Panel</div>)
+      assert [finding] = findings(html)
+      assert finding.message =~ "Escape"
+      assert finding.message =~ "phx-key"
+      assert finding.message =~ ~r/capitali/i
+    end
+
+    test "the generic message mentions the capitalized KeyboardEvent.key value" do
+      html = ~s(<div phx-click-away="close">Panel</div>)
+      assert [finding] = findings(html)
+      assert finding.message =~ "Escape"
+    end
+  end
 end

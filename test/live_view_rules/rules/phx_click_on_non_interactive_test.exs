@@ -37,10 +37,27 @@ defmodule Excessibility.LiveViewRules.Rules.PhxClickOnNonInteractiveTest do
       assert [%{selector: "tr"}] = findings(html)
     end
 
-    test "phx-click-away on non-interactive element" do
-      html = ~s(<div phx-click-away="close">Panel</div>)
+    test "element with BOTH phx-click and phx-click-away is still flagged for the click" do
+      html = ~s(<div phx-click="activate" phx-click-away="close">Panel</div>)
       assert [finding] = findings(html)
-      assert finding.message =~ "phx-click-away"
+      assert finding.message =~ "phx-click"
+    end
+  end
+
+  describe "ignores phx-click-away (dismissal, not activation)" do
+    # phx-click-away fires when the user clicks *elsewhere* — the element is not
+    # a click target, so it does not need to be keyboard-focusable. Keyboard
+    # dismissal is click_away_without_escape's concern. See issue #110.
+    test "div with only phx-click-away" do
+      html = ~s(<div phx-click-away="close">Panel</div>)
+      assert [] = findings(html)
+    end
+
+    test "dialog focus-wrap pattern (click-away + window keydown)" do
+      html =
+        ~s(<div phx-click-away="close" phx-window-keydown="close" phx-key="Escape">Dialog body</div>)
+
+      assert [] = findings(html)
     end
   end
 

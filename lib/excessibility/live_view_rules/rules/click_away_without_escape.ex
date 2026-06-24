@@ -72,9 +72,7 @@ defmodule Excessibility.LiveViewRules.Rules.ClickAwayWithoutEscape do
     %{
       rule: id(),
       severity: :serious,
-      message:
-        "<#{tag}> uses phx-click-away for dismissal but has no keyboard " <>
-          "equivalent. Keyboard and screen-reader users cannot close this overlay.",
+      message: build_message(tag, attrs),
       element: element |> Floki.raw_html() |> String.slice(0, 300),
       selector: build_selector(tag, attrs),
       help:
@@ -83,6 +81,30 @@ defmodule Excessibility.LiveViewRules.Rules.ClickAwayWithoutEscape do
           "dialogs, use `role=\"dialog\"` with proper focus management.",
       help_url: "https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/"
     }
+  end
+
+  # A keydown handler is present but phx-key is "escape"/"ESCAPE"/etc. rather
+  # than the exact DOM value "Escape", so Escape dismissal silently never
+  # fires. Common, hard-to-spot pitfall — call it out specifically (#110).
+  defp build_message(tag, attrs) do
+    if miscased_escape?(attrs) do
+      key = find_attr(attrs, "phx-key")
+
+      "<#{tag}> has a keydown handler with phx-key=\"#{key}\", but phx-key is matched " <>
+        "literally against KeyboardEvent.key — it must be capitalized as \"Escape\". " <>
+        "As written, Escape dismissal silently never fires."
+    else
+      "<#{tag}> uses phx-click-away for dismissal but has no keyboard equivalent. " <>
+        "Keyboard and screen-reader users cannot close this overlay. Add phx-window-keydown " <>
+        "with phx-key=\"Escape\" (must match KeyboardEvent.key exactly — capitalized)."
+    end
+  end
+
+  defp miscased_escape?(attrs) do
+    has_keydown? = has_attr?(attrs, "phx-keydown") or has_attr?(attrs, "phx-window-keydown")
+    key = find_attr(attrs, "phx-key")
+
+    has_keydown? and is_binary(key) and String.downcase(key) == "escape" and key != "Escape"
   end
 
   defp find_attr(attrs, name) do
