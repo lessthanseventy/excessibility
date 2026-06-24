@@ -80,7 +80,7 @@ defmodule Mix.Tasks.Excessibility.ReviewTest do
 
     assert output =~ "[BLOCK] editor.html"
     # default heuristic judge's blast-radius summary
-    assert output =~ "new finding(s)"
+    assert output =~ "a11y finding(s)"
     assert output =~ "[serious] div"
   end
 
@@ -95,5 +95,17 @@ defmodule Mix.Tasks.Excessibility.ReviewTest do
 
     assert output =~ "[AUTO] search.html"
     assert output =~ "1 auto"
+  end
+
+  test "--timeline loads a telemetry timeline and runs cleanly" do
+    timeline_path = Path.join(@output_dir, "timeline.json")
+    File.write!(timeline_path, ~s({"test":"x","timeline":[]}))
+    on_exit(fn -> File.rm_rf!(timeline_path) end)
+
+    write_pair("orders.html", @table_two, @table_one)
+
+    output = capture_io(fn -> ReviewTask.run(["--timeline", timeline_path]) end)
+
+    assert output =~ "orders.html"
   end
 end
