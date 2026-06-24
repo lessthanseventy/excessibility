@@ -46,45 +46,77 @@ defmodule Excessibility.LiveViewRules.Rules.ToggleMissingAriaState do
   def default_enabled?, do: true
 
   @impl true
-  def check(tree, _opts) do
-    tree
-    |> Floki.find("[phx-click]")
-    |> Enum.flat_map(&maybe_finding/1)
-  end
+  def check(tree, _opts), do: collect(tree, [])
 
   # ── Implementation ────────────────────────────────────────────────
 
-  defp maybe_finding({_tag, attrs, _children} = element) do
+  # Walk the tree depth-first, tracking the ids of the current element's
+  # ancestors so a toggle that targets its own container can be recognized
+  # as a dismisser rather than a disclosure toggler.
+  defp collect(nodes, ancestor_ids) when is_list(nodes), do: Enum.flat_map(nodes, &collect(&1, ancestor_ids))
+
+  defp collect({_tag, attrs, children} = element, ancestor_ids) do
+    findings = maybe_finding(element, ancestor_ids)
+
+    child_ancestors =
+      case find_attr(attrs, "id") do
+        nil -> ancestor_ids
+        id -> [id | ancestor_ids]
+      end
+
+    findings ++ collect(children, child_ancestors)
+  end
+
+  # Text/comment nodes have no children to recurse into.
+  defp collect(_node, _ancestor_ids), do: []
+
+  defp maybe_finding({_tag, attrs, _children} = element, ancestor_ids) do
     with value when is_binary(value) <- find_attr(attrs, "phx-click"),
-         {:ok, targets} <- toggle_targets(value) do
-      if has_attr?(attrs, "aria-expanded") do
-        []
-      else
-        [build_finding(element, targets)]
+         {:ok, ops} <- toggle_ops(value) do
+      cond do
+        has_attr?(attrs, "aria-expanded") -> []
+        # Hide-only is a dismiss, not a disclosure toggle — aria-expanded
+        # would be permanently wrong on a close button.
+        dismiss_only?(ops) -> []
+        # Toggling an ancestor container means closing the thing you live
+        # inside (e.g. a menu item that dismisses its own menu).
+        closes_own_container?(ops, ancestor_ids) -> []
+        true -> [build_finding(element, op_targets(ops))]
       end
     else
       _ -> []
     end
   end
 
-  defp toggle_targets(value) do
+  defp toggle_ops(value) do
     case Jason.decode(value) do
       {:ok, ops} when is_list(ops) ->
-        targets = extract_toggle_targets(ops)
-        if targets == [], do: :not_a_toggle, else: {:ok, targets}
+        extracted = extract_ops(ops)
+        if extracted == [], do: :not_a_toggle, else: {:ok, extracted}
 
       _ ->
         :not_a_toggle
     end
   end
 
-  defp extract_toggle_targets(ops) do
+  defp extract_ops(ops) do
     Enum.flat_map(ops, fn
-      [op, %{"to" => target}] when op in @toggle_ops -> [target]
-      [op, _params] when op in @toggle_ops -> [nil]
+      [op, %{"to" => target}] when op in @toggle_ops -> [{op, target}]
+      [op, _params] when op in @toggle_ops -> [{op, nil}]
       _ -> []
     end)
   end
+
+  defp dismiss_only?(ops), do: Enum.all?(ops, fn {op, _target} -> op == "hide" end)
+
+  defp closes_own_container?(ops, ancestor_ids) do
+    Enum.any?(ops, fn
+      {_op, "#" <> id} -> id in ancestor_ids
+      _ -> false
+    end)
+  end
+
+  defp op_targets(ops), do: Enum.map(ops, fn {_op, target} -> target end)
 
   defp build_finding({tag, attrs, _children} = element, targets) do
     %{

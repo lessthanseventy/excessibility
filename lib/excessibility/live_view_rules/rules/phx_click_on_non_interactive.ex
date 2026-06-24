@@ -8,9 +8,14 @@ defmodule Excessibility.LiveViewRules.Rules.PhxClickOnNonInteractive do
   unreachable by keyboard users — no focus, no Enter/Space handling, no
   assistive-tech affordances.
 
+  `phx-click-away` is **not** flagged here: it fires when the user clicks
+  *elsewhere*, so the element is never an activation target and does not need
+  to be keyboard-focusable. Keyboard dismissal of click-away overlays is
+  covered by `click_away_without_escape`.
+
   ## What's flagged
 
-  Any element carrying `phx-click` (or `phx-click-away`) that is **not**:
+  Any element carrying `phx-click` that is **not**:
 
     * a natively interactive element (`<a>`, `<button>`, `<input>`,
       `<select>`, `<textarea>`, `<summary>`, `<details>`)
@@ -50,7 +55,7 @@ defmodule Excessibility.LiveViewRules.Rules.PhxClickOnNonInteractive do
   @impl true
   def check(tree, _opts) do
     tree
-    |> Floki.find("[phx-click], [phx-click-away]")
+    |> Floki.find("[phx-click]")
     |> Enum.reject(&interactive?/1)
     |> Enum.map(&build_finding/1)
   end
@@ -70,13 +75,11 @@ defmodule Excessibility.LiveViewRules.Rules.PhxClickOnNonInteractive do
   defp interactive?(_), do: false
 
   defp build_finding({tag, attrs, _children} = element) do
-    event_attr = offending_attr(attrs)
-
     %{
       rule: id(),
       severity: :serious,
       message:
-        "<#{tag}> has #{event_attr} but is not keyboard-accessible. " <>
+        "<#{tag}> has phx-click but is not keyboard-accessible. " <>
           "Use <button>/<a>, or add tabindex=\"0\" with an interactive role and keyboard handlers.",
       element: element |> Floki.raw_html() |> String.slice(0, 300),
       selector: build_selector(tag, attrs),
@@ -85,18 +88,6 @@ defmodule Excessibility.LiveViewRules.Rules.PhxClickOnNonInteractive do
           "or make the element focusable (tabindex=\"0\") with a proper role and keyboard event handlers.",
       help_url: "https://www.w3.org/WAI/ARIA/apg/patterns/button/"
     }
-  end
-
-  defp offending_attr(attrs) do
-    cond do
-      has_attr?(attrs, "phx-click") -> "phx-click"
-      has_attr?(attrs, "phx-click-away") -> "phx-click-away"
-      true -> "a phx-* click handler"
-    end
-  end
-
-  defp has_attr?(attrs, name) do
-    Enum.any?(attrs, fn {n, _} -> n == name end)
   end
 
   defp build_selector(tag, attrs) do

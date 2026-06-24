@@ -27,8 +27,51 @@ defmodule Excessibility.LiveViewRules.Rules.ToggleMissingAriaStateTest do
       assert [_] = findings(html)
     end
 
-    test "button with JS.hide and no ARIA" do
-      html = ~s(<button phx-click='#{js("hide")}'>Hide</button>)
+    test "div that toggles AND hides (mixed ops) and no ARIA" do
+      html = ~s(<div phx-click='[["toggle",{"to":"#menu"}],["hide",{"to":"#other"}]]'>Open</div>)
+      assert [_] = findings(html)
+    end
+  end
+
+  describe "does not flag dismissers" do
+    # A hide-only action is a dismiss, not a disclosure toggle. aria-expanded
+    # belongs on the control that *shows* the target, not on a close button —
+    # its value would be permanently wrong here. See issue #110.
+    test "hide-only close button" do
+      html = ~s(<button phx-click='#{js("hide", "#disconnected")}' aria-label="close">x</button>)
+      assert [] = findings(html)
+    end
+
+    test "hide-only with a push op (flash clear pattern)" do
+      html =
+        ~s(<button phx-click='[["push",{"event":"lv:clear-flash"}],["hide",{"to":"#flash"}]]'>x</button>)
+
+      assert [] = findings(html)
+    end
+
+    # A toggle whose target is the element's own ancestor container is closing
+    # the container it lives in (e.g. a menu item that dismisses its menu), not
+    # a disclosure toggler. The owning toggler lives outside the container.
+    test "menu item toggling its own ancestor container" do
+      html = """
+      <div id="filter-menu-product" role="menu">
+        <button phx-click='#{js("toggle", "#filter-menu-product")}'>Select product</button>
+      </div>
+      """
+
+      assert [] = findings(html)
+    end
+  end
+
+  describe "still flags real togglers" do
+    # A toggler that opens a target it is NOT inside (e.g. a hamburger button)
+    # must still expose aria-expanded.
+    test "opener toggling a sibling container" do
+      html = """
+      <button phx-click='#{js("toggle", "#menu")}'>Menu</button>
+      <div id="menu" role="menu">...</div>
+      """
+
       assert [_] = findings(html)
     end
   end
