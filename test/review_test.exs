@@ -3,6 +3,20 @@ defmodule Excessibility.ReviewTest do
 
   alias Excessibility.Review
 
+  defmodule CriticalStubAnalyzer do
+    @moduledoc false
+    @behaviour Excessibility.TelemetryCapture.Analyzer
+
+    @impl true
+    def name, do: :stub
+    @impl true
+    def default_enabled?, do: false
+    @impl true
+    def analyze(_timeline, _opts) do
+      %{findings: [%{severity: :critical, message: "N+1 query in orders", events: [], metadata: %{}}], stats: %{}}
+    end
+  end
+
   @table_two ~s(<table><tbody><tr><td>Request A</td></tr><tr><td>Request B</td></tr></tbody></table>)
   @table_one ~s(<table><tbody><tr><td>Request A</td></tr></tbody></table>)
 
@@ -75,6 +89,28 @@ defmodule Excessibility.ReviewTest do
       assert "editor" in views
       assert report.summary.block == 1
       assert report.summary.review == 1
+    end
+  end
+
+  describe "behavioral findings from a timeline" do
+    test "are attached to the change and escalate the tier" do
+      change =
+        Review.review_pair("orders", "<div>x</div>", "<div>x</div>",
+          timeline: %{},
+          analyzers: [CriticalStubAnalyzer]
+        )
+
+      # No DOM change, but a critical behavioral finding makes it :block.
+      assert change.region_count == 0
+      assert change.findings == []
+      assert [%{source: :telemetry, severity: :serious}] = change.behavioral
+      assert change.tier == :block
+    end
+
+    test "review/1 computes them once at the report level" do
+      report = Review.review(timeline: %{}, analyzers: [CriticalStubAnalyzer])
+
+      assert [%{rule: :stub}] = report.behavioral
     end
   end
 end

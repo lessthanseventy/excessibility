@@ -24,6 +24,10 @@ defmodule Mix.Tasks.Excessibility.Review do
       mix excessibility.review --fail-on review
       mix excessibility.review --fail-on never
 
+      # Fold in behavioral findings from a telemetry timeline (N+1 queries,
+      # dead state, render thrash) captured by `mix excessibility.debug`
+      mix excessibility.review --timeline test/excessibility/timeline.json --judge
+
   Establish the baseline with `mix excessibility.baseline`.
   """
 
@@ -36,26 +40,37 @@ defmodule Mix.Tasks.Excessibility.Review do
 
   @impl Mix.Task
   def run(args) do
-    {opts, _argv, _invalid} = OptionParser.parse(args, strict: [fail_on: :string, judge: :boolean])
+    {opts, _argv, _invalid} =
+      OptionParser.parse(args, strict: [fail_on: :string, judge: :boolean, timeline: :string])
+
     fail_on = parse_fail_on(opts[:fail_on])
 
-    report = Review.review()
+    report = Review.review(review_opts(opts))
     report = if Keyword.get(opts, :judge, false), do: judge_report(report), else: report
 
-    if report.changes == [] do
-      Mix.shell().info("No changes vs baseline.")
-    else
-      print_report(report)
-    end
-
-    maybe_exit(report.summary, fail_on)
+    print_report(report)
+    maybe_exit(report, fail_on)
   end
 
-  # Run the configured judge over each change, overriding the heuristic tier
-  # with the judge's verdict and recomputing the summary.
-  defp judge_report(%{changes: changes}) do
+  # Load a telemetry timeline (mix excessibility.debug writes timeline.json) so
+  # behavioral findings — N+1 queries, dead state, render thrash — inform the
+  # review alongside the DOM diff.
+  defp review_opts(opts) do
+    case opts[:timeline] do
+      nil -> []
+      path -> [timeline: path |> File.read!() |> Jason.decode!(keys: :atoms)]
+    end
+  end
+
+  # Run the configured judge over each change. The run-level behavioral
+  # findings are attached to every change so the judge weighs behavior
+  # alongside markup; the verdict's tier overrides the heuristic one.
+  defp judge_report(report) do
+    behavioral = Map.get(report, :behavioral, [])
+
     judged =
-      Enum.map(changes, fn change ->
+      Enum.map(report.changes, fn change ->
+        change = Map.update(change, :behavioral, behavioral, &(&1 ++ behavioral))
         verdict = Judge.verdict(change)
         change |> Map.put(:verdict, verdict) |> Map.put(:tier, verdict.tier)
       end)
@@ -68,7 +83,7 @@ defmodule Mix.Tasks.Excessibility.Review do
       block: Map.get(counts, :block, 0)
     }
 
-    %{changes: judged, summary: summary}
+    %{changes: judged, behavioral: behavioral, summary: summary}
   end
 
   defp parse_fail_on(nil), do: :block
@@ -78,17 +93,35 @@ defmodule Mix.Tasks.Excessibility.Review do
 
   defp parse_fail_on(other), do: Mix.raise("Unknown --fail-on value #{inspect(other)}. Use block, review, or never.")
 
-  defp print_report(%{changes: changes, summary: summary}) do
+  defp print_report(%{changes: [], behavioral: []}) do
+    Mix.shell().info("No changes vs baseline.")
+  end
+
+  defp print_report(%{changes: changes, summary: summary} = report) do
     Mix.shell().info("## Blast radius vs baseline\n")
 
     changes
     |> Enum.sort_by(&tier_rank(&1.tier))
     |> Enum.each(&print_change/1)
 
+    print_behavioral(Map.get(report, :behavioral, []))
+
     Mix.shell().info(
       "#{length(changes)} view(s) changed — " <>
         "#{summary.block} block, #{summary.review} review, #{summary.auto} auto"
     )
+  end
+
+  defp print_behavioral([]), do: :ok
+
+  defp print_behavioral(findings) do
+    Mix.shell().info("### Behavioral (telemetry analyzers)\n")
+
+    Enum.each(findings, fn finding ->
+      Mix.shell().info("    [#{finding.severity}] #{finding.rule}: #{finding.message}")
+    end)
+
+    Mix.shell().info("")
   end
 
   defp print_change(change) do
@@ -122,7 +155,19 @@ defmodule Mix.Tasks.Excessibility.Review do
   defp tier_rank(:review), do: 1
   defp tier_rank(:auto), do: 2
 
-  defp maybe_exit(summary, :block) when summary.block > 0, do: exit({:shutdown, 1})
-  defp maybe_exit(summary, :review) when summary.block + summary.review > 0, do: exit({:shutdown, 1})
-  defp maybe_exit(_summary, _fail_on), do: :ok
+  defp maybe_exit(report, fail_on) do
+    block? = report.summary.block > 0 or behavioral_serious?(report)
+
+    cond do
+      fail_on == :block and block? -> exit({:shutdown, 1})
+      fail_on == :review and (block? or report.summary.review > 0) -> exit({:shutdown, 1})
+      true -> :ok
+    end
+  end
+
+  # A critical analyzer finding (normalized to :serious) fails the run even
+  # without --judge, the same as a serious accessibility regression.
+  defp behavioral_serious?(report) do
+    Enum.any?(Map.get(report, :behavioral, []), &(&1.severity == :serious))
+  end
 end

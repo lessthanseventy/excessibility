@@ -20,6 +20,7 @@ defmodule Excessibility.Review do
   """
 
   alias Excessibility.LiveViewRules
+  alias Excessibility.Review.Behavioral
   alias Excessibility.SnapshotDiff
 
   @type tier :: :auto | :review | :block
@@ -29,11 +30,13 @@ defmodule Excessibility.Review do
           regions: [SnapshotDiff.region()],
           region_count: non_neg_integer(),
           findings: [map()],
+          behavioral: [Behavioral.finding()],
           tier: tier()
         }
 
   @type report :: %{
           changes: [change()],
+          behavioral: [Behavioral.finding()],
           summary: %{auto: non_neg_integer(), review: non_neg_integer(), block: non_neg_integer()}
         }
 
@@ -48,9 +51,18 @@ defmodule Excessibility.Review do
   """
   @spec review(keyword()) :: report()
   def review(opts \\ []) do
-    opts
-    |> matched_pairs()
-    |> review_pairs(opts)
+    # Behavioral findings come from the run's telemetry timeline, so they are
+    # computed once at the report level rather than attached per view.
+    timeline = Keyword.get(opts, :timeline)
+    pair_opts = Keyword.delete(opts, :timeline)
+
+    report =
+      opts
+      |> matched_pairs()
+      |> review_pairs(pair_opts)
+
+    behavioral = if timeline, do: Behavioral.findings(timeline, opts), else: []
+    Map.put(report, :behavioral, behavioral)
   end
 
   @doc """
@@ -80,21 +92,33 @@ defmodule Excessibility.Review do
       SnapshotDiff.live_region_findings(baseline_html, current_html, opts) ++
         new_rule_findings(baseline_html, current_html, opts)
 
+    behavioral =
+      case Keyword.get(opts, :timeline) do
+        nil -> []
+        timeline -> Behavioral.findings(timeline, opts)
+      end
+
     %{
       view: view,
       regions: regions,
       region_count: length(regions),
       findings: findings,
-      tier: tier(findings)
+      behavioral: behavioral,
+      tier: tier(findings ++ behavioral)
     }
   end
 
   # ── Tiering ────────────────────────────────────────────────────────
 
-  # Drive the tier off the severity of *newly introduced* findings.
-  # Regions are reported for context but don't escalate on their own — a
-  # change that altered rendering without breaking accessibility is safe.
-  defp tier(findings) do
+  @doc """
+  The risk tier for a list of findings (accessibility and/or behavioral).
+
+  Driven by the worst severity: a new critical/serious finding is `:block`,
+  any other finding is `:review`, none is `:auto`. Regions are reported for
+  context but don't escalate on their own.
+  """
+  @spec tier([map()]) :: tier()
+  def tier(findings) do
     severities = Enum.map(findings, & &1.severity)
 
     cond do
@@ -121,7 +145,7 @@ defmodule Excessibility.Review do
 
   defp fingerprint(%{rule: rule, selector: selector}), do: {rule, selector}
 
-  defp unchanged?(%{region_count: 0, findings: []}), do: true
+  defp unchanged?(%{region_count: 0, findings: [], behavioral: []}), do: true
   defp unchanged?(_), do: false
 
   defp summarize(changes) do

@@ -6,9 +6,31 @@ defmodule Excessibility.Review.JudgeTest do
   alias Excessibility.Review.Judge.Heuristic
   alias Excessibility.Review.Judge.LLM
 
+  defmodule CriticalStubAnalyzer do
+    @moduledoc false
+    @behaviour Excessibility.TelemetryCapture.Analyzer
+
+    @impl true
+    def name, do: :stub
+    @impl true
+    def default_enabled?, do: false
+    @impl true
+    def analyze(_timeline, _opts) do
+      %{findings: [%{severity: :critical, message: "N+1 query in orders", events: [], metadata: %{}}], stats: %{}}
+    end
+  end
+
   # A change that introduces a serious (keyboard-inaccessible) violation.
   defp block_change do
     Review.review_pair("editor", "<div>Save</div>", ~s(<div phx-click="save">Save</div>))
+  end
+
+  # A change with no DOM/a11y issue but a critical behavioral finding.
+  defp behavioral_change do
+    Review.review_pair("orders", "<div>x</div>", "<div>x</div>",
+      timeline: %{},
+      analyzers: [CriticalStubAnalyzer]
+    )
   end
 
   describe "Heuristic judge" do
@@ -75,6 +97,29 @@ defmodule Excessibility.Review.JudgeTest do
 
     test "falls back to the heuristic when no completion is configured" do
       assert LLM.judge(block_change(), []).source == :heuristic
+    end
+  end
+
+  describe "reading behavioral (telemetry) findings" do
+    test "heuristic folds behavioral findings into risks and the tier" do
+      verdict = Heuristic.judge(behavioral_change(), [])
+
+      assert verdict.tier == :block
+      assert verdict.blast_radius =~ "behavioral"
+      assert Enum.any?(verdict.risks, &(&1.detail =~ "N+1"))
+    end
+
+    test "LLM prompt includes the behavioral findings" do
+      completion = fn prompt ->
+        send(self(), {:prompt, prompt})
+        {:ok, ~s({"tier":"review","blast_radius":"x","risks":[],"confidence":0.5})}
+      end
+
+      LLM.judge(behavioral_change(), completion: completion)
+
+      assert_received {:prompt, prompt}
+      assert prompt =~ "Behavioral findings"
+      assert prompt =~ "N+1"
     end
   end
 

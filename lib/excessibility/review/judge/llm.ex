@@ -113,7 +113,18 @@ defmodule Excessibility.Review.Judge.LLM do
 
     Newly introduced accessibility findings:
     #{render_findings(change.findings)}
+
+    Behavioral findings (from telemetry analyzers — queries, state, renders):
+    #{render_behavioral(Map.get(change, :behavioral, []))}
     """
+  end
+
+  defp render_behavioral([]), do: "(none)"
+
+  defp render_behavioral(findings) do
+    Enum.map_join(findings, "\n", fn finding ->
+      "- [#{finding.severity}] #{finding.rule}: #{finding.message}"
+    end)
   end
 
   defp render_regions([]), do: "(none)"
