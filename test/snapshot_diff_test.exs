@@ -6,6 +6,17 @@ defmodule Excessibility.SnapshotDiffTest do
   defp regions(old, new), do: SnapshotDiff.diff(old, new)
   defp findings(old, new), do: SnapshotDiff.live_region_findings(old, new)
 
+  defp write_snap(dir, name, test, sequence, body) do
+    path = Path.join(dir, name)
+
+    content =
+      "<!--\nExcessibility Snapshot\nTest: #{test}\nSequence: #{sequence}\n-->\n" <>
+        "<html><body>#{body}</body></html>"
+
+    File.write!(path, content)
+    path
+  end
+
   # A LiveView patch that filters a table from two rows to one.
   @table_two ~s(<table><tbody><tr><td>Request A</td></tr><tr><td>Request B</td></tr></tbody></table>)
   @table_one ~s(<table><tbody><tr><td>Request A</td></tr></tbody></table>)
@@ -106,6 +117,50 @@ defmodule Excessibility.SnapshotDiffTest do
 
     test "returns no findings for a single snapshot" do
       assert [] = SnapshotDiff.scan_sequence([@table_two])
+    end
+  end
+
+  describe "scan_files/2 — pair snapshots by captured test metadata" do
+    setup do
+      dir = Path.join(System.tmp_dir!(), "excessibility_diff_#{System.unique_integer([:positive])}")
+      File.mkdir_p!(dir)
+      on_exit(fn -> File.rm_rf!(dir) end)
+      {:ok, dir: dir}
+    end
+
+    test "diffs consecutive snapshots within the same test, ordered by sequence", %{dir: dir} do
+      p1 = write_snap(dir, "t_1_initial.html", "page test", 1, @table_two)
+      p2 = write_snap(dir, "t_2_filter.html", "page test", 2, @table_one)
+
+      # Pass out of order — grouping sorts by sequence.
+      assert [{file, finding}] = SnapshotDiff.scan_files([p2, p1])
+      assert file == p2
+      assert finding.rule == :content_change_without_live_region
+    end
+
+    test "does not cross-chain snapshots from different tests", %{dir: dir} do
+      p1 = write_snap(dir, "a_1.html", "test a", 1, @table_two)
+      p2 = write_snap(dir, "b_1.html", "test b", 1, @table_one)
+
+      assert [] = SnapshotDiff.scan_files([p1, p2])
+    end
+
+    test "skips snapshots without capture metadata", %{dir: dir} do
+      p1 = Path.join(dir, "Mod_10.html")
+      p2 = Path.join(dir, "Mod_20.html")
+      File.write!(p1, "<html><body>#{@table_two}</body></html>")
+      File.write!(p2, "<html><body>#{@table_one}</body></html>")
+
+      assert [] = SnapshotDiff.scan_files([p1, p2])
+    end
+
+    test "respects live regions across paired files", %{dir: dir} do
+      body_two = ~s(<div role="status">#{@table_two}</div>)
+      body_one = ~s(<div role="status">#{@table_one}</div>)
+      p1 = write_snap(dir, "t_1.html", "announced test", 1, body_two)
+      p2 = write_snap(dir, "t_2.html", "announced test", 2, body_one)
+
+      assert [] = SnapshotDiff.scan_files([p1, p2])
     end
   end
 end

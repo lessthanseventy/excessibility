@@ -88,6 +88,52 @@ defmodule Excessibility.SnapshotDiff do
     |> Enum.flat_map(fn [old, new] -> live_region_findings(old, new, opts) end)
   end
 
+  @doc """
+  Diff snapshot *files* on disk, grouped by the test that produced them.
+
+  Auto-captured snapshots embed a `Test:`/`Sequence:` metadata comment;
+  this groups files by test, orders them by sequence, and diffs each
+  consecutive pair. Returns `{file, finding}` tuples where `file` is the
+  later snapshot of the pair the finding came from.
+
+  Snapshots without that metadata (the default `Module_line.html` naming
+  carries no reliable test boundary) are skipped, so this is inert unless
+  capture metadata is present.
+  """
+  @spec scan_files([Path.t()], keyword()) :: [{Path.t(), Rule.finding()}]
+  def scan_files(paths, opts \\ []) when is_list(paths) do
+    paths
+    |> Enum.map(&read_with_meta/1)
+    |> Enum.filter(fn {_path, _html, meta} -> meta != nil end)
+    |> Enum.group_by(fn {_path, _html, meta} -> meta.test end)
+    |> Enum.flat_map(fn {_test, entries} -> diff_group(entries, opts) end)
+  end
+
+  defp read_with_meta(path) do
+    case File.read(path) do
+      {:ok, html} -> {path, html, parse_meta(html)}
+      {:error, _} -> {path, "", nil}
+    end
+  end
+
+  defp parse_meta(html) do
+    with [_, test] <- Regex.run(~r/Test:\s*(.+)/, html),
+         [_, sequence] <- Regex.run(~r/Sequence:\s*(\d+)/, html) do
+      %{test: String.trim(test), sequence: String.to_integer(sequence)}
+    else
+      _ -> nil
+    end
+  end
+
+  defp diff_group(entries, opts) do
+    entries
+    |> Enum.sort_by(fn {_path, _html, meta} -> meta.sequence end)
+    |> Enum.chunk_every(2, 1, :discard)
+    |> Enum.flat_map(fn [{_p1, old, _m1}, {p2, new, _m2}] ->
+      old |> live_region_findings(new, opts) |> Enum.map(&{p2, &1})
+    end)
+  end
+
   # ── Diff walk ──────────────────────────────────────────────────────
 
   defp regions(old_node, new_node, ancestors) do

@@ -28,6 +28,9 @@ defmodule Mix.Tasks.Excessibility do
 
   - `:axe_disable_rules` - List of axe rule IDs to disable (default: `[]`)
   - `:excessibility_output_path` - Base directory for snapshots (default: `"test/excessibility"`)
+  - `:cross_snapshot_enabled?` - Diff consecutive snapshots of the same test
+    to flag content that changed without an `aria-live` region (default:
+    `true`). Only fires on snapshots that carry capture metadata.
 
   ## Prerequisites
 
@@ -126,19 +129,21 @@ defmodule Mix.Tasks.Excessibility do
     lv_disabled = Application.get_env(:excessibility, :lv_rules_disabled, [])
     lv_opts = [disable: lv_disabled]
 
+    cross_by_file = cross_snapshot_findings(files)
+
     results =
       Enum.map(files, fn file ->
         file_url = "file://" <> Path.expand(file)
         axe_result = Excessibility.Scanner.scan(file_url, scan_opts)
 
-        lv_result =
+        lv_findings =
           if lv_rules_enabled? do
-            Excessibility.LiveViewRules.scan_file(file, lv_opts)
+            Excessibility.LiveViewRules.scan_file(file, lv_opts).findings
           else
-            %{findings: []}
+            []
           end
 
-        {file, axe_result, lv_result}
+        {file, axe_result, %{findings: lv_findings ++ Map.get(cross_by_file, file, [])}}
       end)
 
     {passed, failed} = Enum.split_with(results, &file_passed?/1)
@@ -159,6 +164,19 @@ defmodule Mix.Tasks.Excessibility do
     end
   end
 
+  # Cross-snapshot checks compare consecutive snapshots of the same test
+  # (e.g. content that changed without an aria-live announcement). They only
+  # fire on snapshots carrying capture metadata, so this is inert otherwise.
+  defp cross_snapshot_findings(files) do
+    if Application.get_env(:excessibility, :cross_snapshot_enabled?, true) do
+      files
+      |> Excessibility.SnapshotDiff.scan_files()
+      |> Enum.group_by(fn {file, _finding} -> file end, fn {_file, finding} -> finding end)
+    else
+      %{}
+    end
+  end
+
   defp file_passed?({_file, {:ok, %{violations: []}}, %{findings: []}}), do: true
   defp file_passed?(_), do: false
 
@@ -169,7 +187,7 @@ defmodule Mix.Tasks.Excessibility do
   defp print_lv(%{findings: []}), do: :ok
 
   defp print_lv(%{findings: findings}) do
-    Mix.shell().info("  LiveView rule issues:")
+    Mix.shell().info("  Rule issues:")
 
     Enum.each(findings, fn %{rule: rule, severity: severity, message: message, selector: selector} ->
       label = severity |> Atom.to_string() |> String.upcase()
