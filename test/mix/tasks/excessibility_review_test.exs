@@ -70,6 +70,20 @@ defmodule Mix.Tasks.Excessibility.ReviewTest do
     end)
   end
 
+  test "--judge enriches the report with the judge's blast-radius summary" do
+    write_pair("editor.html", "<div>Save</div>", ~s(<div phx-click="save">Save</div>))
+
+    output =
+      capture_io(fn ->
+        assert catch_exit(ReviewTask.run(["--judge"])) == {:shutdown, 1}
+      end)
+
+    assert output =~ "[BLOCK] editor.html"
+    # default heuristic judge's blast-radius summary
+    assert output =~ "new finding(s)"
+    assert output =~ "[serious] div"
+  end
+
   test "a change inside a live region is :auto and does not block" do
     write_pair(
       "search.html",
