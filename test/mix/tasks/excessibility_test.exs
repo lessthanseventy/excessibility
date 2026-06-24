@@ -16,6 +16,7 @@ defmodule Mix.Tasks.ExcessibilityTest do
       File.rm_rf!(@snapshot_dir)
       Application.delete_env(:excessibility, :axe_runner_path)
       Application.delete_env(:excessibility, :axe_disable_rules)
+      Application.delete_env(:excessibility, :cross_snapshot_enabled?)
     end)
 
     :ok
@@ -147,7 +148,66 @@ defmodule Mix.Tasks.ExcessibilityTest do
     end
   end
 
+  describe "cross-snapshot diffing (#104)" do
+    setup :setup_passing_mock
+
+    # A filter interaction that drops a table row — content changes with no
+    # aria-live, which only a before/after comparison can catch.
+    @table_two ~s(<table><tbody><tr><td>Request A</td></tr><tr><td>Request B</td></tr></tbody></table>)
+    @table_one ~s(<table><tbody><tr><td>Request A</td></tr></tbody></table>)
+
+    test "flags content changed without aria-live across snapshots of one test" do
+      write_capture("page_test_1_initial.html", "page test", 1, @table_two)
+      write_capture("page_test_2_filter.html", "page test", 2, @table_one)
+
+      output =
+        capture_io(fn ->
+          assert catch_exit(Excessibility.run([])) == {:shutdown, 1}
+        end)
+
+      assert output =~ "### Issues Found"
+      assert output =~ "content_change_without_live_region"
+      assert output =~ "aria-live"
+    end
+
+    test "passes when the changed content is inside a live region" do
+      write_capture("p_1.html", "page test", 1, ~s(<div role="status">#{@table_two}</div>))
+      write_capture("p_2.html", "page test", 2, ~s(<div role="status">#{@table_one}</div>))
+
+      output = capture_io(fn -> Excessibility.run([]) end)
+
+      assert output =~ "passed accessibility checks"
+    end
+
+    test "does not run on snapshots without capture metadata" do
+      File.write!(Path.join(@snapshot_dir, "Mod_10.html"), "<html><body>#{@table_two}</body></html>")
+      File.write!(Path.join(@snapshot_dir, "Mod_20.html"), "<html><body>#{@table_one}</body></html>")
+
+      output = capture_io(fn -> Excessibility.run([]) end)
+
+      assert output =~ "passed accessibility checks"
+    end
+
+    test "respects :cross_snapshot_enabled? = false" do
+      Application.put_env(:excessibility, :cross_snapshot_enabled?, false)
+      write_capture("page_test_1.html", "page test", 1, @table_two)
+      write_capture("page_test_2.html", "page test", 2, @table_one)
+
+      output = capture_io(fn -> Excessibility.run([]) end)
+
+      assert output =~ "passed accessibility checks"
+    end
+  end
+
   # --- Mock Helpers ---
+
+  defp write_capture(name, test, sequence, body) do
+    content =
+      "<!--\nExcessibility Snapshot\nTest: #{test}\nSequence: #{sequence}\n-->\n" <>
+        "<html><body>#{body}</body></html>"
+
+    File.write!(Path.join(@snapshot_dir, name), content)
+  end
 
   defp setup_passing_mock(_context) do
     mock_path =
