@@ -64,4 +64,25 @@ defmodule Excessibility.MacroIntegrationTest do
            "Expected snapshot file matching #{expected_pattern}, but found none. " <>
              "Dir contents: #{inspect(File.ls!(@snapshot_dir))}"
   end
+
+  test "default snapshots embed Test/Sequence metadata without changing the filename" do
+    conn =
+      :get
+      |> Plug.Test.conn("/")
+      |> Plug.Conn.put_resp_content_type("text/html")
+      |> Plug.Conn.send_resp(200, "<h1>Hello World</h1>")
+
+    html_snapshot(conn)
+
+    files = Path.wildcard(Path.join(@snapshot_dir, "Elixir_Excessibility_MacroIntegrationTest_*.html"))
+    assert [file | _] = files
+
+    content = File.read!(file)
+    # The default Module_line.html name is preserved (matched by the wildcard
+    # above) but the snapshot now carries capture metadata for cross-snapshot
+    # diffing.
+    assert content =~ "Excessibility Snapshot"
+    assert content =~ "Test:"
+    assert content =~ "Sequence:"
+  end
 end

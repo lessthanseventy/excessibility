@@ -66,16 +66,27 @@ defmodule Excessibility do
       import Excessibility, only: [html_snapshot: 1, html_snapshot: 2]
 
       setup context do
+        telemetry? = System.get_env("EXCESSIBILITY_TELEMETRY_CAPTURE") == "true"
+
         # Store test name for telemetry capture
-        if System.get_env("EXCESSIBILITY_TELEMETRY_CAPTURE") == "true" do
-          test_name = context[:test]
-          Process.put(:excessibility_test_name, test_name)
-          Excessibility.TelemetryCapture.clear_snapshots(test_name)
+        if telemetry? do
+          Process.put(:excessibility_test_name, context[:test])
+          Excessibility.TelemetryCapture.clear_snapshots(context[:test])
         end
 
-        if context[:capture_snapshots] || context[:capture] do
-          test_name = context[:test]
-          Excessibility.Capture.init_capture(test_name, context)
+        cond do
+          context[:capture_snapshots] || context[:capture] ->
+            Excessibility.Capture.init_capture(context[:test], context)
+
+          # Default-mode context: embeds Test/Sequence metadata in ordinary
+          # snapshots (module-qualified test key avoids collisions between
+          # same-named tests in different modules) so cross-snapshot diffing
+          # can pair them. Skipped under telemetry, which manages its own.
+          not telemetry? ->
+            Excessibility.Capture.init_default_context("#{inspect(context[:module])} #{context[:test]}")
+
+          true ->
+            :ok
         end
 
         on_exit(fn ->

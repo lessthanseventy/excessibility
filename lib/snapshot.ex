@@ -85,8 +85,10 @@ defmodule Excessibility.Snapshot do
       opts[:name] ->
         opts[:name]
 
-      # Auto-capture mode with metadata
-      metadata ->
+      # Auto-capture (telemetry) mode names files by test/sequence/event.
+      # Default-mode metadata is written into the snapshot comment but does
+      # NOT change the filename scheme.
+      auto_capture?(metadata) ->
         "#{metadata.test_name}_#{metadata.sequence}_#{metadata.event_type}.html"
 
       # Default: module_line.html
@@ -94,6 +96,9 @@ defmodule Excessibility.Snapshot do
         "#{module |> to_string() |> String.replace(".", "_")}_#{env.line}.html"
     end
   end
+
+  defp auto_capture?(%{mode: :auto}), do: true
+  defp auto_capture?(_), do: false
 
   defp get_capture_metadata(source, opts) do
     # Check if we're in auto-capture mode
