@@ -24,9 +24,16 @@ defmodule Mix.Tasks.Excessibility do
       # Run a describe block
       mix excessibility test/my_test.exs:10
 
+      # Scan each snapshot at several widths (WCAG 1.4.10 Reflow only
+      # shows up at narrow viewports)
+      mix excessibility --viewports 1440x900,320x800
+
   ## Configuration
 
   - `:axe_disable_rules` - List of axe rule IDs to disable (default: `[]`)
+  - `:viewports` - List of `{width, height}` tuples to scan each snapshot
+    at (default: single 1280x720 scan). Equivalent to the `--viewports`
+    flag; the flag wins when both are given.
   - `:excessibility_output_path` - Base directory for snapshots (default: `"test/excessibility"`)
   - `:cross_snapshot_enabled?` - Diff consecutive snapshots of the same test
     to flag content that changed without an `aria-live` region (default:
@@ -42,17 +49,55 @@ defmodule Mix.Tasks.Excessibility do
   @requirements ["app.config"]
 
   @impl Mix.Task
-  def run([]) do
-    # No args - check all existing snapshots
-    run_axe_on_all()
-  end
-
   def run(args) do
-    # With args - run tests first, then check new snapshots
-    run_tests_then_check(args)
+    {viewports, test_args} = extract_viewports(args)
+
+    if test_args == [] do
+      # No test args - check all existing snapshots
+      run_axe_on_all(viewports)
+    else
+      # With args - run tests first, then check new snapshots
+      run_tests_then_check(test_args, viewports)
+    end
   end
 
-  defp run_axe_on_all do
+  # --viewports is our flag, not mix test's; strip it before passing the
+  # remaining args through. Falls back to the :viewports config key.
+  defp extract_viewports(args) do
+    case Enum.split_while(args, &(&1 != "--viewports" and not String.starts_with?(&1, "--viewports="))) do
+      {_all, []} -> {config_viewports(), args}
+      {leading, ["--viewports", spec | rest]} -> {parse_viewport_specs(spec), leading ++ rest}
+      {leading, ["--viewports=" <> spec | rest]} -> {parse_viewport_specs(spec), leading ++ rest}
+      {leading, ["--viewports"]} -> {config_viewports(), leading}
+    end
+  end
+
+  defp config_viewports do
+    case Application.get_env(:excessibility, :viewports) do
+      [_ | _] = viewports -> Enum.filter(viewports, &valid_viewport?/1)
+      _ -> []
+    end
+  end
+
+  defp parse_viewport_specs(spec) do
+    spec
+    |> String.split(",", trim: true)
+    |> Enum.map(fn pair ->
+      with [w, h] <- String.split(pair, "x"),
+           {width, ""} <- Integer.parse(w),
+           {height, ""} <- Integer.parse(h) do
+        {width, height}
+      else
+        _ -> nil
+      end
+    end)
+    |> Enum.filter(&valid_viewport?/1)
+  end
+
+  defp valid_viewport?({w, h}) when is_integer(w) and is_integer(h) and w > 0 and h > 0, do: true
+  defp valid_viewport?(_), do: false
+
+  defp run_axe_on_all(viewports) do
     files = list_snapshots()
 
     if Enum.empty?(files) do
@@ -72,10 +117,10 @@ defmodule Mix.Tasks.Excessibility do
     end
 
     Mix.shell().info("Checking #{length(files)} snapshot(s)...\n")
-    run_axe(files)
+    run_axe(files, viewports)
   end
 
-  defp run_tests_then_check(args) do
+  defp run_tests_then_check(args, viewports) do
     # Get snapshot count before test
     snapshots_before = list_snapshots()
 
@@ -111,7 +156,7 @@ defmodule Mix.Tasks.Excessibility do
     Mix.shell().info("\n## Accessibility Check\n")
     Mix.shell().info("Checking #{length(new_snapshots)} snapshot(s)...\n")
 
-    run_axe(new_snapshots)
+    run_axe(new_snapshots, viewports)
   end
 
   defp list_snapshots do
@@ -122,9 +167,10 @@ defmodule Mix.Tasks.Excessibility do
     |> Enum.sort()
   end
 
-  defp run_axe(files) do
+  defp run_axe(files, viewports) do
     disable_rules = Application.get_env(:excessibility, :axe_disable_rules, [])
     scan_opts = if disable_rules == [], do: [], else: [disable_rules: disable_rules]
+    scan_opts = if viewports == [], do: scan_opts, else: [{:viewports, viewports} | scan_opts]
     lv_rules_enabled? = Application.get_env(:excessibility, :lv_rules_enabled?, true)
     lv_disabled = Application.get_env(:excessibility, :lv_rules_disabled, [])
     lv_opts = [disable: lv_disabled]
@@ -179,6 +225,9 @@ defmodule Mix.Tasks.Excessibility do
     end
   end
 
+  defp file_passed?({_file, {:ok, %{results: results}}, %{findings: []}}) when is_list(results),
+    do: Enum.all?(results, &(&1.violations == []))
+
   defp file_passed?({_file, {:ok, %{violations: []}}, %{findings: []}}), do: true
   defp file_passed?(_), do: false
 
@@ -195,9 +244,21 @@ defmodule Mix.Tasks.Excessibility do
     end)
   end
 
+  defp print_axe({:ok, %{results: results}}) when is_list(results) do
+    Enum.each(results, fn %{viewport: viewport, violations: violations} ->
+      if violations != [] do
+        Mix.shell().info("  @#{format_viewport(viewport)}:")
+        format_violations(violations)
+      end
+    end)
+  end
+
   defp print_axe({:ok, %{violations: []}}), do: :ok
   defp print_axe({:ok, %{violations: violations}}), do: format_violations(violations)
   defp print_axe({:error, reason}), do: Mix.shell().info("  Error: #{format_error(reason)}\n")
+
+  defp format_viewport({w, h}), do: "#{w}x#{h}"
+  defp format_viewport(other), do: inspect(other)
 
   defp print_lv(%{findings: []}), do: :ok
 

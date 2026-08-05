@@ -11,7 +11,8 @@ const { AxeBuilder } = require(path.join(modulesDir, "@axe-core", "playwright"))
 const USAGE =
   "Usage: node axe-runner.js <url> " +
   "[--screenshot path] [--wait-for selector] [--wait-until load|domcontentloaded|networkidle] " +
-  "[--disable-rules r1,r2] [--tags t1,t2] [--timeout ms] [--viewport WxH] [--user-agent ua]";
+  "[--disable-rules r1,r2] [--tags t1,t2] [--timeout ms] [--viewport WxH] " +
+  "[--viewports WxH,WxH,...] [--user-agent ua]";
 
 const DEFAULT_UA =
   "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
@@ -39,6 +40,7 @@ function parseArgs(argv) {
     tags: ["wcag2a", "wcag2aa"],
     timeout: 30000,
     viewport: { width: 1280, height: 720 },
+    viewports: null,
     userAgent: null,
   };
 
@@ -76,6 +78,18 @@ function parseArgs(argv) {
         if (next) {
           const [w, h] = next.split("x").map((s) => parseInt(s, 10));
           if (w > 0 && h > 0) opts.viewport = { width: w, height: h };
+        }
+        i++;
+        break;
+      }
+      case "--viewports": {
+        if (next) {
+          const parsed = next
+            .split(",")
+            .map((spec) => spec.split("x").map((s) => parseInt(s, 10)))
+            .filter(([w, h]) => w > 0 && h > 0)
+            .map(([w, h]) => ({ width: w, height: h }));
+          if (parsed.length > 0) opts.viewports = parsed;
         }
         i++;
         break;
@@ -141,6 +155,11 @@ async function waitForStylesheets(page, warnings, maxWait = 10000) {
   await page.evaluate(() => document.fonts && document.fonts.ready).catch(() => {});
 }
 
+function viewportScreenshotPath(basePath, vp) {
+  const suffix = `${vp.width}x${vp.height}`;
+  return /\.png$/i.test(basePath) ? basePath.replace(/\.png$/i, `.${suffix}.png`) : `${basePath}.${suffix}.png`;
+}
+
 async function waitForContent(page, maxWait = 8000) {
   const start = Date.now();
   while (Date.now() - start < maxWait) {
@@ -160,7 +179,8 @@ async function main() {
   }
 
   const opts = parseArgs(argv);
-  const { url, screenshotPath, waitFor, waitUntil, disableRules, tags, timeout, viewport, userAgent } = opts;
+  const { url, screenshotPath, waitFor, waitUntil, disableRules, tags, timeout, viewport, viewports, userAgent } =
+    opts;
 
   const isFileUrl = url.startsWith("file://");
   const startTime = Date.now();
@@ -176,7 +196,7 @@ async function main() {
   const chromiumVersion = browser.version();
 
   const contextOptions = {
-    viewport,
+    viewport: viewports ? viewports[0] : viewport,
     locale: "en-US",
   };
   if (!isFileUrl) {
@@ -243,30 +263,79 @@ async function main() {
 
     await waitForStylesheets(page, warnings);
 
-    let builder = new AxeBuilder({ page }).withTags(tags);
-    if (disableRules.length > 0) builder = builder.disableRules(disableRules);
+    const runAxe = async () => {
+      let builder = new AxeBuilder({ page }).withTags(tags);
+      if (disableRules.length > 0) builder = builder.disableRules(disableRules);
+      return builder.analyze();
+    };
+
+    const takeScreenshot = async (screenshotFile) => {
+      try {
+        await page.screenshot({ path: screenshotFile, fullPage: true });
+      } catch {
+        // screenshot failure is non-fatal
+      }
+    };
+
+    const baseOutput = () => ({
+      final_url: page.url(),
+      timestamp: new Date().toISOString(),
+      duration_ms: Date.now() - startTime,
+      warnings,
+    });
+
+    if (viewports) {
+      const perViewport = [];
+      let axeVersion = null;
+
+      for (const vp of viewports) {
+        await page.setViewportSize(vp);
+
+        let results;
+        try {
+          results = await runAxe();
+        } catch (err) {
+          emitError("playwright_error", `axe-core analyze failed at ${vp.width}x${vp.height}: ${err.message}`);
+          await closeQuietly(browser);
+          process.exit(1);
+        }
+
+        if (screenshotPath) await takeScreenshot(viewportScreenshotPath(screenshotPath, vp));
+
+        axeVersion = (results && results.testEngine && results.testEngine.version) || axeVersion;
+        perViewport.push({
+          viewport: `${vp.width}x${vp.height}`,
+          violations: results.violations || [],
+          incomplete: results.incomplete || [],
+          passes_count: (results.passes || []).length,
+          inapplicable_count: (results.inapplicable || []).length,
+        });
+      }
+
+      console.log(
+        JSON.stringify({
+          ...baseOutput(),
+          engine: { axe_version: axeVersion, chromium_version: chromiumVersion },
+          results: perViewport,
+        }),
+      );
+      await closeQuietly(browser);
+      return;
+    }
 
     let results;
     try {
-      results = await builder.analyze();
+      results = await runAxe();
     } catch (err) {
       emitError("playwright_error", `axe-core analyze failed: ${err.message}`);
       await closeQuietly(browser);
       process.exit(1);
     }
 
-    if (screenshotPath) {
-      try {
-        await page.screenshot({ path: screenshotPath, fullPage: true });
-      } catch {
-        // screenshot failure is non-fatal
-      }
-    }
+    if (screenshotPath) await takeScreenshot(screenshotPath);
 
     const output = {
-      final_url: page.url(),
-      timestamp: new Date().toISOString(),
-      duration_ms: Date.now() - startTime,
+      ...baseOutput(),
       engine: {
         axe_version: results && results.testEngine ? results.testEngine.version || null : null,
         chromium_version: chromiumVersion,
@@ -275,7 +344,6 @@ async function main() {
       incomplete: results.incomplete || [],
       passes_count: (results.passes || []).length,
       inapplicable_count: (results.inapplicable || []).length,
-      warnings,
     };
 
     console.log(JSON.stringify(output));

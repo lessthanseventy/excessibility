@@ -199,7 +199,98 @@ defmodule Mix.Tasks.ExcessibilityTest do
     end
   end
 
+  describe "multiple viewports (#122)" do
+    setup do
+      on_exit(fn -> Application.delete_env(:excessibility, :viewports) end)
+      :ok
+    end
+
+    test "--viewports flag reaches the runner and clean results pass" do
+      setup_multi_viewport_mock(clean?: true)
+      File.write!(Path.join(@snapshot_dir, "test.html"), "<html></html>")
+
+      output =
+        capture_io(fn ->
+          Excessibility.run(["--viewports", "1440x900,320x800"])
+        end)
+
+      assert output =~ "passed accessibility checks"
+    end
+
+    test "per-viewport violations are attributed to their width" do
+      setup_multi_viewport_mock(clean?: false)
+      File.write!(Path.join(@snapshot_dir, "test.html"), "<html></html>")
+
+      output =
+        capture_io(fn ->
+          assert catch_exit(Excessibility.run(["--viewports", "1440x900,320x800"])) ==
+                   {:shutdown, 1}
+        end)
+
+      assert output =~ "### Issues Found"
+      assert output =~ "@320x800"
+      assert output =~ "image-alt"
+      refute output =~ "@1440x900"
+    end
+
+    test ":viewports config is honored without a CLI flag" do
+      setup_multi_viewport_mock(clean?: true)
+      Application.put_env(:excessibility, :viewports, [{1440, 900}, {320, 800}])
+      File.write!(Path.join(@snapshot_dir, "test.html"), "<html></html>")
+
+      output =
+        capture_io(fn ->
+          Excessibility.run([])
+        end)
+
+      assert output =~ "passed accessibility checks"
+    end
+  end
+
   # --- Mock Helpers ---
+
+  # Emits per-viewport results, but only when the runner actually received
+  # --viewports 1440x900,320x800 — otherwise errors, so these tests prove
+  # the flag is plumbed through.
+  defp setup_multi_viewport_mock(clean?: clean?) do
+    narrow_violations =
+      if clean? do
+        "[]"
+      else
+        """
+        [{
+          id: "image-alt",
+          impact: "critical",
+          description: "Images must have alternative text",
+          helpUrl: "https://dequeuniversity.com/rules/axe/4.11/image-alt",
+          nodes: [{html: "<img src='a.png'>"}]
+        }]
+        """
+      end
+
+    mock_path =
+      create_mock_script("""
+      #!/usr/bin/env node
+      const args = process.argv.slice(2);
+      const idx = args.indexOf("--viewports");
+      if (idx === -1 || args[idx + 1] !== "1440x900,320x800") {
+        process.stdout.write(JSON.stringify({error: "playwright_error", message: "runner did not receive --viewports"}));
+        process.exit(1);
+      }
+      process.stdout.write(JSON.stringify({
+        results: [
+          {viewport: "1440x900", violations: [], incomplete: [], passes_count: 1, inapplicable_count: 0},
+          {viewport: "320x800", violations: #{String.trim(narrow_violations)}, incomplete: [], passes_count: 1, inapplicable_count: 0}
+        ]
+      }));
+      process.exit(0);
+      """)
+
+    Application.put_env(:excessibility, :axe_runner_path, mock_path)
+
+    on_exit(fn -> File.rm_rf!(Path.dirname(mock_path)) end)
+    :ok
+  end
 
   defp write_capture(name, test, sequence, body) do
     content =
