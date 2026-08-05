@@ -83,16 +83,16 @@ defmodule Excessibility.MixProject do
       {:credo, "~> 1.5", only: [:dev, :test], runtime: false},
       {:ecto, "~> 3.0", only: :test},
       {:ex_doc, "~> 0.18", only: :dev, runtime: false},
-      {:floki, ">= 0.30.0"},
-      {:igniter, ">= 0.7.0", runtime: false},
+      {:floki, "~> 0.30"},
+      {:igniter, "~> 0.7", runtime: false},
       {:jason, "~> 1.4"},
       {:mix_test_interactive, "~> 5.0", only: :dev, runtime: false},
       {:mox, "~> 1.1", only: :test},
-      {:phoenix, ">= 1.5.0"},
-      {:phoenix_live_view, ">= 0.17.0"},
+      {:phoenix, "~> 1.5"},
+      {:phoenix_live_view, "~> 0.17 or ~> 1.0"},
       {:styler, "~> 0.9", only: [:dev, :test], runtime: false},
       # Wallaby is optional - add it to your project if you want Wallaby.Session support
-      {:wallaby, ">= 0.25.0", optional: true, only: :test}
+      {:wallaby, "~> 0.25", optional: true, only: :test}
     ]
   end
 end
