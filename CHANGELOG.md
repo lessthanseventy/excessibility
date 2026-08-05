@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Content-change findings are opt-in for reviews** ([#139](https://github.com/lessthanseventy/excessibility/issues/139)). `mix excessibility.review` compares a baseline and a current snapshot that normally come from two independent `mix test` runs, where the rendered text differs wherever fixtures do (record ids, generated names) — on one real PR that produced 319 false `content_change_without_live_region` findings. The rule is only meaningful when both sides rendered the same fixture data, so `Excessibility.Review` now folds it in only with `content_diff: true` (`mix excessibility.review --content-diff`). Within-run sequence scanning (`SnapshotDiff.scan_sequence/2`, used by `mix excessibility`) and the MCP `diff_snapshots` tool (before/after around a single edit, same fixtures) keep the rule unconditionally.
 
+### Fixed
+- **Finding fingerprints no longer depend on database ids** ([#140](https://github.com/lessthanseventy/excessibility/issues/140)). Reviews identify pre-existing findings by `{rule, selector}`, and selectors are built from DOM ids — which Phoenix idiomatically derives from record ids (`id={"row-#{@row.id}"}`). Fixture ids shift between the baseline run and the current run, so a pre-existing finding could resurface under a new id (`#section-2` → `#section-7`) and be reported as a newly introduced `:block`. Digit runs in the selector are now collapsed for fingerprinting (`#section-2` and `#section-7` both compare as `#section-N`); the raw selector is unchanged in the reported finding.
+
 
 ## [0.15.2] - 2026-08-05
 

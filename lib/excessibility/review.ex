@@ -221,7 +221,12 @@ defmodule Excessibility.Review do
     |> Map.fetch!(:findings)
   end
 
-  defp fingerprint(%{rule: rule, selector: selector}), do: {rule, selector}
+  # Selectors embed DOM ids, and Phoenix idiomatically derives those from
+  # record ids (`id={"row-#{@row.id}"}`) whose values shift between the
+  # baseline run and the current run (issue #140), so digit runs are
+  # collapsed before comparing. The raw selector stays on the finding for
+  # display.
+  defp fingerprint(%{rule: rule, selector: selector}), do: {rule, String.replace(selector, ~r/\d+/, "N")}
 
   # ── axe-core findings ──────────────────────────────────────────────
 
