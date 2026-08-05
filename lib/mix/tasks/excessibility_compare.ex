@@ -26,6 +26,10 @@ defmodule Mix.Tasks.Excessibility.Compare do
   - `--keep good` - Automatically keep all baseline versions (no changes)
   - `--keep bad` - Automatically accept all new versions as baseline
 
+  When stdin is not a TTY (CI, editor task runners), the interactive
+  prompt cannot work; the task exits with an error asking for `--keep`
+  instead of resolving diffs unattended.
+
   ## Workflow
 
   1. Run your tests to generate snapshots
@@ -71,8 +75,32 @@ defmodule Mix.Tasks.Excessibility.Compare do
       Mix.shell().info("All #{length(snapshots)} snapshot(s) match baseline.")
     else
       Mix.shell().info("Found #{length(diffs)} diff(s) out of #{length(snapshots)} snapshot(s).\n")
+      resolve_diffs(diffs, keep)
+    end
+  end
+
+  defp resolve_diffs(diffs, keep) do
+    if is_nil(keep) and not interactive?() do
+      Mix.raise("""
+      stdin is not interactive, so diffs cannot be resolved by prompting.
+      Re-run with --keep good (keep all baselines) or --keep bad (accept all new versions as baseline).
+      """)
+    end
+
+    try do
       Enum.each(diffs, &resolve_diff(&1, keep))
+    after
       cleanup_diff_files()
+    end
+  end
+
+  # OTP reports terminal: true only when stdin is a real TTY. Absent or
+  # false means a prompt would read :eof (CI, editor task runners,
+  # `zsh -c`), so there is no point opening diffs and asking.
+  defp interactive? do
+    case :io.getopts(:standard_io) do
+      opts when is_list(opts) -> Keyword.get(opts, :terminal, false) == true
+      _ -> false
     end
   end
 
@@ -132,12 +160,16 @@ defmodule Mix.Tasks.Excessibility.Compare do
     |> parse_choice()
   end
 
+  # IO.gets/1 returns :eof when stdin closes mid-run (and can return
+  # {:error, reason}). Keep the baseline in that case — unattended input
+  # must not quietly rewrite the reference version.
+  defp parse_choice(input) when input in [nil, :eof], do: keep_baseline_on_closed_stdin()
+  defp parse_choice({:error, _reason}), do: keep_baseline_on_closed_stdin()
+
   defp parse_choice(input) do
     input
-    |> case do
-      nil -> "b"
-      str -> String.trim(String.downcase(str))
-    end
+    |> String.downcase()
+    |> String.trim()
     |> case do
       choice when choice in ["g", "good"] ->
         :good
@@ -149,6 +181,11 @@ defmodule Mix.Tasks.Excessibility.Compare do
         Mix.shell().info("Unrecognized response, defaulting to bad (new version).")
         :bad
     end
+  end
+
+  defp keep_baseline_on_closed_stdin do
+    Mix.shell().info("stdin closed — kept baseline. Use --keep bad to accept new versions unattended.")
+    :good
   end
 
   defp cleanup_diff_files do
