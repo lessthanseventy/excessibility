@@ -51,7 +51,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.AssignLifecycle do
     }
 
     findings =
-      if length(stale_keys) > 0 and length(timeline) >= 3 do
+      if stale_keys != [] and length(timeline) >= 3 do
         [
           %{
             severity: :info,

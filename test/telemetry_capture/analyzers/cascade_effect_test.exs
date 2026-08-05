@@ -44,7 +44,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.CascadeEffectTest do
 
       result = CascadeEffect.analyze(timeline, [])
 
-      assert length(result.findings) > 0
+      assert result.findings != []
     end
 
     test "calculates cascade depth" do

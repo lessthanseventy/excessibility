@@ -53,7 +53,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.RenderEfficiencyTest do
 
       result = RenderEfficiency.analyze(timeline, [])
 
-      assert length(result.findings) > 0
+      assert result.findings != []
       # 100% wasted (2/2) triggers critical threshold (>30%)
       assert Enum.any?(result.findings, &(&1.severity == :critical))
       assert result.stats.wasted_render_count == 2

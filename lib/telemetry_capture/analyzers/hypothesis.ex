@@ -161,12 +161,17 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Hypothesis do
          last when not is_nil(last) <- List.last(timeline) do
       first_lists = Map.get(first, :list_sizes, %{})
       last_lists = Map.get(last, :list_sizes, %{})
-      growing = find_growing_lists(first_lists, last_lists)
 
-      case Enum.max_by(growing, fn {_key, size} -> size end, fn -> nil end) do
-        {key, _size} -> key
-        nil -> nil
-      end
+      first_lists
+      |> find_growing_lists(last_lists)
+      |> largest_list_key()
+    end
+  end
+
+  defp largest_list_key(growing) do
+    case Enum.max_by(growing, fn {_key, size} -> size end, fn -> nil end) do
+      {key, _size} -> key
+      nil -> nil
     end
   end
 

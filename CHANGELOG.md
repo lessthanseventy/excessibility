@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Multiple viewports per scan** ([#122](https://github.com/lessthanseventy/excessibility/issues/122)). `Excessibility.Scanner.scan(url, viewports: [{1440, 900}, {320, 800}])` runs axe once per width in a single browser session and returns per-viewport results, so WCAG 1.4.10 Reflow failures are actually exercised. Also available as `mix excessibility --viewports 1440x900,320x800` or the `:viewports` config key; screenshots are suffixed per viewport (`name.1440x900.png`). The single `:viewport` option keeps the flat report shape.
+- **`:reveal_without_announcement`** ([#123](https://github.com/lessthanseventy/excessibility/issues/123)) — new LiveView rule flagging an initially hidden element (a `hidden` class/attribute or inline `display:none`) that is revealed from the server via a serialized `JS.show`/`JS.toggle` command — either its own `data-*` attribute (the `push_event("js-exec")` idiom) or another element's `phx-*` op whose `to` targets it — while exposing no `role="alert"`/`"status"`/`"log"`, `aria-live`, or live-region ancestor. axe-core cannot catch this because the element is hidden at rest. Severity `:serious`. Dialog targets (`role="dialog"`/`aria-modal`) are skipped.
+- **Reuse an existing Playwright installation** ([#124](https://github.com/lessthanseventy/excessibility/issues/124)) via `config :excessibility, playwright_path: "..."`. Resolution order: override → bundled copy → ambient Node resolution. The bundled `playwright` is now pinned (`~1.58.2`) and `assets/package-lock.json` ships in the hex package, so a fresh install resolves the version the browsers were downloaded for. Chromium launch failures now include the exact directory-qualified `npx playwright install chromium` command.
+- Scan reports gained a `:warnings` list ([#121](https://github.com/lessthanseventy/excessibility/issues/121)), surfaced by `mix excessibility` (even for passing files) and the MCP `a11y_check` tool — e.g. a linked stylesheet that failed to load, which invalidates contrast/layout findings.
+- **Browser-assisted clipping detection** (follow-up to [#122](https://github.com/lessthanseventy/excessibility/issues/122)). `check_clipping: true` (or `mix excessibility --check-clipping`) measures interactive elements — `a`, `button`, `input`, `select`, `textarea`, `[phx-click]`, `[role="button"]` — whose visible width falls below `:clipping_ratio` (default `0.9`), and reports page-level horizontal overflow, per viewport. axe has no rule for a control that is technically in the DOM but only 6% visible; this is the actual user-facing WCAG 1.4.10 failure.
+
+### Fixed
+- **`html_snapshot/2` no longer kills LiveView tests** ([#125](https://github.com/lessthanseventy/excessibility/issues/125)). Capture-metadata assigns are now read from the LiveView channel process via `:sys.get_state/2` instead of sending `:get_state` to the test client proxy, which has no matching `handle_call/3` clause and crashed — taking the linked test down with it. Any failure degrades to empty metadata.
+- **Screenshot failures are non-fatal and legible** ([#126](https://github.com/lessthanseventy/excessibility/issues/126)). A failed screenshot logs the actual `inspect/1`-ed scanner reason instead of raising `Protocol.UndefinedError` (String.Chars for tuples) and failing the test; the HTML snapshot is kept.
+- **axe no longer scans `file://` snapshots before CSS applies** ([#121](https://github.com/lessthanseventy/excessibility/issues/121)). Navigation defaults to `load` and the runner additionally waits until every linked stylesheet has loaded or errored (plus `document.fonts.ready`) before analyzing, so results no longer depend on a race between stylesheet loading and axe injection.
+
+### Changed
+- Dependency requirements are now bounded (`~>` instead of open-ended `>=`) for `floki`, `igniter`, `phoenix`, and `phoenix_live_view`, so a future breaking major is not silently accepted into consumer apps.
+
 ## [0.14.0] - 2026-06-24
 
 ### Added

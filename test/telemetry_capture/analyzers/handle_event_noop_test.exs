@@ -37,7 +37,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.HandleEventNoopTest do
 
       result = HandleEventNoop.analyze(timeline, [])
 
-      assert length(result.findings) > 0
+      assert result.findings != []
       assert Enum.any?(result.findings, &String.contains?(&1.message, "click"))
     end
 
