@@ -39,6 +39,7 @@ defmodule Excessibility.Scanner do
 
   `file://` URLs never fall back (curl can't fetch them).
   """
+  @behaviour Excessibility.ScannerBehaviour
 
   @typedoc "axe-core impact level, normalized to an atom."
   @type impact :: :critical | :serious | :moderate | :minor | nil
@@ -129,6 +130,7 @@ defmodule Excessibility.Scanner do
   `{:ok, report}` on success or `{:error, reason}` where reason is one of
   the `t:scan_error/0` tuples.
   """
+  @impl Excessibility.ScannerBehaviour
   @spec scan(String.t(), scan_opts()) :: {:ok, report()} | {:error, scan_error()}
   def scan(url, opts \\ []) when is_binary(url) do
     with {:ok, validated_url} <- validate_url(url) do
