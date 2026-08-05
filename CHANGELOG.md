@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **`:reveal_without_announcement`** ([#123](https://github.com/lessthanseventy/excessibility/issues/123)) — new LiveView rule flagging an initially hidden element (a `hidden` class/attribute or inline `display:none`) that is revealed from the server via a serialized `JS.show`/`JS.toggle` command — either its own `data-*` attribute (the `push_event("js-exec")` idiom) or another element's `phx-*` op whose `to` targets it — while exposing no `role="alert"`/`"status"`/`"log"`, `aria-live`, or live-region ancestor. axe-core cannot catch this because the element is hidden at rest. Severity `:serious`. Dialog targets (`role="dialog"`/`aria-modal`) are skipped.
+
 ## [0.14.0] - 2026-06-24
 
 ### Added
