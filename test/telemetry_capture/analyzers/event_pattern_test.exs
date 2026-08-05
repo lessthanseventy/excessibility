@@ -189,10 +189,10 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EventPatternTest do
 
       result = EventPattern.analyze(timeline, [])
 
-      if length(result.findings) > 0 do
+      if result.findings != [] do
         finding = List.first(result.findings)
         assert is_list(finding.events)
-        assert length(finding.events) > 0
+        assert finding.events != []
       end
     end
   end

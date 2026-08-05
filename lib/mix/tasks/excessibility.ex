@@ -148,7 +148,7 @@ defmodule Mix.Tasks.Excessibility do
 
     {passed, failed} = Enum.split_with(results, &file_passed?/1)
 
-    if length(failed) > 0 do
+    if failed != [] do
       Mix.shell().info("### Issues Found\n")
 
       Enum.each(failed, fn {file, axe_result, lv_result} ->

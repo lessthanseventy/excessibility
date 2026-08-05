@@ -42,7 +42,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.FormValidationTest do
 
       result = FormValidation.analyze(timeline, [])
 
-      assert length(result.findings) > 0
+      assert result.findings != []
       assert Enum.any?(result.findings, &(&1.severity == :warning))
     end
 
