@@ -57,6 +57,22 @@ defmodule Excessibility.Review.JudgeTest do
       assert verdict.source == :heuristic
     end
 
+    test "falls back to the heuristic when the model replies with a JSON array" do
+      # Valid JSON, wrong shape — a common LLM failure mode. Must not
+      # leak the decoded list out as the "verdict".
+      verdict = LLM.judge(block_change(), completion: fn _ -> {:ok, "[]"} end)
+
+      assert verdict.source == :heuristic
+      assert verdict.tier == :block
+    end
+
+    test "falls back to the heuristic when the completion raises" do
+      verdict = LLM.judge(block_change(), completion: fn _ -> raise "boom" end)
+
+      assert verdict.source == :heuristic
+      assert verdict.tier == :block
+    end
+
     test "falls back to the heuristic when no completion is configured" do
       assert LLM.judge(block_change(), []).source == :heuristic
     end
