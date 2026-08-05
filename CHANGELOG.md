@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.1] - 2026-08-05
+
+### Fixed
+- **Reviews now run axe-core** ([#131](https://github.com/lessthanseventy/excessibility/issues/131)). `mix excessibility.review` (and `Excessibility.Review`) scans both sides of every changed snapshot pair through the configured scanner and folds axe violations into the finding-delta — one finding per offending node, fingerprinted `{id, target}` — so a newly introduced critical (e.g. a button losing its accessible name) is `:block` and `--fail-on block` exits non-zero. If a scan fails (e.g. Playwright isn't installed) the review degrades to the LiveView rules and says so in the report's `:warnings`. Opt out with `--no-axe` (or `axe: false` in the API).
+- **False `stylesheet failed to load` when a nested `@import` fails** ([#132](https://github.com/lessthanseventy/excessibility/issues/132)). Chromium fires an `error` event on a `<link>` whose sheet loaded fine but whose nested `@import` failed, which previously warned that the stylesheet was missing and invalidated the whole run's contrast findings. The warning is now gated on `link.sheet` (null exactly when the sheet did not load or parse); failing imports are surfaced separately and accurately as `stylesheet import failed: <url> — text metrics may differ from production`.
+- **Telemetry capture no longer crashes on lists of Ecto structs** ([#133](https://github.com/lessthanseventy/excessibility/issues/133)). `Filter.filter_ecto_metadata/1` converts structs (dropping `__meta__`, `NotLoaded` becomes `nil`) instead of `Enum.reduce`-ing them, so index/detail LiveViews with `[%Schema{}]` assigns capture cleanly. Independently, `write_snapshots/1` now logs a timeline failure instead of raising out of the `on_exit` hook — instrumentation can no longer fail the test it observes.
+- **`mix excessibility.compare` in non-interactive shells** ([#134](https://github.com/lessthanseventy/excessibility/issues/134)). Without `--keep`, a non-TTY stdin (CI, editor task runners) previously crashed on `:eof` deep in the prompt and leaked `.good.html`/`.bad.html` temp files. The task now refuses up front with the actual guidance (`--keep good|bad`), cleans up temp files even when resolution errors, and if stdin closes mid-run it keeps the baseline (fail-safe) instead of silently accepting the new version.
+
+### Added
+- **`node_modules_path` config** ([#135](https://github.com/lessthanseventy/excessibility/issues/135)). `@axe-core/playwright` now gets the same override → bundled → ambient resolution as Playwright, so `config :excessibility, node_modules_path: "assets/node_modules"` reuses a host `node_modules` (providing both `playwright` and `@axe-core/playwright`) and removes the `deps/excessibility/assets` npm install from the workflow entirely. Caveat: the host then pins the axe-core version, and `engine.axe_version` in reports follows it — an axe minor bump can change finding sets vs earlier baselines.
+
 ## [0.15.0] - 2026-08-05
 
 ### Added
