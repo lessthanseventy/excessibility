@@ -44,7 +44,7 @@ defmodule Excessibility.Review.Judge.LLM do
   end
 
   defp run(change, fun, opts) do
-    with {:ok, text} <- fun.(build_prompt(change)),
+    with {:ok, text} when is_binary(text) <- safe_call(fun, build_prompt(change)),
          {:ok, verdict} <- parse(text, change) do
       verdict
     else
@@ -52,16 +52,30 @@ defmodule Excessibility.Review.Judge.LLM do
     end
   end
 
+  # The host's completion function is arbitrary code; an exception there
+  # must degrade to the heuristic, not crash the review.
+  defp safe_call(fun, prompt) do
+    fun.(prompt)
+  rescue
+    _ -> :error
+  end
+
   defp parse(text, change) do
-    with {:ok, %{} = data} <- Jason.decode(text) do
-      {:ok,
-       %{
-         tier: parse_tier(data["tier"], change.tier),
-         blast_radius: data["blast_radius"] || "",
-         risks: parse_risks(data["risks"]),
-         confidence: data["confidence"],
-         source: :llm
-       }}
+    # Only a JSON object is a verdict — a decoded array or scalar must
+    # not fall through as one.
+    case Jason.decode(text) do
+      {:ok, %{} = data} ->
+        {:ok,
+         %{
+           tier: parse_tier(data["tier"], change.tier),
+           blast_radius: data["blast_radius"] || "",
+           risks: parse_risks(data["risks"]),
+           confidence: data["confidence"],
+           source: :llm
+         }}
+
+      _ ->
+        :error
     end
   end
 

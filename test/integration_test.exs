@@ -60,7 +60,7 @@ defmodule Excessibility.MacroIntegrationTest do
     expected_pattern = Path.join(@snapshot_dir, "Elixir_Excessibility_MacroIntegrationTest_*.html")
     files = Path.wildcard(expected_pattern)
 
-    assert length(files) > 0,
+    assert files != [],
            "Expected snapshot file matching #{expected_pattern}, but found none. " <>
              "Dir contents: #{inspect(File.ls!(@snapshot_dir))}"
   end

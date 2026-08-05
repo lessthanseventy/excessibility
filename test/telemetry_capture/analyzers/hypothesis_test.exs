@@ -28,7 +28,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.HypothesisTest do
 
       result = Hypothesis.analyze(timeline, [])
 
-      assert length(result.findings) > 0
+      assert result.findings != []
       finding = List.first(result.findings)
       assert finding.severity == :info
 

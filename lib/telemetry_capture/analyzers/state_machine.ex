@@ -81,7 +81,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.StateMachine do
         to_sequence: curr.sequence,
         added: added,
         removed: removed,
-        has_changes?: length(added) > 0 or length(removed) > 0
+        has_changes?: added != [] or removed != []
       }
     end)
   end

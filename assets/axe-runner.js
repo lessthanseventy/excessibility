@@ -4,14 +4,15 @@
 // both shapes.
 
 const path = require("path");
-const modulesDir = path.join(__dirname, "node_modules");
-const { chromium } = require(path.join(modulesDir, "playwright"));
+const { resolvePlaywright, launchErrorHint, modulesDir } = require("./resolve-playwright");
+const { chromium } = resolvePlaywright();
 const { AxeBuilder } = require(path.join(modulesDir, "@axe-core", "playwright"));
 
 const USAGE =
   "Usage: node axe-runner.js <url> " +
   "[--screenshot path] [--wait-for selector] [--wait-until load|domcontentloaded|networkidle] " +
-  "[--disable-rules r1,r2] [--tags t1,t2] [--timeout ms] [--viewport WxH] [--user-agent ua]";
+  "[--disable-rules r1,r2] [--tags t1,t2] [--timeout ms] [--viewport WxH] " +
+  "[--viewports WxH,WxH,...] [--check-clipping] [--clipping-ratio 0.9] [--user-agent ua]";
 
 const DEFAULT_UA =
   "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
@@ -39,6 +40,9 @@ function parseArgs(argv) {
     tags: ["wcag2a", "wcag2aa"],
     timeout: 30000,
     viewport: { width: 1280, height: 720 },
+    viewports: null,
+    checkClipping: false,
+    clippingRatio: 0.9,
     userAgent: null,
   };
 
@@ -80,6 +84,27 @@ function parseArgs(argv) {
         i++;
         break;
       }
+      case "--viewports": {
+        if (next) {
+          const parsed = next
+            .split(",")
+            .map((spec) => spec.split("x").map((s) => parseInt(s, 10)))
+            .filter(([w, h]) => w > 0 && h > 0)
+            .map(([w, h]) => ({ width: w, height: h }));
+          if (parsed.length > 0) opts.viewports = parsed;
+        }
+        i++;
+        break;
+      }
+      case "--check-clipping":
+        opts.checkClipping = true;
+        break;
+      case "--clipping-ratio": {
+        const ratio = parseFloat(next);
+        if (!Number.isNaN(ratio) && ratio > 0 && ratio <= 1) opts.clippingRatio = ratio;
+        i++;
+        break;
+      }
       case "--user-agent":
         opts.userAgent = next;
         i++;
@@ -88,6 +113,111 @@ function parseArgs(argv) {
   }
 
   return opts;
+}
+
+// domcontentloaded/load do not guarantee linked stylesheets are applied,
+// and axe results are invalid on unstyled markup (contrast rules see no
+// colors, hidden containers are visible). Wait until every linked
+// stylesheet has either loaded or errored, then report failures so
+// callers know styled-dependent findings can't be trusted.
+async function installStylesheetTracker(page) {
+  await page.addInitScript(() => {
+    window.__excessibilityFailedStylesheets = [];
+    window.addEventListener(
+      "error",
+      (e) => {
+        const t = e.target;
+        if (t && t.tagName === "LINK" && (t.rel || "").includes("stylesheet")) {
+          t.__excessibilityFailed = true;
+          window.__excessibilityFailedStylesheets.push(t.href);
+        }
+      },
+      true,
+    );
+  });
+}
+
+async function waitForStylesheets(page, warnings, maxWait = 10000) {
+  const hasLinks = await page
+    .evaluate(() => document.querySelectorAll('link[rel~="stylesheet"]').length > 0)
+    .catch(() => false);
+  if (!hasLinks) return;
+
+  await page
+    .waitForFunction(
+      () => {
+        const links = [...document.querySelectorAll('link[rel~="stylesheet"]')];
+        return links.every((l) => l.sheet || l.__excessibilityFailed);
+      },
+      null,
+      { timeout: maxWait },
+    )
+    .catch(() => {
+      warnings.push(
+        `stylesheets did not finish loading within ${maxWait}ms — contrast/layout findings may be invalid`,
+      );
+    });
+
+  const failed = await page.evaluate(() => window.__excessibilityFailedStylesheets || []).catch(() => []);
+  for (const href of failed) {
+    warnings.push(`stylesheet failed to load: ${href} — contrast/layout findings are invalid until it exists`);
+  }
+
+  await page.evaluate(() => document.fonts && document.fonts.ready).catch(() => {});
+}
+
+// axe has no rule for "this control is in the DOM but mostly outside the
+// visible area" — the actual user-facing failure of WCAG 1.4.10 Reflow.
+// Measures interactive elements' horizontal visibility and page-level
+// horizontal overflow at the current viewport width.
+async function measureClipping(page, ratioThreshold) {
+  return page
+    .evaluate((threshold) => {
+      const selectors = ["a", "button", "input", "select", "textarea", "[phx-click]", '[role="button"]'];
+      const innerW = window.innerWidth;
+
+      const cssPath = (el) => {
+        const tag = el.tagName.toLowerCase();
+        if (el.id) return `${tag}#${el.id}`;
+        const cls = (el.getAttribute("class") || "").trim().split(/\s+/)[0];
+        return cls ? `${tag}.${cls}` : tag;
+      };
+
+      const clipped = [...document.querySelectorAll(selectors.join(","))]
+        .map((el) => {
+          const r = el.getBoundingClientRect();
+          if (r.width === 0) return null; // hidden or unrendered
+          const visible = Math.max(0, Math.min(r.right, innerW) - Math.max(r.left, 0));
+          const ratio = visible / r.width;
+          if (ratio >= threshold) return null;
+          return {
+            selector: cssPath(el),
+            width: Math.round(r.width),
+            visible: Math.round(visible),
+            ratio: Math.round(ratio * 100) / 100,
+            html: el.outerHTML.slice(0, 200),
+          };
+        })
+        .filter(Boolean);
+
+      // documentElement.scrollWidth misses overflow from absolutely
+      // positioned boxes, which body.scrollWidth does report.
+      const scrollW = Math.max(
+        document.documentElement.scrollWidth,
+        document.body ? document.body.scrollWidth : 0,
+      );
+
+      return {
+        page_overflow: scrollW > innerW,
+        clipped,
+      };
+    }, ratioThreshold)
+    .catch(() => null);
+}
+
+function viewportScreenshotPath(basePath, vp) {
+  const suffix = `${vp.width}x${vp.height}`;
+  return /\.png$/i.test(basePath) ? basePath.replace(/\.png$/i, `.${suffix}.png`) : `${basePath}.${suffix}.png`;
 }
 
 async function waitForContent(page, maxWait = 8000) {
@@ -109,7 +239,20 @@ async function main() {
   }
 
   const opts = parseArgs(argv);
-  const { url, screenshotPath, waitFor, waitUntil, disableRules, tags, timeout, viewport, userAgent } = opts;
+  const {
+    url,
+    screenshotPath,
+    waitFor,
+    waitUntil,
+    disableRules,
+    tags,
+    timeout,
+    viewport,
+    viewports,
+    checkClipping,
+    clippingRatio,
+    userAgent,
+  } = opts;
 
   const isFileUrl = url.startsWith("file://");
   const startTime = Date.now();
@@ -118,14 +261,14 @@ async function main() {
   try {
     browser = await chromium.launch();
   } catch (err) {
-    emitError("playwright_error", `failed to launch chromium: ${err.message}`);
+    emitError("playwright_error", `failed to launch chromium: ${err.message}\n${launchErrorHint()}`);
     process.exit(1);
   }
 
   const chromiumVersion = browser.version();
 
   const contextOptions = {
-    viewport,
+    viewport: viewports ? viewports[0] : viewport,
     locale: "en-US",
   };
   if (!isFileUrl) {
@@ -145,8 +288,12 @@ async function main() {
     process.exit(1);
   }
 
+  const warnings = [];
+
   try {
-    const effectiveWaitUntil = waitUntil || (isFileUrl ? "domcontentloaded" : "load");
+    const effectiveWaitUntil = waitUntil || "load";
+
+    await installStylesheetTracker(page);
 
     let response;
     try {
@@ -186,30 +333,86 @@ async function main() {
       await waitForContent(page);
     }
 
-    let builder = new AxeBuilder({ page }).withTags(tags);
-    if (disableRules.length > 0) builder = builder.disableRules(disableRules);
+    await waitForStylesheets(page, warnings);
+
+    const runAxe = async () => {
+      let builder = new AxeBuilder({ page }).withTags(tags);
+      if (disableRules.length > 0) builder = builder.disableRules(disableRules);
+      return builder.analyze();
+    };
+
+    const takeScreenshot = async (screenshotFile) => {
+      try {
+        await page.screenshot({ path: screenshotFile, fullPage: true });
+      } catch {
+        // screenshot failure is non-fatal
+      }
+    };
+
+    const baseOutput = () => ({
+      final_url: page.url(),
+      timestamp: new Date().toISOString(),
+      duration_ms: Date.now() - startTime,
+      warnings,
+    });
+
+    if (viewports) {
+      const perViewport = [];
+      let axeVersion = null;
+
+      for (const vp of viewports) {
+        await page.setViewportSize(vp);
+
+        let results;
+        try {
+          results = await runAxe();
+        } catch (err) {
+          emitError("playwright_error", `axe-core analyze failed at ${vp.width}x${vp.height}: ${err.message}`);
+          await closeQuietly(browser);
+          process.exit(1);
+        }
+
+        if (screenshotPath) await takeScreenshot(viewportScreenshotPath(screenshotPath, vp));
+
+        const clipping = checkClipping ? await measureClipping(page, clippingRatio) : null;
+
+        axeVersion = (results && results.testEngine && results.testEngine.version) || axeVersion;
+        perViewport.push({
+          viewport: `${vp.width}x${vp.height}`,
+          violations: results.violations || [],
+          incomplete: results.incomplete || [],
+          passes_count: (results.passes || []).length,
+          inapplicable_count: (results.inapplicable || []).length,
+          ...(clipping ? { clipping } : {}),
+        });
+      }
+
+      console.log(
+        JSON.stringify({
+          ...baseOutput(),
+          engine: { axe_version: axeVersion, chromium_version: chromiumVersion },
+          results: perViewport,
+        }),
+      );
+      await closeQuietly(browser);
+      return;
+    }
 
     let results;
     try {
-      results = await builder.analyze();
+      results = await runAxe();
     } catch (err) {
       emitError("playwright_error", `axe-core analyze failed: ${err.message}`);
       await closeQuietly(browser);
       process.exit(1);
     }
 
-    if (screenshotPath) {
-      try {
-        await page.screenshot({ path: screenshotPath, fullPage: true });
-      } catch {
-        // screenshot failure is non-fatal
-      }
-    }
+    if (screenshotPath) await takeScreenshot(screenshotPath);
+
+    const clipping = checkClipping ? await measureClipping(page, clippingRatio) : null;
 
     const output = {
-      final_url: page.url(),
-      timestamp: new Date().toISOString(),
-      duration_ms: Date.now() - startTime,
+      ...baseOutput(),
       engine: {
         axe_version: results && results.testEngine ? results.testEngine.version || null : null,
         chromium_version: chromiumVersion,
@@ -218,6 +421,7 @@ async function main() {
       incomplete: results.incomplete || [],
       passes_count: (results.passes || []).length,
       inapplicable_count: (results.inapplicable || []).length,
+      ...(clipping ? { clipping } : {}),
     };
 
     console.log(JSON.stringify(output));

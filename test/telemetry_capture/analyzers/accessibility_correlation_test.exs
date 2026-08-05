@@ -120,7 +120,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.AccessibilityCorrelationTest 
 
       result = AccessibilityCorrelation.analyze(timeline, [])
 
-      assert length(result.findings) > 0
+      assert result.findings != []
     end
 
     test "handles empty timeline" do

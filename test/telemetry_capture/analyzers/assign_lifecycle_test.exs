@@ -40,7 +40,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.AssignLifecycleTest do
 
       result = AssignLifecycle.analyze(timeline, [])
 
-      assert length(result.findings) > 0
+      assert result.findings != []
       finding = List.first(result.findings)
       assert :static_config in finding.metadata.stale_assigns
     end

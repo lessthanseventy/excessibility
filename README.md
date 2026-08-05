@@ -41,6 +41,7 @@ Built-in rules:
 | `:click_away_without_escape` | `phx-click-away` with no matching `phx-window-keydown` + `phx-key="Escape"` (or `role="dialog"`) — keyboard users can't dismiss the overlay |
 | `:debounce_without_live_region` | `<input phx-debounce>` when the page has no `aria-live` / `role="status"` region anywhere — screen readers never hear that results updated |
 | `:hidden_form_control_without_aria` | Visually hidden `<input type="checkbox\|radio">` whose wrapping `<label>` doesn't expose state via `aria-checked` or `role="checkbox"`/`"radio"` |
+| `:reveal_without_announcement` | An initially hidden element (`hidden` class/attribute or inline `display:none`) revealed from the server via a serialized `JS.show`/`JS.toggle` command — its own `data-*` or another element's `phx-*` `to:` target — with no `role="alert"`/`"status"`/`"log"`, `aria-live`, or live-region ancestor, so screen readers never hear it appear |
 
 On non-Phoenix HTML (no `phx-*` attributes) these rules are no-ops, so
 enabling them never adds noise for projects that don't use LiveView.
@@ -102,6 +103,27 @@ Excessibility.Scanner.scan("https://example.com",
   screenshot: "/tmp/example.png"
 )
 ```
+
+Scan at several widths in one browser session — WCAG 1.4.10 Reflow
+failures only show up at narrow viewports — and optionally measure
+clipping, which axe has no rule for:
+
+```elixir
+{:ok, report} =
+  Excessibility.Scanner.scan("https://example.com",
+    viewports: [{1440, 900}, {320, 800}],
+    check_clipping: true
+  )
+
+for %{viewport: {w, _h}, violations: violations, clipping: clipping} <- report.results do
+  IO.puts("@#{w}px: #{length(violations)} violations, #{length(clipping.clipped)} clipped controls")
+end
+```
+
+The same checks are available on snapshots via
+`mix excessibility --viewports 1440x900,320x800 --check-clipping`.
+Scan reports also carry a `:warnings` list — e.g. a linked stylesheet
+that failed to load, which would silently invalidate contrast findings.
 
 See `Excessibility.Scanner` for the full report type and options list.
 Unlike Mix tasks, the Scanner is safe to call from production Phoenix
@@ -509,6 +531,10 @@ All configuration goes in `test/test_helper.exs` or `config/test.exs`:
 | `:live_view_mod` | No | `Excessibility.LiveView` | Module for LiveView rendering |
 | `:excessibility_output_path` | No | `"test/excessibility"` | Base directory for snapshots |
 | `:axe_runner_path` | No | auto-detected | Path to axe-runner.js script |
+| `:playwright_path` | No | bundled copy | Path to an existing Playwright installation to reuse (skips the second browser download) |
+| `:viewports` | No | `[]` | `{width, height}` tuples for `mix excessibility` to scan each snapshot at |
+| `:check_clipping` | No | `false` | Flag interactive elements mostly outside the visible area, plus page-level horizontal overflow |
+| `:clipping_ratio` | No | `0.9` | Minimum visible-width ratio before an element counts as clipped |
 | `:head_render_path` | No | `"/"` | Route used for rendering `<head>` content |
 | `:custom_enrichers` | No | `[]` | List of custom enricher modules (see Timeline Analysis section above) |
 | `:custom_analyzers` | No | `[]` | List of custom analyzer modules (see Timeline Analysis section above) |

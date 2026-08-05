@@ -57,7 +57,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.PerformanceTest do
 
       result = Performance.analyze(timeline, [])
 
-      assert length(result.findings) > 0
+      assert result.findings != []
       slow_finding = List.first(result.findings)
       assert slow_finding.severity in [:warning, :critical]
       # May be detected as "slow" or "bottleneck" depending on thresholds
@@ -166,7 +166,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.PerformanceTest do
 
       result = Performance.analyze(timeline, [])
 
-      assert length(result.findings) > 0
+      assert result.findings != []
       finding = List.first(result.findings)
       assert Map.has_key?(finding.metadata, :duration_ms)
       assert finding.metadata.duration_ms == 500
@@ -243,7 +243,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.PerformanceTest do
       result = Performance.analyze(timeline, [])
 
       # Event 3 should be detected as critical (>1000ms)
-      assert length(result.findings) > 0
+      assert result.findings != []
       critical = Enum.find(result.findings, &(&1.severity == :critical))
       assert critical
       assert 3 in critical.events

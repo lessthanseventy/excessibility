@@ -57,7 +57,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.DataGrowthTest do
 
       result = DataGrowth.analyze(timeline, [])
 
-      assert length(result.findings) > 0
+      assert result.findings != []
       growth_finding = List.first(result.findings)
       assert growth_finding.severity in [:warning, :critical]
       assert growth_finding.message =~ "products"
@@ -74,7 +74,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.DataGrowthTest do
 
       result = DataGrowth.analyze(timeline, [])
 
-      assert length(result.findings) > 0
+      assert result.findings != []
       finding = List.first(result.findings)
       assert finding.severity == :critical
       assert finding.message =~ "10"
@@ -180,7 +180,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.DataGrowthTest do
 
       result = DataGrowth.analyze(timeline, [])
 
-      assert length(result.findings) > 0
+      assert result.findings != []
       finding = List.first(result.findings)
       assert finding.message =~ "cart.items"
     end
@@ -195,7 +195,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.DataGrowthTest do
 
       result = DataGrowth.analyze(timeline, [])
 
-      assert length(result.findings) > 0
+      assert result.findings != []
       finding = List.first(result.findings)
       assert Map.has_key?(finding.metadata, :growth_multiplier)
       assert finding.metadata.growth_multiplier == 5.0
@@ -214,7 +214,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.DataGrowthTest do
 
       result = DataGrowth.analyze(timeline, [])
 
-      assert length(result.findings) > 0
+      assert result.findings != []
       finding = List.first(result.findings)
       assert finding.message =~ "temporary_assigns"
       assert finding.metadata.suggestion =~ "temporary_assigns"
@@ -231,7 +231,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.DataGrowthTest do
 
       result = DataGrowth.analyze(timeline, [])
 
-      assert length(result.findings) > 0
+      assert result.findings != []
       finding = List.first(result.findings)
       assert finding.message =~ "Streams"
     end
@@ -250,7 +250,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.DataGrowthTest do
       result = DataGrowth.analyze(timeline, [])
 
       # Should detect the growth
-      assert length(result.findings) > 0
+      assert result.findings != []
       finding = List.first(result.findings)
       assert finding.message =~ "products"
       # When starting from 0, we can't calculate a meaningful multiplier
