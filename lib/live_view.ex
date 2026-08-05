@@ -62,17 +62,20 @@ defmodule Excessibility.LiveView do
   Extracts assigns from a LiveView test view.
 
   Returns `{:ok, assigns}` if successful, `{:error, reason}` otherwise.
-  """
-  def get_assigns(%View{} = view) do
-    # Call the LiveView process to get assigns
-    assigns = call(view, :get_state)
 
-    case assigns do
-      %{assigns: a} when is_map(a) -> {:ok, a}
+  Reads the assigns from the LiveView channel process state rather than
+  the test client proxy — the proxy has no `handle_call/3` clause for
+  state introspection, so asking it would crash it and, through the test
+  process link, the calling test. Assigns metadata is best-effort, so any
+  failure here degrades to an error tuple instead of raising.
+  """
+  def get_assigns(%View{pid: pid}) when is_pid(pid) do
+    case :sys.get_state(pid, 5_000) do
+      %{socket: %{assigns: assigns}} when is_map(assigns) -> {:ok, assigns}
       _ -> {:error, :no_assigns}
     end
   rescue
-    error -> {:error, error}
+    _ -> {:error, :unsupported}
   catch
     :exit, _ -> {:error, :unsupported}
   end
