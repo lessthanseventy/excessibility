@@ -59,7 +59,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.AssignDiffTest do
 
       result = AssignDiff.analyze(timeline, [])
 
-      assert length(result.findings) > 0
+      assert result.findings != []
       finding = List.first(result.findings)
       assert finding.severity in [:warning, :critical]
       assert finding.message =~ "current_user"
@@ -90,7 +90,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.AssignDiffTest do
 
       result = AssignDiff.analyze(timeline, [])
 
-      assert length(result.findings) > 0
+      assert result.findings != []
       assert List.first(result.findings).severity == :critical
     end
 

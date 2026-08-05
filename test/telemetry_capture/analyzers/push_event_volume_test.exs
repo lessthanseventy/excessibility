@@ -39,7 +39,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.PushEventVolumeTest do
 
       result = PushEventVolume.analyze(timeline, [])
 
-      assert length(result.findings) > 0
+      assert result.findings != []
       finding = List.first(result.findings)
       assert finding.message =~ "update-chart"
       assert finding.message =~ "8"
@@ -72,7 +72,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.PushEventVolumeTest do
 
       result = PushEventVolume.analyze(timeline, [])
 
-      assert length(result.findings) > 0
+      assert result.findings != []
       assert Enum.any?(result.findings, &(&1.message =~ "batch"))
     end
 

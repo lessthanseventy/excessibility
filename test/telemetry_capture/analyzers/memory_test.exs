@@ -53,7 +53,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.MemoryTest do
       timeline = build_timeline([1000, 10_000, 11_000])
       result = Memory.analyze(timeline, [])
 
-      assert length(result.findings) > 0
+      assert result.findings != []
       assert Enum.any?(result.findings, &(&1.severity in [:warning, :critical]))
       assert Enum.any?(result.findings, &String.contains?(&1.message, "grew"))
     end
@@ -63,7 +63,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.MemoryTest do
       timeline = build_timeline([1000, 2000, 4000, 8000, 16_000])
       result = Memory.analyze(timeline, [])
 
-      assert length(result.findings) > 0
+      assert result.findings != []
       assert Enum.any?(result.findings, &String.contains?(&1.message, "leak"))
     end
 
