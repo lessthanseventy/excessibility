@@ -104,6 +104,27 @@ Excessibility.Scanner.scan("https://example.com",
 )
 ```
 
+Scan at several widths in one browser session — WCAG 1.4.10 Reflow
+failures only show up at narrow viewports — and optionally measure
+clipping, which axe has no rule for:
+
+```elixir
+{:ok, report} =
+  Excessibility.Scanner.scan("https://example.com",
+    viewports: [{1440, 900}, {320, 800}],
+    check_clipping: true
+  )
+
+for %{viewport: {w, _h}, violations: violations, clipping: clipping} <- report.results do
+  IO.puts("@#{w}px: #{length(violations)} violations, #{length(clipping.clipped)} clipped controls")
+end
+```
+
+The same checks are available on snapshots via
+`mix excessibility --viewports 1440x900,320x800 --check-clipping`.
+Scan reports also carry a `:warnings` list — e.g. a linked stylesheet
+that failed to load, which would silently invalidate contrast findings.
+
 See `Excessibility.Scanner` for the full report type and options list.
 Unlike Mix tasks, the Scanner is safe to call from production Phoenix
 releases, which makes it easy to build things like a public URL
@@ -510,6 +531,10 @@ All configuration goes in `test/test_helper.exs` or `config/test.exs`:
 | `:live_view_mod` | No | `Excessibility.LiveView` | Module for LiveView rendering |
 | `:excessibility_output_path` | No | `"test/excessibility"` | Base directory for snapshots |
 | `:axe_runner_path` | No | auto-detected | Path to axe-runner.js script |
+| `:playwright_path` | No | bundled copy | Path to an existing Playwright installation to reuse (skips the second browser download) |
+| `:viewports` | No | `[]` | `{width, height}` tuples for `mix excessibility` to scan each snapshot at |
+| `:check_clipping` | No | `false` | Flag interactive elements mostly outside the visible area, plus page-level horizontal overflow |
+| `:clipping_ratio` | No | `0.9` | Minimum visible-width ratio before an element counts as clipped |
 | `:head_render_path` | No | `"/"` | Route used for rendering `<head>` content |
 | `:custom_enrichers` | No | `[]` | List of custom enricher modules (see Timeline Analysis section above) |
 | `:custom_analyzers` | No | `[]` | List of custom analyzer modules (see Timeline Analysis section above) |
