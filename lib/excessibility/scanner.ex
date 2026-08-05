@@ -105,12 +105,34 @@ defmodule Excessibility.Scanner do
           | {:playwright_error, String.t()}
           | {:invalid_url, atom()}
 
+  @typedoc "Per-viewport axe results, returned when `:viewports` is used."
+  @type viewport_result :: %{
+          viewport: {pos_integer(), pos_integer()},
+          violations: [violation()],
+          incomplete: [violation()],
+          passes_count: non_neg_integer(),
+          inapplicable_count: non_neg_integer()
+        }
+
+  @typedoc "A multi-viewport scan report."
+  @type multi_report :: %{
+          url: String.t(),
+          final_url: String.t(),
+          results: [viewport_result()],
+          timestamp: DateTime.t(),
+          duration_ms: non_neg_integer(),
+          engine: engine_info(),
+          warnings: [String.t()],
+          fallback: fallback_info()
+        }
+
   @typedoc "Options accepted by `scan/2`."
   @type scan_opts :: [
           timeout: pos_integer(),
           wait_for: String.t(),
           wait_until: :load | :domcontentloaded | :networkidle,
           viewport: {pos_integer(), pos_integer()},
+          viewports: [{pos_integer(), pos_integer()}],
           tags: [String.t()],
           user_agent: String.t() | nil,
           screenshot: Path.t() | nil,
@@ -130,6 +152,12 @@ defmodule Excessibility.Scanner do
     * `:wait_until` — Playwright wait state: `:load` | `:domcontentloaded` |
       `:networkidle` (default: `:load` for remote, `:domcontentloaded` for file)
     * `:viewport` — `{width, height}` tuple (default: `{1280, 720}`)
+    * `:viewports` — list of `{width, height}` tuples; runs axe once per
+      viewport in a single browser session and returns per-viewport
+      results (see `t:multi_report/0`). WCAG 1.4.10 Reflow only shows up
+      at narrow widths, so `[{1440, 900}, {320, 800}]` is the recommended
+      pair for snapshot scanning. Screenshots are suffixed per viewport
+      (`name.1440x900.png`). Takes precedence over `:viewport`.
     * `:tags` — axe-core tag filter (default: `["wcag2a", "wcag2aa"]`)
     * `:user_agent` — Override the default Chrome UA string
     * `:screenshot` — Path to save a full-page PNG
@@ -143,7 +171,7 @@ defmodule Excessibility.Scanner do
   the `t:scan_error/0` tuples.
   """
   @impl Excessibility.ScannerBehaviour
-  @spec scan(String.t(), scan_opts()) :: {:ok, report()} | {:error, scan_error()}
+  @spec scan(String.t(), scan_opts()) :: {:ok, report() | multi_report()} | {:error, scan_error()}
   def scan(url, opts \\ []) when is_binary(url) do
     with {:ok, validated_url} <- validate_url(url) do
       opts = Keyword.merge(@default_opts, opts)
@@ -272,6 +300,7 @@ defmodule Excessibility.Scanner do
     |> maybe_add_list(opts, :disable_rules, "--disable-rules")
     |> maybe_add_list(opts, :tags, "--tags")
     |> maybe_add_viewport(opts)
+    |> maybe_add_viewports(opts)
   end
 
   defp maybe_add(args, opts, key, flag, fmt) do
@@ -309,7 +338,33 @@ defmodule Excessibility.Scanner do
     end
   end
 
+  defp maybe_add_viewports(args, opts) do
+    specs =
+      opts
+      |> Keyword.get(:viewports, [])
+      |> Enum.filter(&valid_viewport?/1)
+      |> Enum.map_join(",", fn {w, h} -> "#{w}x#{h}" end)
+
+    if specs == "", do: args, else: args ++ ["--viewports", specs]
+  end
+
+  defp valid_viewport?({w, h}) when is_integer(w) and is_integer(h) and w > 0 and h > 0, do: true
+  defp valid_viewport?(_), do: false
+
   # ── Result normalization ───────────────────────────────────────────
+
+  defp normalize_result(%{"results" => results} = result, url) when is_list(results) do
+    %{
+      url: url,
+      final_url: Map.get(result, "final_url") || url,
+      results: Enum.map(results, &normalize_viewport_result/1),
+      timestamp: parse_timestamp(Map.get(result, "timestamp")),
+      duration_ms: Map.get(result, "duration_ms", 0),
+      engine: normalize_engine(Map.get(result, "engine", %{})),
+      warnings: normalize_warnings(Map.get(result, "warnings", [])),
+      fallback: nil
+    }
+  end
 
   defp normalize_result(result, url) do
     %{
@@ -329,6 +384,28 @@ defmodule Excessibility.Scanner do
 
   defp normalize_warnings(warnings) when is_list(warnings), do: Enum.filter(warnings, &is_binary/1)
   defp normalize_warnings(_), do: []
+
+  defp normalize_viewport_result(result) do
+    %{
+      viewport: parse_viewport(Map.get(result, "viewport")),
+      violations: normalize_violations(Map.get(result, "violations", [])),
+      incomplete: normalize_violations(Map.get(result, "incomplete", [])),
+      passes_count: Map.get(result, "passes_count", 0),
+      inapplicable_count: Map.get(result, "inapplicable_count", 0)
+    }
+  end
+
+  defp parse_viewport(spec) when is_binary(spec) do
+    with [w, h] <- String.split(spec, "x"),
+         {width, ""} <- Integer.parse(w),
+         {height, ""} <- Integer.parse(h) do
+      {width, height}
+    else
+      _ -> nil
+    end
+  end
+
+  defp parse_viewport(_), do: nil
 
   defp normalize_engine(engine) when is_map(engine) do
     %{

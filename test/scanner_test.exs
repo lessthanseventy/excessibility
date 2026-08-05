@@ -153,6 +153,82 @@ defmodule Excessibility.ScannerTest do
     end
   end
 
+  describe "scan/2 — multiple viewports" do
+    @tag timeout: 60_000
+    test "returns per-viewport results and actually applies each width" do
+      # The media query hides the unlabeled input below 400px, so axe must
+      # report the label violation at 1440px but not at 320px — proving the
+      # scan genuinely ran at both widths.
+      path =
+        write_tmp_html("""
+        <html lang="en"><head><title>Test</title>
+        <style>@media (max-width: 400px) { .wide-only { display: none; } }</style>
+        </head>
+        <body><h1>Hello</h1>
+        <div class="wide-only"><input type="text" id="wide-input"></div>
+        </body></html>
+        """)
+
+      on_exit(fn -> File.rm(path) end)
+
+      {:ok, report} = Scanner.scan("file://#{path}", viewports: [{1440, 900}, {320, 800}])
+
+      assert [wide, narrow] = report.results
+      assert wide.viewport == {1440, 900}
+      assert narrow.viewport == {320, 800}
+
+      assert Enum.any?(wide.violations, &(&1.id == "label"))
+      refute Enum.any?(narrow.violations, &(&1.id == "label"))
+
+      assert is_integer(wide.passes_count)
+      assert is_list(narrow.incomplete)
+    end
+
+    @tag timeout: 60_000
+    test "suffixes screenshots per viewport" do
+      html_path =
+        write_tmp_html("""
+        <html lang="en"><head><title>Test</title></head>
+        <body><p>Hi</p></body></html>
+        """)
+
+      png_base = Path.join(@tmp_dir, "scanner_vp_#{System.unique_integer([:positive])}.png")
+      wide_png = String.replace(png_base, ".png", ".1440x900.png")
+      narrow_png = String.replace(png_base, ".png", ".320x800.png")
+
+      on_exit(fn ->
+        File.rm(html_path)
+        File.rm(wide_png)
+        File.rm(narrow_png)
+      end)
+
+      {:ok, _report} =
+        Scanner.scan("file://#{html_path}",
+          viewports: [{1440, 900}, {320, 800}],
+          screenshot: png_base
+        )
+
+      assert File.exists?(wide_png)
+      assert File.exists?(narrow_png)
+    end
+
+    @tag timeout: 60_000
+    test "single :viewport keeps the flat report shape" do
+      path =
+        write_tmp_html("""
+        <html lang="en"><head><title>Test</title></head>
+        <body><h1>Hello</h1></body></html>
+        """)
+
+      on_exit(fn -> File.rm(path) end)
+
+      {:ok, report} = Scanner.scan("file://#{path}", viewport: {800, 600})
+
+      assert is_list(report.violations)
+      refute Map.get(report, :results)
+    end
+  end
+
   describe "scan/2 — playwright resolution" do
     @tag timeout: 60_000
     test "honors the :playwright_path config override" do
