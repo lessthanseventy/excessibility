@@ -38,6 +38,17 @@ defmodule Excessibility.Scanner do
   report has a non-nil `:fallback` field. Disable with `fallback: false`.
 
   `file://` URLs never fall back (curl can't fetch them).
+
+  ## Reusing an existing Playwright installation
+
+  By default the scanner uses the Playwright copy bundled under this
+  library's `assets/` directory. Projects that already have Playwright
+  installed (with browsers downloaded) can point Excessibility at it and
+  skip the second browser download:
+
+      config :excessibility, playwright_path: "assets/node_modules/playwright"
+
+  Relative paths are expanded from the project root.
   """
   @behaviour Excessibility.ScannerBehaviour
 
@@ -199,7 +210,7 @@ defmodule Excessibility.Scanner do
 
     case System.cmd("node", [runner_path | args],
            stderr_to_stdout: false,
-           env: [{"NODE_NO_WARNINGS", "1"}]
+           env: [{"NODE_NO_WARNINGS", "1"} | playwright_env()]
          ) do
       {output, 0} ->
         parse_output(output, url)
@@ -209,6 +220,13 @@ defmodule Excessibility.Scanner do
           {:ok, error} -> {:error, error}
           :unparseable -> {:error, {:playwright_error, String.trim(output)}}
         end
+    end
+  end
+
+  defp playwright_env do
+    case Application.get_env(:excessibility, :playwright_path) do
+      nil -> []
+      path -> [{"EXCESSIBILITY_PLAYWRIGHT_PATH", Path.expand(path)}]
     end
   end
 

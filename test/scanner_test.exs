@@ -153,6 +153,43 @@ defmodule Excessibility.ScannerTest do
     end
   end
 
+  describe "scan/2 — playwright resolution" do
+    @tag timeout: 60_000
+    test "honors the :playwright_path config override" do
+      bundled = Path.expand("assets/node_modules/playwright", File.cwd!())
+      Application.put_env(:excessibility, :playwright_path, bundled)
+      on_exit(fn -> Application.delete_env(:excessibility, :playwright_path) end)
+
+      path =
+        write_tmp_html("""
+        <html lang="en"><head><title>Test</title></head>
+        <body><h1>Hello</h1></body></html>
+        """)
+
+      on_exit(fn -> File.rm(path) end)
+
+      assert {:ok, _report} = Scanner.scan("file://#{path}")
+    end
+
+    @tag timeout: 60_000
+    test "reports an actionable error when :playwright_path is invalid" do
+      Application.put_env(:excessibility, :playwright_path, "/nonexistent/playwright")
+      on_exit(fn -> Application.delete_env(:excessibility, :playwright_path) end)
+
+      path =
+        write_tmp_html("""
+        <html lang="en"><head><title>Test</title></head>
+        <body><h1>Hello</h1></body></html>
+        """)
+
+      on_exit(fn -> File.rm(path) end)
+
+      assert {:error, {:playwright_error, message}} = Scanner.scan("file://#{path}", fallback: false)
+      assert message =~ "/nonexistent/playwright"
+      assert message =~ "EXCESSIBILITY_PLAYWRIGHT_PATH"
+    end
+  end
+
   describe "scan/2 — error tuples" do
     test "returns {:error, {:invalid_url, :parse_failed}} for unparseable input" do
       assert {:error, {:invalid_url, :parse_failed}} = Scanner.scan("not a url")

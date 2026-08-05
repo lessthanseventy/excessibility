@@ -9,8 +9,8 @@
 // Outputs JSON with axe results for each stage reached.
 
 const path = require("path");
-const modulesDir = path.join(__dirname, "node_modules");
-const { chromium } = require(path.join(modulesDir, "playwright"));
+const { resolvePlaywright, modulesDir } = require("./resolve-playwright");
+const { chromium } = resolvePlaywright();
 const { AxeBuilder } = require(path.join(modulesDir, "@axe-core", "playwright"));
 
 // ── Heuristic selectors ────────────────────────────────────
