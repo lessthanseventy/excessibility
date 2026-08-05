@@ -82,6 +82,7 @@ defmodule Excessibility.Scanner do
           timestamp: DateTime.t(),
           duration_ms: non_neg_integer(),
           engine: engine_info(),
+          warnings: [String.t()],
           fallback: fallback_info()
         }
 
@@ -303,9 +304,13 @@ defmodule Excessibility.Scanner do
       timestamp: parse_timestamp(Map.get(result, "timestamp")),
       duration_ms: Map.get(result, "duration_ms", 0),
       engine: normalize_engine(Map.get(result, "engine", %{})),
+      warnings: normalize_warnings(Map.get(result, "warnings", [])),
       fallback: nil
     }
   end
+
+  defp normalize_warnings(warnings) when is_list(warnings), do: Enum.filter(warnings, &is_binary/1)
+  defp normalize_warnings(_), do: []
 
   defp normalize_engine(engine) when is_map(engine) do
     %{

@@ -67,6 +67,7 @@ defmodule Excessibility.ScannerTest do
       assert Map.has_key?(report.engine, :axe_version)
       assert Map.has_key?(report.engine, :chromium_version)
       assert is_nil(report.fallback)
+      assert report.warnings == []
     end
 
     @tag timeout: 60_000
@@ -87,6 +88,53 @@ defmodule Excessibility.ScannerTest do
       {:ok, _report} = Scanner.scan("file://#{html_path}", screenshot: png_path)
 
       assert File.exists?(png_path)
+    end
+
+    @tag timeout: 60_000
+    test "applies linked CSS before analyzing so hidden content is excluded" do
+      css_path = Path.join(@tmp_dir, "scanner_css_#{System.unique_integer([:positive])}.css")
+      File.write!(css_path, ".modal { display: none; }")
+
+      # The unlabeled input is a critical `label` violation — unless the
+      # stylesheet is applied first, which hides the containing modal.
+      path =
+        write_tmp_html("""
+        <html lang="en"><head><title>Test</title>
+        <link rel="stylesheet" href="file://#{css_path}">
+        </head>
+        <body><h1>Hello</h1>
+        <div class="modal"><input type="text" id="hidden-input"></div>
+        </body></html>
+        """)
+
+      on_exit(fn ->
+        File.rm(path)
+        File.rm(css_path)
+      end)
+
+      {:ok, report} = Scanner.scan("file://#{path}")
+
+      refute Enum.any?(report.violations, &(&1.id == "label"))
+      assert report.warnings == []
+    end
+
+    @tag timeout: 60_000
+    test "warns when a linked stylesheet is missing" do
+      path =
+        write_tmp_html("""
+        <html lang="en"><head><title>Test</title>
+        <link rel="stylesheet" href="file:///nonexistent/assets/app.css">
+        </head>
+        <body><h1>Hello</h1></body></html>
+        """)
+
+      on_exit(fn -> File.rm(path) end)
+
+      {:ok, report} = Scanner.scan("file://#{path}")
+
+      assert [warning | _] = report.warnings
+      assert warning =~ "stylesheet"
+      assert warning =~ "/nonexistent/assets/app.css"
     end
 
     @tag timeout: 60_000
