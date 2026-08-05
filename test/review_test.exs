@@ -72,6 +72,30 @@ defmodule Excessibility.ReviewTest do
       assert change.tier == :block
     end
 
+    test "a pre-existing violation whose selector differs only by an embedded record id is not new" do
+      # Phoenix idiomatically derives DOM ids from record ids
+      # (`id={"row-#{@row.id}"}`), and fixture ids shift between the baseline
+      # run and the current run — see issue #140. Same rule, same markup
+      # pattern, different trailing id must not read as a new finding.
+      baseline = ~s(<div><span id="row-2" phx-click="a">one</span></div>)
+      current = ~s(<div><span id="row-7" phx-click="a">one</span></div>)
+
+      change = Review.review_pair("list", baseline, current)
+
+      assert change.findings == []
+      assert change.tier == :auto
+    end
+
+    test "an additional violation on an id-shifted sibling still counts as new" do
+      baseline = ~s(<div><span id="row-2" phx-click="a">one</span></div>)
+      current = ~s(<div><span id="row-2" phx-click="a">one</span><span id="row-7" phx-click="b">two</span></div>)
+
+      change = Review.review_pair("list", baseline, current)
+
+      assert Enum.count(change.findings, &(&1.rule == :phx_click_on_non_interactive)) == 1
+      assert change.tier == :block
+    end
+
     test "a pre-existing rule violation is not counted as new (finding-delta)" do
       # The phx-click violation exists in BOTH snapshots; only the text inside
       # a live region changed, so there is nothing newly wrong.
