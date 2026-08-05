@@ -48,6 +48,19 @@ defmodule Excessibility.ReviewTest do
       assert change.tier == :block
     end
 
+    test "a second identical violation with the same fingerprint counts as new" do
+      # One keyboard-inaccessible span pre-exists; the change adds another
+      # with the same {rule, selector} fingerprint. The new one must not
+      # hide behind the pre-existing one.
+      baseline = ~s(<div><span phx-click="a">one</span></div>)
+      current = ~s(<div><span phx-click="a">one</span><span phx-click="b">two</span></div>)
+
+      change = Review.review_pair("list", baseline, current)
+
+      assert Enum.count(change.findings, &(&1.rule == :phx_click_on_non_interactive)) == 1
+      assert change.tier == :block
+    end
+
     test "a pre-existing rule violation is not counted as new (finding-delta)" do
       # The phx-click violation exists in BOTH snapshots; only the text inside
       # a live region changed, so there is nothing newly wrong.
