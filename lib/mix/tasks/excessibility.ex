@@ -28,12 +28,21 @@ defmodule Mix.Tasks.Excessibility do
       # shows up at narrow viewports)
       mix excessibility --viewports 1440x900,320x800
 
+      # Also flag interactive elements that are mostly outside the
+      # visible area, and page-level horizontal overflow
+      mix excessibility --viewports 1440x900,320x800 --check-clipping
+
   ## Configuration
 
   - `:axe_disable_rules` - List of axe rule IDs to disable (default: `[]`)
   - `:viewports` - List of `{width, height}` tuples to scan each snapshot
     at (default: single 1280x720 scan). Equivalent to the `--viewports`
     flag; the flag wins when both are given.
+  - `:check_clipping` - Flag interactive elements whose visible width falls
+    below `:clipping_ratio`, plus page-level horizontal overflow (default:
+    `false`). Equivalent to the `--check-clipping` flag.
+  - `:clipping_ratio` - Minimum visible-width ratio before an element counts
+    as clipped (default: `0.9`)
   - `:excessibility_output_path` - Base directory for snapshots (default: `"test/excessibility"`)
   - `:cross_snapshot_enabled?` - Diff consecutive snapshots of the same test
     to flag content that changed without an `aria-live` region (default:
@@ -50,14 +59,16 @@ defmodule Mix.Tasks.Excessibility do
 
   @impl Mix.Task
   def run(args) do
-    {viewports, test_args} = extract_viewports(args)
+    {viewports, args} = extract_viewports(args)
+    {check_clipping?, test_args} = extract_check_clipping(args)
+    scan_config = %{viewports: viewports, check_clipping?: check_clipping?}
 
     if test_args == [] do
       # No test args - check all existing snapshots
-      run_axe_on_all(viewports)
+      run_axe_on_all(scan_config)
     else
       # With args - run tests first, then check new snapshots
-      run_tests_then_check(test_args, viewports)
+      run_tests_then_check(test_args, scan_config)
     end
   end
 
@@ -79,6 +90,14 @@ defmodule Mix.Tasks.Excessibility do
     end
   end
 
+  defp extract_check_clipping(args) do
+    if "--check-clipping" in args do
+      {true, List.delete(args, "--check-clipping")}
+    else
+      {Application.get_env(:excessibility, :check_clipping, false) == true, args}
+    end
+  end
+
   defp parse_viewport_specs(spec) do
     spec
     |> String.split(",", trim: true)
@@ -97,7 +116,7 @@ defmodule Mix.Tasks.Excessibility do
   defp valid_viewport?({w, h}) when is_integer(w) and is_integer(h) and w > 0 and h > 0, do: true
   defp valid_viewport?(_), do: false
 
-  defp run_axe_on_all(viewports) do
+  defp run_axe_on_all(scan_config) do
     files = list_snapshots()
 
     if Enum.empty?(files) do
@@ -117,10 +136,10 @@ defmodule Mix.Tasks.Excessibility do
     end
 
     Mix.shell().info("Checking #{length(files)} snapshot(s)...\n")
-    run_axe(files, viewports)
+    run_axe(files, scan_config)
   end
 
-  defp run_tests_then_check(args, viewports) do
+  defp run_tests_then_check(args, scan_config) do
     # Get snapshot count before test
     snapshots_before = list_snapshots()
 
@@ -156,7 +175,7 @@ defmodule Mix.Tasks.Excessibility do
     Mix.shell().info("\n## Accessibility Check\n")
     Mix.shell().info("Checking #{length(new_snapshots)} snapshot(s)...\n")
 
-    run_axe(new_snapshots, viewports)
+    run_axe(new_snapshots, scan_config)
   end
 
   defp list_snapshots do
@@ -167,10 +186,11 @@ defmodule Mix.Tasks.Excessibility do
     |> Enum.sort()
   end
 
-  defp run_axe(files, viewports) do
+  defp run_axe(files, %{viewports: viewports, check_clipping?: check_clipping?}) do
     disable_rules = Application.get_env(:excessibility, :axe_disable_rules, [])
     scan_opts = if disable_rules == [], do: [], else: [disable_rules: disable_rules]
     scan_opts = if viewports == [], do: scan_opts, else: [{:viewports, viewports} | scan_opts]
+    scan_opts = if check_clipping?, do: [{:check_clipping, true} | clipping_ratio_opts()] ++ scan_opts, else: scan_opts
     lv_rules_enabled? = Application.get_env(:excessibility, :lv_rules_enabled?, true)
     lv_disabled = Application.get_env(:excessibility, :lv_rules_disabled, [])
     lv_opts = [disable: lv_disabled]
@@ -225,11 +245,24 @@ defmodule Mix.Tasks.Excessibility do
     end
   end
 
-  defp file_passed?({_file, {:ok, %{results: results}}, %{findings: []}}) when is_list(results),
-    do: Enum.all?(results, &(&1.violations == []))
+  defp clipping_ratio_opts do
+    case Application.get_env(:excessibility, :clipping_ratio) do
+      ratio when is_float(ratio) and ratio > 0 and ratio <= 1 -> [clipping_ratio: ratio]
+      _ -> []
+    end
+  end
 
-  defp file_passed?({_file, {:ok, %{violations: []}}, %{findings: []}}), do: true
+  defp file_passed?({_file, {:ok, %{results: results}}, %{findings: []}}) when is_list(results),
+    do: Enum.all?(results, &result_clean?/1)
+
+  defp file_passed?({_file, {:ok, %{violations: _} = report}, %{findings: []}}), do: result_clean?(report)
   defp file_passed?(_), do: false
+
+  defp result_clean?(%{violations: []} = result), do: clipping_clean?(Map.get(result, :clipping))
+  defp result_clean?(_), do: false
+
+  defp clipping_clean?(%{clipped: [_ | _]}), do: false
+  defp clipping_clean?(_), do: true
 
   # Scan warnings (e.g. a missing stylesheet) mean the axe numbers can't be
   # trusted, so they must surface even when every file passes.
@@ -245,17 +278,36 @@ defmodule Mix.Tasks.Excessibility do
   end
 
   defp print_axe({:ok, %{results: results}}) when is_list(results) do
-    Enum.each(results, fn %{viewport: viewport, violations: violations} ->
-      if violations != [] do
-        Mix.shell().info("  @#{format_viewport(viewport)}:")
-        format_violations(violations)
-      end
-    end)
+    Enum.each(results, &print_viewport_result/1)
   end
 
-  defp print_axe({:ok, %{violations: []}}), do: :ok
-  defp print_axe({:ok, %{violations: violations}}), do: format_violations(violations)
+  defp print_axe({:ok, %{violations: violations} = report}) do
+    if violations != [], do: format_violations(violations)
+    print_clipping(Map.get(report, :clipping))
+  end
+
   defp print_axe({:error, reason}), do: Mix.shell().info("  Error: #{format_error(reason)}\n")
+
+  defp print_viewport_result(%{viewport: viewport, violations: violations} = result) do
+    unless result_clean?(result) do
+      Mix.shell().info("  @#{format_viewport(viewport)}:")
+      if violations != [], do: format_violations(violations)
+      print_clipping(Map.get(result, :clipping))
+    end
+  end
+
+  defp print_clipping(%{clipped: [_ | _] = clipped, page_overflow?: overflow?}) do
+    Enum.each(clipped, fn clip ->
+      Mix.shell().info(
+        "    [CLIPPED] #{clip.selector} — #{clip.visible}px of #{clip.width}px visible " <>
+          "(#{round(clip.ratio * 100)}%)"
+      )
+    end)
+
+    if overflow?, do: Mix.shell().info("    page has horizontal overflow at this width")
+  end
+
+  defp print_clipping(_), do: :ok
 
   defp format_viewport({w, h}), do: "#{w}x#{h}"
   defp format_viewport(other), do: inspect(other)

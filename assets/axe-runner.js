@@ -12,7 +12,7 @@ const USAGE =
   "Usage: node axe-runner.js <url> " +
   "[--screenshot path] [--wait-for selector] [--wait-until load|domcontentloaded|networkidle] " +
   "[--disable-rules r1,r2] [--tags t1,t2] [--timeout ms] [--viewport WxH] " +
-  "[--viewports WxH,WxH,...] [--user-agent ua]";
+  "[--viewports WxH,WxH,...] [--check-clipping] [--clipping-ratio 0.9] [--user-agent ua]";
 
 const DEFAULT_UA =
   "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
@@ -41,6 +41,8 @@ function parseArgs(argv) {
     timeout: 30000,
     viewport: { width: 1280, height: 720 },
     viewports: null,
+    checkClipping: false,
+    clippingRatio: 0.9,
     userAgent: null,
   };
 
@@ -91,6 +93,15 @@ function parseArgs(argv) {
             .map(([w, h]) => ({ width: w, height: h }));
           if (parsed.length > 0) opts.viewports = parsed;
         }
+        i++;
+        break;
+      }
+      case "--check-clipping":
+        opts.checkClipping = true;
+        break;
+      case "--clipping-ratio": {
+        const ratio = parseFloat(next);
+        if (!Number.isNaN(ratio) && ratio > 0 && ratio <= 1) opts.clippingRatio = ratio;
         i++;
         break;
       }
@@ -155,6 +166,55 @@ async function waitForStylesheets(page, warnings, maxWait = 10000) {
   await page.evaluate(() => document.fonts && document.fonts.ready).catch(() => {});
 }
 
+// axe has no rule for "this control is in the DOM but mostly outside the
+// visible area" — the actual user-facing failure of WCAG 1.4.10 Reflow.
+// Measures interactive elements' horizontal visibility and page-level
+// horizontal overflow at the current viewport width.
+async function measureClipping(page, ratioThreshold) {
+  return page
+    .evaluate((threshold) => {
+      const selectors = ["a", "button", "input", "select", "textarea", "[phx-click]", '[role="button"]'];
+      const innerW = window.innerWidth;
+
+      const cssPath = (el) => {
+        const tag = el.tagName.toLowerCase();
+        if (el.id) return `${tag}#${el.id}`;
+        const cls = (el.getAttribute("class") || "").trim().split(/\s+/)[0];
+        return cls ? `${tag}.${cls}` : tag;
+      };
+
+      const clipped = [...document.querySelectorAll(selectors.join(","))]
+        .map((el) => {
+          const r = el.getBoundingClientRect();
+          if (r.width === 0) return null; // hidden or unrendered
+          const visible = Math.max(0, Math.min(r.right, innerW) - Math.max(r.left, 0));
+          const ratio = visible / r.width;
+          if (ratio >= threshold) return null;
+          return {
+            selector: cssPath(el),
+            width: Math.round(r.width),
+            visible: Math.round(visible),
+            ratio: Math.round(ratio * 100) / 100,
+            html: el.outerHTML.slice(0, 200),
+          };
+        })
+        .filter(Boolean);
+
+      // documentElement.scrollWidth misses overflow from absolutely
+      // positioned boxes, which body.scrollWidth does report.
+      const scrollW = Math.max(
+        document.documentElement.scrollWidth,
+        document.body ? document.body.scrollWidth : 0,
+      );
+
+      return {
+        page_overflow: scrollW > innerW,
+        clipped,
+      };
+    }, ratioThreshold)
+    .catch(() => null);
+}
+
 function viewportScreenshotPath(basePath, vp) {
   const suffix = `${vp.width}x${vp.height}`;
   return /\.png$/i.test(basePath) ? basePath.replace(/\.png$/i, `.${suffix}.png`) : `${basePath}.${suffix}.png`;
@@ -179,8 +239,20 @@ async function main() {
   }
 
   const opts = parseArgs(argv);
-  const { url, screenshotPath, waitFor, waitUntil, disableRules, tags, timeout, viewport, viewports, userAgent } =
-    opts;
+  const {
+    url,
+    screenshotPath,
+    waitFor,
+    waitUntil,
+    disableRules,
+    tags,
+    timeout,
+    viewport,
+    viewports,
+    checkClipping,
+    clippingRatio,
+    userAgent,
+  } = opts;
 
   const isFileUrl = url.startsWith("file://");
   const startTime = Date.now();
@@ -302,6 +374,8 @@ async function main() {
 
         if (screenshotPath) await takeScreenshot(viewportScreenshotPath(screenshotPath, vp));
 
+        const clipping = checkClipping ? await measureClipping(page, clippingRatio) : null;
+
         axeVersion = (results && results.testEngine && results.testEngine.version) || axeVersion;
         perViewport.push({
           viewport: `${vp.width}x${vp.height}`,
@@ -309,6 +383,7 @@ async function main() {
           incomplete: results.incomplete || [],
           passes_count: (results.passes || []).length,
           inapplicable_count: (results.inapplicable || []).length,
+          ...(clipping ? { clipping } : {}),
         });
       }
 
@@ -334,6 +409,8 @@ async function main() {
 
     if (screenshotPath) await takeScreenshot(screenshotPath);
 
+    const clipping = checkClipping ? await measureClipping(page, clippingRatio) : null;
+
     const output = {
       ...baseOutput(),
       engine: {
@@ -344,6 +421,7 @@ async function main() {
       incomplete: results.incomplete || [],
       passes_count: (results.passes || []).length,
       inapplicable_count: (results.inapplicable || []).length,
+      ...(clipping ? { clipping } : {}),
     };
 
     console.log(JSON.stringify(output));
