@@ -38,6 +38,19 @@ defmodule Excessibility.MCP.Registry do
   @resource_behaviour Excessibility.MCP.Resource
   @prompt_behaviour Excessibility.MCP.Prompt
 
+  # Discovery below runs when THIS module compiles, so Mix must be told to
+  # recompile it when the discovered directories change — otherwise adding
+  # a tool/resource/prompt file leaves a stale built-in list on
+  # incremental builds.
+  for dir <- ["tools", "resources", "prompts"] do
+    dir_path = Path.join(__DIR__, dir)
+    @external_resource dir_path
+
+    for file <- Path.wildcard(Path.join(dir_path, "*.ex")) do
+      @external_resource file
+    end
+  end
+
   # Compile-time discovery helper functions
   file_to_module = fn path, subdir ->
     module_name =
