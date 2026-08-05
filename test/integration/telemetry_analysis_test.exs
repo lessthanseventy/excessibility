@@ -38,7 +38,7 @@ defmodule Integration.TelemetryAnalysisTest do
       result = memory_analyzer.analyze(timeline, [])
 
       # Should detect the bloat at event 3
-      assert length(result.findings) > 0
+      assert result.findings != []
       assert Enum.any?(result.findings, &String.contains?(&1.message, "grew"))
     end
 

@@ -123,7 +123,8 @@ defmodule Excessibility.MCP.Tools.A11yCheck do
            "violation_count" => length(violations),
            "violations" => violations,
            "passes" => report.passes_count,
-           "incomplete" => length(report.incomplete)
+           "incomplete" => length(report.incomplete),
+           "warnings" => report.warnings
          }}
 
       {:error, reason} ->
