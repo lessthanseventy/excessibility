@@ -3,10 +3,9 @@
 // to stdout and exits 1. The Elixir Excessibility.Scanner module parses
 // both shapes.
 
-const path = require("path");
-const { resolvePlaywright, launchErrorHint, modulesDir } = require("./resolve-playwright");
+const { resolvePlaywright, resolveAxeBuilder, launchErrorHint } = require("./resolve-playwright");
 const { chromium } = resolvePlaywright();
-const { AxeBuilder } = require(path.join(modulesDir, "@axe-core", "playwright"));
+const AxeBuilder = resolveAxeBuilder();
 
 const USAGE =
   "Usage: node axe-runner.js <url> " +

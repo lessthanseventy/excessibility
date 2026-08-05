@@ -532,6 +532,7 @@ All configuration goes in `test/test_helper.exs` or `config/test.exs`:
 | `:excessibility_output_path` | No | `"test/excessibility"` | Base directory for snapshots |
 | `:axe_runner_path` | No | auto-detected | Path to axe-runner.js script |
 | `:playwright_path` | No | bundled copy | Path to an existing Playwright installation to reuse (skips the second browser download) |
+| `:node_modules_path` | No | bundled copy | Path to a host `node_modules` directory providing `playwright` **and** `@axe-core/playwright` (skips the bundled `npm install` entirely; pins the axe version to the host's) |
 | `:viewports` | No | `[]` | `{width, height}` tuples for `mix excessibility` to scan each snapshot at |
 | `:check_clipping` | No | `false` | Flag interactive elements mostly outside the visible area, plus page-level horizontal overflow |
 | `:clipping_ratio` | No | `0.9` | Minimum visible-width ratio before an element counts as clipped |
