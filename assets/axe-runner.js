@@ -121,23 +121,31 @@ function parseArgs(argv) {
 // stylesheet has either loaded or errored, then report failures so
 // callers know styled-dependent findings can't be trusted.
 async function installStylesheetTracker(page) {
+  // The flag only feeds the wait predicate below. Chromium also fires this
+  // error event when the sheet loaded fine but a nested @import failed, so
+  // it cannot be used to decide whether the stylesheet itself is missing —
+  // link.sheet is the authoritative signal for that.
   await page.addInitScript(() => {
-    window.__excessibilityFailedStylesheets = [];
     window.addEventListener(
       "error",
       (e) => {
         const t = e.target;
         if (t && t.tagName === "LINK" && (t.rel || "").includes("stylesheet")) {
           t.__excessibilityFailed = true;
-          window.__excessibilityFailedStylesheets.push(t.href);
         }
       },
       true,
     );
   });
+
+  const failedStylesheetRequests = [];
+  page.on("requestfailed", (request) => {
+    if (request.resourceType() === "stylesheet") failedStylesheetRequests.push(request.url());
+  });
+  return failedStylesheetRequests;
 }
 
-async function waitForStylesheets(page, warnings, maxWait = 10000) {
+async function waitForStylesheets(page, warnings, failedStylesheetRequests, maxWait = 10000) {
   const hasLinks = await page
     .evaluate(() => document.querySelectorAll('link[rel~="stylesheet"]').length > 0)
     .catch(() => false);
@@ -158,9 +166,26 @@ async function waitForStylesheets(page, warnings, maxWait = 10000) {
       );
     });
 
-  const failed = await page.evaluate(() => window.__excessibilityFailedStylesheets || []).catch(() => []);
+  // link.sheet is null exactly when the stylesheet did not load or parse,
+  // so a genuinely missing file warns while a loaded sheet whose nested
+  // @import failed does not.
+  const failed = await page
+    .evaluate(() =>
+      [...document.querySelectorAll('link[rel~="stylesheet"]')].filter((l) => !l.sheet).map((l) => l.href),
+    )
+    .catch(() => []);
   for (const href of failed) {
     warnings.push(`stylesheet failed to load: ${href} — contrast/layout findings are invalid until it exists`);
+  }
+
+  // A failed stylesheet request that isn't one of the missing <link>s is a
+  // nested @import (e.g. a remote font stylesheet blocked from file://).
+  // Styling is degraded, not absent — fallback fonts change text metrics.
+  const failedSet = new Set(failed);
+  for (const url of new Set(failedStylesheetRequests)) {
+    if (!failedSet.has(url)) {
+      warnings.push(`stylesheet import failed: ${url} — text metrics may differ from production`);
+    }
   }
 
   await page.evaluate(() => document.fonts && document.fonts.ready).catch(() => {});
@@ -293,7 +318,7 @@ async function main() {
   try {
     const effectiveWaitUntil = waitUntil || "load";
 
-    await installStylesheetTracker(page);
+    const failedStylesheetRequests = await installStylesheetTracker(page);
 
     let response;
     try {
@@ -333,7 +358,7 @@ async function main() {
       await waitForContent(page);
     }
 
-    await waitForStylesheets(page, warnings);
+    await waitForStylesheets(page, warnings, failedStylesheetRequests);
 
     const runAxe = async () => {
       let builder = new AxeBuilder({ page }).withTags(tags);

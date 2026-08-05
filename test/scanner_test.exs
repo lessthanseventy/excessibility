@@ -133,6 +133,37 @@ defmodule Excessibility.ScannerTest do
       assert warning =~ "/nonexistent/assets/app.css"
     end
 
+    test "does not warn 'failed to load' when the sheet loaded but a nested @import failed" do
+      # Chromium fires an error event on the <link> when a nested @import
+      # fails even though the sheet itself loaded and applied. That must
+      # not read as "the stylesheet doesn't exist" — only as degraded
+      # styling from the missing import.
+      css_path = Path.join(@tmp_dir, "excessibility_import_#{System.unique_integer([:positive])}.css")
+
+      File.write!(css_path, """
+      @import url("file:///nonexistent/excessibility/missing-import.css");
+      body { color: rgb(20, 20, 20); }
+      """)
+
+      path =
+        write_tmp_html("""
+        <html lang="en"><head><title>Test</title>
+        <link rel="stylesheet" href="file://#{css_path}">
+        </head>
+        <body><h1>Hello</h1></body></html>
+        """)
+
+      on_exit(fn ->
+        File.rm(path)
+        File.rm(css_path)
+      end)
+
+      {:ok, report} = Scanner.scan("file://#{path}")
+
+      refute Enum.any?(report.warnings, &(&1 =~ "stylesheet failed to load"))
+      assert Enum.any?(report.warnings, &(&1 =~ "stylesheet import failed" and &1 =~ "missing-import.css"))
+    end
+
     test "respects :disable_rules option" do
       path =
         write_tmp_html("""
