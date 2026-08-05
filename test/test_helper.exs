@@ -15,6 +15,7 @@ ExUnit.start()
 Mox.defmock(Excessibility.LiveViewMock, for: Excessibility.LiveView.Behaviour)
 Mox.defmock(Excessibility.BrowserMock, for: Excessibility.BrowserBehaviour)
 Mox.defmock(Excessibility.SystemMock, for: Excessibility.SystemBehaviour)
+Mox.defmock(Excessibility.ScannerMock, for: Excessibility.ScannerBehaviour)
 
 Application.put_env(:excessibility, :system_mod, Excessibility.SystemMock)
 Application.put_env(:excessibility, :live_view_mod, Excessibility.LiveViewMock)

@@ -1,6 +1,7 @@
 defmodule Excessibility.SnapshotTest do
   use ExUnit.Case
 
+  import ExUnit.CaptureLog
   import Mox
 
   setup :verify_on_exit!
@@ -62,5 +63,40 @@ defmodule Excessibility.SnapshotTest do
 
     # Cleanup
     File.rm_rf!(snapshot_dir)
+  end
+
+  describe "screenshot failures" do
+    setup do
+      Application.put_env(:excessibility, :scanner_mod, Excessibility.ScannerMock)
+      on_exit(fn -> Application.delete_env(:excessibility, :scanner_mod) end)
+    end
+
+    test "a failed screenshot logs the reason and keeps the HTML snapshot" do
+      filename = "Elixir_Excessibility_SnapshotTest_60.html"
+      full_path = Path.join([File.cwd!(), "test/excessibility/html_snapshots", filename])
+
+      expect(Excessibility.ScannerMock, :scan, fn url, opts ->
+        assert url =~ ".html"
+        assert Keyword.get(opts, :screenshot) =~ ".png"
+        {:error, {:playwright_error, ""}}
+      end)
+
+      conn =
+        :get
+        |> Plug.Test.conn("/")
+        |> Plug.Conn.put_resp_content_type("text/html")
+        |> Plug.Conn.send_resp(200, "<html><body>Hello</body></html>")
+
+      log =
+        capture_log(fn ->
+          Excessibility.Snapshot.html_snapshot(conn, %{line: 60}, __MODULE__, screenshot?: true)
+        end)
+
+      assert log =~ "Screenshot failed"
+      assert log =~ "playwright_error"
+      assert File.exists?(full_path)
+
+      File.rm(full_path)
+    end
   end
 end

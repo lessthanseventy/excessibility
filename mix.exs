@@ -35,7 +35,8 @@ defmodule Excessibility.MixProject do
         ],
         Behaviours: [
           Excessibility.SystemBehaviour,
-          Excessibility.BrowserBehaviour
+          Excessibility.BrowserBehaviour,
+          Excessibility.ScannerBehaviour
         ],
         Implementations: [
           Excessibility.System,
