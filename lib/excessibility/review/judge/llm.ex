@@ -44,7 +44,7 @@ defmodule Excessibility.Review.Judge.LLM do
   end
 
   defp run(change, fun, opts) do
-    with {:ok, text} when is_binary(text) <- safe_call(fun, build_prompt(change)),
+    with {:ok, text} when is_binary(text) <- safe_call(fun, build_prompt(change, opts)),
          {:ok, verdict} <- parse(text, change) do
       verdict
     else
@@ -92,7 +92,7 @@ defmodule Excessibility.Review.Judge.LLM do
 
   defp parse_risks(_), do: []
 
-  defp build_prompt(change) do
+  defp build_prompt(change, opts) do
     """
     You are a release-risk judge for a Phoenix/LiveView change. Decide whether
     this view's change is safe to auto-merge given a strong test + painless
@@ -116,6 +116,9 @@ defmodule Excessibility.Review.Judge.LLM do
 
     Behavioral findings (from telemetry analyzers — queries, state, renders):
     #{render_behavioral(Map.get(change, :behavioral, []))}
+
+    Run-level behavioral findings (whole test run — context only, not attributed to this view):
+    #{render_behavioral(Keyword.get(opts, :run_behavioral, []))}
     """
   end
 

@@ -21,6 +21,7 @@ defmodule Excessibility.Review do
 
   alias Excessibility.LiveViewRules
   alias Excessibility.Review.Behavioral
+  alias Excessibility.Review.Judge
   alias Excessibility.SnapshotDiff
 
   @type tier :: :auto | :review | :block
@@ -79,6 +80,34 @@ defmodule Excessibility.Review do
       |> Enum.reject(&unchanged?/1)
 
     %{changes: changes, summary: summarize(changes)}
+  end
+
+  @doc """
+  Run the configured judge over each change in a report.
+
+  Attaches the judge's verdict to every change, replaces the change's
+  tier with the judged tier, and recomputes the summary. Run-level
+  behavioral findings are handed to the judge as context
+  (`:run_behavioral`) but are **not** attributed to any view — they
+  stay at the report level, where `mix excessibility.review` prints
+  them and gates the exit code on them. A view's tier only reflects
+  what that view introduced.
+  """
+  @spec judge_changes(report(), keyword()) :: report()
+  def judge_changes(report, opts \\ []) do
+    behavioral = Map.get(report, :behavioral, [])
+    judge_opts = Keyword.put(opts, :run_behavioral, behavioral)
+
+    judged =
+      Enum.map(report.changes, fn change ->
+        verdict = Judge.verdict(change, judge_opts)
+
+        change
+        |> Map.put(:verdict, verdict)
+        |> Map.put(:tier, verdict.tier)
+      end)
+
+    %{report | changes: judged, summary: summarize(judged)}
   end
 
   @doc """
