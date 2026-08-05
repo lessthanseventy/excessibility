@@ -50,7 +50,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.ComponentRerenderTest do
 
       result = ComponentRerender.analyze(timeline, [])
 
-      assert length(result.findings) > 0
+      assert result.findings != []
       finding = List.first(result.findings)
       assert finding.severity in [:warning, :critical]
       assert finding.message =~ "render"

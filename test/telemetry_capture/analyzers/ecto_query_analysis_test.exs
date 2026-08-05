@@ -62,7 +62,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EctoQueryAnalysisTest do
 
       result = EctoQueryAnalysis.analyze(timeline, [])
 
-      assert length(result.findings) > 0
+      assert result.findings != []
       assert Enum.any?(result.findings, &(&1.severity in [:warning, :critical]))
     end
 
@@ -85,7 +85,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EctoQueryAnalysisTest do
 
       result = EctoQueryAnalysis.analyze(timeline, [])
 
-      assert length(result.findings) > 0
+      assert result.findings != []
       n_plus_one_finding = Enum.find(result.findings, &(&1.metadata[:pattern] == :n_plus_one))
       assert n_plus_one_finding
       assert n_plus_one_finding.message =~ "products"
@@ -109,7 +109,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EctoQueryAnalysisTest do
 
       result = EctoQueryAnalysis.analyze(timeline, [])
 
-      assert length(result.findings) > 0
+      assert result.findings != []
       finding = List.first(result.findings)
       assert finding.message =~ "150"
     end

@@ -38,7 +38,19 @@ defmodule Excessibility.Scanner do
   report has a non-nil `:fallback` field. Disable with `fallback: false`.
 
   `file://` URLs never fall back (curl can't fetch them).
+
+  ## Reusing an existing Playwright installation
+
+  By default the scanner uses the Playwright copy bundled under this
+  library's `assets/` directory. Projects that already have Playwright
+  installed (with browsers downloaded) can point Excessibility at it and
+  skip the second browser download:
+
+      config :excessibility, playwright_path: "assets/node_modules/playwright"
+
+  Relative paths are expanded from the project root.
   """
+  @behaviour Excessibility.ScannerBehaviour
 
   @typedoc "axe-core impact level, normalized to an atom."
   @type impact :: :critical | :serious | :moderate | :minor | nil
@@ -81,6 +93,8 @@ defmodule Excessibility.Scanner do
           timestamp: DateTime.t(),
           duration_ms: non_neg_integer(),
           engine: engine_info(),
+          warnings: [String.t()],
+          clipping: clipping_info(),
           fallback: fallback_info()
         }
 
@@ -92,12 +106,49 @@ defmodule Excessibility.Scanner do
           | {:playwright_error, String.t()}
           | {:invalid_url, atom()}
 
+  @typedoc "An interactive element that is mostly outside the visible area."
+  @type clipped_element :: %{
+          selector: String.t(),
+          width: non_neg_integer(),
+          visible: non_neg_integer(),
+          ratio: float(),
+          html: String.t()
+        }
+
+  @typedoc "Clipping measurements, present when `:check_clipping` is set."
+  @type clipping_info :: %{page_overflow?: boolean(), clipped: [clipped_element()]} | nil
+
+  @typedoc "Per-viewport axe results, returned when `:viewports` is used."
+  @type viewport_result :: %{
+          viewport: {pos_integer(), pos_integer()},
+          violations: [violation()],
+          incomplete: [violation()],
+          passes_count: non_neg_integer(),
+          inapplicable_count: non_neg_integer(),
+          clipping: clipping_info()
+        }
+
+  @typedoc "A multi-viewport scan report."
+  @type multi_report :: %{
+          url: String.t(),
+          final_url: String.t(),
+          results: [viewport_result()],
+          timestamp: DateTime.t(),
+          duration_ms: non_neg_integer(),
+          engine: engine_info(),
+          warnings: [String.t()],
+          fallback: fallback_info()
+        }
+
   @typedoc "Options accepted by `scan/2`."
   @type scan_opts :: [
           timeout: pos_integer(),
           wait_for: String.t(),
           wait_until: :load | :domcontentloaded | :networkidle,
           viewport: {pos_integer(), pos_integer()},
+          viewports: [{pos_integer(), pos_integer()}],
+          check_clipping: boolean(),
+          clipping_ratio: float(),
           tags: [String.t()],
           user_agent: String.t() | nil,
           screenshot: Path.t() | nil,
@@ -117,6 +168,21 @@ defmodule Excessibility.Scanner do
     * `:wait_until` — Playwright wait state: `:load` | `:domcontentloaded` |
       `:networkidle` (default: `:load` for remote, `:domcontentloaded` for file)
     * `:viewport` — `{width, height}` tuple (default: `{1280, 720}`)
+    * `:viewports` — list of `{width, height}` tuples; runs axe once per
+      viewport in a single browser session and returns per-viewport
+      results (see `t:multi_report/0`). WCAG 1.4.10 Reflow only shows up
+      at narrow widths, so `[{1440, 900}, {320, 800}]` is the recommended
+      pair for snapshot scanning. Screenshots are suffixed per viewport
+      (`name.1440x900.png`). Takes precedence over `:viewport`.
+    * `:check_clipping` — measure interactive elements (`a`, `button`,
+      `input`, `select`, `textarea`, `[phx-click]`, `[role="button"]`)
+      whose visible width falls below `:clipping_ratio`, plus page-level
+      horizontal overflow. axe has no rule for content that is technically
+      in the DOM but slid outside the visible area, yet that is the actual
+      user-facing WCAG 1.4.10 failure. Results land in `:clipping` (per
+      viewport with `:viewports`). Default `false`.
+    * `:clipping_ratio` — minimum visible-width ratio before an element
+      counts as clipped (default: `0.9`)
     * `:tags` — axe-core tag filter (default: `["wcag2a", "wcag2aa"]`)
     * `:user_agent` — Override the default Chrome UA string
     * `:screenshot` — Path to save a full-page PNG
@@ -129,7 +195,8 @@ defmodule Excessibility.Scanner do
   `{:ok, report}` on success or `{:error, reason}` where reason is one of
   the `t:scan_error/0` tuples.
   """
-  @spec scan(String.t(), scan_opts()) :: {:ok, report()} | {:error, scan_error()}
+  @impl Excessibility.ScannerBehaviour
+  @spec scan(String.t(), scan_opts()) :: {:ok, report() | multi_report()} | {:error, scan_error()}
   def scan(url, opts \\ []) when is_binary(url) do
     with {:ok, validated_url} <- validate_url(url) do
       opts = Keyword.merge(@default_opts, opts)
@@ -196,7 +263,7 @@ defmodule Excessibility.Scanner do
 
     case System.cmd("node", [runner_path | args],
            stderr_to_stdout: false,
-           env: [{"NODE_NO_WARNINGS", "1"}]
+           env: [{"NODE_NO_WARNINGS", "1"} | playwright_env()]
          ) do
       {output, 0} ->
         parse_output(output, url)
@@ -206,6 +273,13 @@ defmodule Excessibility.Scanner do
           {:ok, error} -> {:error, error}
           :unparseable -> {:error, {:playwright_error, String.trim(output)}}
         end
+    end
+  end
+
+  defp playwright_env do
+    case Application.get_env(:excessibility, :playwright_path) do
+      nil -> []
+      path -> [{"EXCESSIBILITY_PLAYWRIGHT_PATH", Path.expand(path)}]
     end
   end
 
@@ -251,6 +325,21 @@ defmodule Excessibility.Scanner do
     |> maybe_add_list(opts, :disable_rules, "--disable-rules")
     |> maybe_add_list(opts, :tags, "--tags")
     |> maybe_add_viewport(opts)
+    |> maybe_add_viewports(opts)
+    |> maybe_add_clipping(opts)
+  end
+
+  defp maybe_add_clipping(args, opts) do
+    if Keyword.get(opts, :check_clipping, false) do
+      args = args ++ ["--check-clipping"]
+
+      case Keyword.get(opts, :clipping_ratio) do
+        ratio when is_float(ratio) and ratio > 0 and ratio <= 1 -> args ++ ["--clipping-ratio", to_string(ratio)]
+        _ -> args
+      end
+    else
+      args
+    end
   end
 
   defp maybe_add(args, opts, key, flag, fmt) do
@@ -288,7 +377,33 @@ defmodule Excessibility.Scanner do
     end
   end
 
+  defp maybe_add_viewports(args, opts) do
+    specs =
+      opts
+      |> Keyword.get(:viewports, [])
+      |> Enum.filter(&valid_viewport?/1)
+      |> Enum.map_join(",", fn {w, h} -> "#{w}x#{h}" end)
+
+    if specs == "", do: args, else: args ++ ["--viewports", specs]
+  end
+
+  defp valid_viewport?({w, h}) when is_integer(w) and is_integer(h) and w > 0 and h > 0, do: true
+  defp valid_viewport?(_), do: false
+
   # ── Result normalization ───────────────────────────────────────────
+
+  defp normalize_result(%{"results" => results} = result, url) when is_list(results) do
+    %{
+      url: url,
+      final_url: Map.get(result, "final_url") || url,
+      results: Enum.map(results, &normalize_viewport_result/1),
+      timestamp: parse_timestamp(Map.get(result, "timestamp")),
+      duration_ms: Map.get(result, "duration_ms", 0),
+      engine: normalize_engine(Map.get(result, "engine", %{})),
+      warnings: normalize_warnings(Map.get(result, "warnings", [])),
+      fallback: nil
+    }
+  end
 
   defp normalize_result(result, url) do
     %{
@@ -301,9 +416,56 @@ defmodule Excessibility.Scanner do
       timestamp: parse_timestamp(Map.get(result, "timestamp")),
       duration_ms: Map.get(result, "duration_ms", 0),
       engine: normalize_engine(Map.get(result, "engine", %{})),
+      warnings: normalize_warnings(Map.get(result, "warnings", [])),
+      clipping: normalize_clipping(Map.get(result, "clipping")),
       fallback: nil
     }
   end
+
+  defp normalize_warnings(warnings) when is_list(warnings), do: Enum.filter(warnings, &is_binary/1)
+  defp normalize_warnings(_), do: []
+
+  defp normalize_clipping(%{} = clipping) do
+    %{
+      page_overflow?: Map.get(clipping, "page_overflow", false) == true,
+      clipped: clipping |> Map.get("clipped", []) |> Enum.map(&normalize_clipped_element/1)
+    }
+  end
+
+  defp normalize_clipping(_), do: nil
+
+  defp normalize_clipped_element(element) do
+    %{
+      selector: Map.get(element, "selector", ""),
+      width: Map.get(element, "width", 0),
+      visible: Map.get(element, "visible", 0),
+      ratio: Map.get(element, "ratio", 0.0) / 1,
+      html: Map.get(element, "html", "")
+    }
+  end
+
+  defp normalize_viewport_result(result) do
+    %{
+      viewport: parse_viewport(Map.get(result, "viewport")),
+      violations: normalize_violations(Map.get(result, "violations", [])),
+      incomplete: normalize_violations(Map.get(result, "incomplete", [])),
+      passes_count: Map.get(result, "passes_count", 0),
+      inapplicable_count: Map.get(result, "inapplicable_count", 0),
+      clipping: normalize_clipping(Map.get(result, "clipping"))
+    }
+  end
+
+  defp parse_viewport(spec) when is_binary(spec) do
+    with [w, h] <- String.split(spec, "x"),
+         {width, ""} <- Integer.parse(w),
+         {height, ""} <- Integer.parse(h) do
+      {width, height}
+    else
+      _ -> nil
+    end
+  end
+
+  defp parse_viewport(_), do: nil
 
   defp normalize_engine(engine) when is_map(engine) do
     %{
