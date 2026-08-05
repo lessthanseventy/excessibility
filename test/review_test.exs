@@ -30,8 +30,19 @@ defmodule Excessibility.ReviewTest do
       assert change.tier == :auto
     end
 
-    test "content changed outside a live region is :review with the changed region" do
+    test "content changed outside a live region is not flagged by default (fixtures differ across runs)" do
+      # The baseline and current snapshots come from independent `mix test`
+      # runs, so text deltas usually mean different fixture data, not a
+      # template change — see issue #139. The region is still reported.
       change = Review.review_pair("orders", @table_two, @table_one)
+
+      assert change.region_count == 1
+      assert change.findings == []
+      assert change.tier == :auto
+    end
+
+    test "content changed outside a live region is :review with content_diff: true" do
+      change = Review.review_pair("orders", @table_two, @table_one, content_diff: true)
 
       assert change.region_count == 1
       assert Enum.any?(change.findings, &(&1.rule == :content_change_without_live_region))
@@ -94,7 +105,7 @@ defmodule Excessibility.ReviewTest do
         {"editor", "<div>Save</div>", ~s(<div phx-click="save">Save</div>)}
       ]
 
-      report = Review.review_pairs(pairs)
+      report = Review.review_pairs(pairs, content_diff: true)
 
       views = Enum.map(report.changes, & &1.view)
       refute "unchanged" in views

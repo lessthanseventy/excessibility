@@ -10,9 +10,15 @@ defmodule Excessibility.Review do
     * the rendered regions that changed (via `Excessibility.SnapshotDiff`)
     * the accessibility findings this change **newly introduced** —
       axe-core violations and `Excessibility.LiveViewRules` violations
-      present now but not in the baseline (a finding-delta), plus content
-      that changed without an `aria-live` announcement
+      present now but not in the baseline (a finding-delta)
     * a risk **tier** — `:auto`, `:review`, or `:block`
+
+  With `content_diff: true`, content that changed without an `aria-live`
+  announcement is also flagged. That signal compares rendered text, so it
+  is only meaningful when the baseline and current snapshots rendered the
+  **same fixture data** — with the usual CI shape (baseline and current
+  from two independent `mix test` runs) it mostly reports fixture drift,
+  which is why it is off by default.
 
   axe-core runs through the configured `:scanner_mod` (a browser scan of
   each side of the pair); disable it with `axe: false`. When a scan fails
@@ -130,7 +136,7 @@ defmodule Excessibility.Review do
     {axe_pair, warnings} = axe_findings_pair(baseline_html, current_html, opts)
 
     findings =
-      SnapshotDiff.live_region_findings(baseline_html, current_html, opts) ++
+      content_change_findings(baseline_html, current_html, opts) ++
         new_rule_findings(baseline_html, current_html, axe_pair, opts)
 
     behavioral =
@@ -168,6 +174,18 @@ defmodule Excessibility.Review do
       severities != [] -> :review
       true -> :auto
     end
+  end
+
+  # `content_change_without_live_region` compares rendered text, so it only
+  # means something when both sides rendered the same fixture data. The
+  # baseline and current snapshots normally come from two independent
+  # `mix test` runs whose fixtures differ (issue #139), so it is opt-in here
+  # — unlike `SnapshotDiff.scan_sequence/2`, which diffs consecutive
+  # snapshots within one run and keeps it unconditionally.
+  defp content_change_findings(baseline_html, current_html, opts) do
+    if Keyword.get(opts, :content_diff, false),
+      do: SnapshotDiff.live_region_findings(baseline_html, current_html, opts),
+      else: []
   end
 
   # Rule violations (LiveView rules + axe) present in the current snapshot

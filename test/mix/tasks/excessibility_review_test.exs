@@ -53,10 +53,20 @@ defmodule Mix.Tasks.Excessibility.ReviewTest do
     assert output =~ "1 block"
   end
 
-  test "a content change without aria-live is :review (does not block by default)" do
+  test "a content change without aria-live is :auto by default (independent-run fixtures)" do
     write_pair("orders.html", @table_two, @table_one)
 
     output = capture_io(fn -> ReviewTask.run([]) end)
+
+    assert output =~ "[AUTO] orders.html"
+    refute output =~ "content_change_without_live_region"
+    assert output =~ "1 auto"
+  end
+
+  test "--content-diff flags a content change without aria-live as :review" do
+    write_pair("orders.html", @table_two, @table_one)
+
+    output = capture_io(fn -> ReviewTask.run(["--content-diff"]) end)
 
     assert output =~ "[REVIEW] orders.html"
     assert output =~ "content_change_without_live_region"
@@ -67,7 +77,7 @@ defmodule Mix.Tasks.Excessibility.ReviewTest do
     write_pair("orders.html", @table_two, @table_one)
 
     capture_io(fn ->
-      assert catch_exit(ReviewTask.run(["--fail-on", "review"])) == {:shutdown, 1}
+      assert catch_exit(ReviewTask.run(["--content-diff", "--fail-on", "review"])) == {:shutdown, 1}
     end)
   end
 
