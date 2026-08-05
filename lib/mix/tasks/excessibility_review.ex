@@ -28,6 +28,14 @@ defmodule Mix.Tasks.Excessibility.Review do
       # dead state, render thrash) captured by `mix excessibility.debug`
       mix excessibility.review --timeline test/excessibility/timeline.json --judge
 
+      # Skip the axe-core browser scans and review on the LiveView rules only
+      mix excessibility.review --no-axe
+
+  New findings are the union of axe-core violations (scanned per snapshot
+  pair through Playwright) and the LiveView rules. If the axe scan fails
+  (e.g. Playwright isn't installed), the review degrades to the LiveView
+  rules and prints a warning.
+
   Establish the baseline with `mix excessibility.baseline`.
   """
 
@@ -40,7 +48,7 @@ defmodule Mix.Tasks.Excessibility.Review do
   @impl Mix.Task
   def run(args) do
     {opts, _argv, _invalid} =
-      OptionParser.parse(args, strict: [fail_on: :string, judge: :boolean, timeline: :string])
+      OptionParser.parse(args, strict: [fail_on: :string, judge: :boolean, timeline: :string, axe: :boolean])
 
     fail_on = parse_fail_on(opts[:fail_on])
 
@@ -57,9 +65,11 @@ defmodule Mix.Tasks.Excessibility.Review do
   # behavioral findings — N+1 queries, dead state, render thrash — inform the
   # review alongside the DOM diff.
   defp review_opts(opts) do
+    base = [axe: Keyword.get(opts, :axe, true)]
+
     case opts[:timeline] do
-      nil -> []
-      path -> [timeline: load_timeline!(path)]
+      nil -> base
+      path -> [timeline: load_timeline!(path)] ++ base
     end
   end
 
@@ -117,11 +127,13 @@ defmodule Mix.Tasks.Excessibility.Review do
 
   defp parse_fail_on(other), do: Mix.raise("Unknown --fail-on value #{inspect(other)}. Use block, review, or never.")
 
-  defp print_report(%{changes: [], behavioral: []}) do
+  defp print_report(%{changes: [], behavioral: []} = report) do
+    print_warnings(Map.get(report, :warnings, []))
     Mix.shell().info("No changes vs baseline.")
   end
 
   defp print_report(%{changes: changes, summary: summary} = report) do
+    print_warnings(Map.get(report, :warnings, []))
     Mix.shell().info("## Blast radius vs baseline\n")
 
     changes
@@ -134,6 +146,13 @@ defmodule Mix.Tasks.Excessibility.Review do
       "#{length(changes)} view(s) changed — " <>
         "#{summary.block} block, #{summary.review} review, #{summary.auto} auto"
     )
+  end
+
+  defp print_warnings([]), do: :ok
+
+  defp print_warnings(warnings) do
+    Enum.each(warnings, &Mix.shell().info("WARNING: " <> &1))
+    Mix.shell().info("")
   end
 
   defp print_behavioral([]), do: :ok

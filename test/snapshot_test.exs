@@ -68,7 +68,7 @@ defmodule Excessibility.SnapshotTest do
   describe "screenshot failures" do
     setup do
       Application.put_env(:excessibility, :scanner_mod, Excessibility.ScannerMock)
-      on_exit(fn -> Application.delete_env(:excessibility, :scanner_mod) end)
+      on_exit(fn -> Application.put_env(:excessibility, :scanner_mod, Excessibility.ScannerStub) end)
     end
 
     test "a failed screenshot logs the reason and keeps the HTML snapshot" do

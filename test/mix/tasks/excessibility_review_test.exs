@@ -2,6 +2,7 @@ defmodule Mix.Tasks.Excessibility.ReviewTest do
   use ExUnit.Case
 
   import ExUnit.CaptureIO
+  import Mox
 
   alias Mix.Tasks.Excessibility.Review, as: ReviewTask
 
@@ -146,5 +147,79 @@ defmodule Mix.Tasks.Excessibility.ReviewTest do
     output = capture_io(fn -> ReviewTask.run(["--timeline", timeline_path]) end)
 
     assert output =~ "orders.html"
+  end
+
+  describe "axe-core findings" do
+    setup :verify_on_exit!
+
+    setup do
+      Application.put_env(:excessibility, :scanner_mod, Excessibility.ScannerMock)
+      on_exit(fn -> Application.put_env(:excessibility, :scanner_mod, Excessibility.ScannerStub) end)
+      :ok
+    end
+
+    # The reproduction from issue #131: a visible button losing its text is
+    # a new `button-name` critical, which must put the view in :block and
+    # make the default --fail-on block exit non-zero.
+    test "blocks on a newly introduced critical axe violation" do
+      write_pair(
+        "offer_detail.html",
+        ~s(<button data-test-id="review-button">Review Order</button>),
+        ~s(<button data-test-id="review-button"> </button>)
+      )
+
+      expect(Excessibility.ScannerMock, :scan, 2, fn "file://" <> path, _opts ->
+        if File.read!(path) =~ "Review Order" do
+          {:ok, %{violations: []}}
+        else
+          {:ok,
+           %{
+             violations: [
+               %{
+                 id: "button-name",
+                 impact: :critical,
+                 description: "Ensures buttons have discernible text",
+                 help: "Buttons must have discernible text",
+                 help_url: "https://dequeuniversity.com/rules/axe/4.11/button-name",
+                 tags: ["wcag2a"],
+                 nodes: [%{target: ["button"], html: "<button> </button>", failure_summary: "Fix it"}]
+               }
+             ]
+           }}
+        end
+      end)
+
+      output =
+        capture_io(fn ->
+          assert catch_exit(ReviewTask.run([])) == {:shutdown, 1}
+        end)
+
+      assert output =~ "[BLOCK] offer_detail.html"
+      assert output =~ "button-name"
+      assert output =~ "1 block"
+    end
+
+    test "--no-axe skips the scanner entirely" do
+      write_pair("home.html", "<div>old</div>", "<div>new</div>")
+
+      # No ScannerMock expectations: any scan call would raise.
+      output = capture_io(fn -> ReviewTask.run(["--no-axe"]) end)
+
+      assert output =~ "home.html"
+    end
+
+    test "a scan failure prints a warning and reviews on the LiveView rules alone" do
+      write_pair("home.html", "<div>old</div>", "<div>new</div>")
+
+      expect(Excessibility.ScannerMock, :scan, 2, fn _url, _opts ->
+        {:error, {:playwright_error, "chromium not found"}}
+      end)
+
+      output = capture_io(fn -> ReviewTask.run([]) end)
+
+      assert output =~ "WARNING: axe scan failed"
+      assert output =~ "chromium not found"
+      assert output =~ "home.html"
+    end
   end
 end

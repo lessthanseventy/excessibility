@@ -8,10 +8,16 @@ defmodule Excessibility.Review do
   state) and, per view, reports:
 
     * the rendered regions that changed (via `Excessibility.SnapshotDiff`)
-    * the accessibility findings this change **newly introduced** — rule
-      violations present now but not in the baseline (a finding-delta), plus
-      content that changed without an `aria-live` announcement
+    * the accessibility findings this change **newly introduced** —
+      axe-core violations and `Excessibility.LiveViewRules` violations
+      present now but not in the baseline (a finding-delta), plus content
+      that changed without an `aria-live` announcement
     * a risk **tier** — `:auto`, `:review`, or `:block`
+
+  axe-core runs through the configured `:scanner_mod` (a browser scan of
+  each side of the pair); disable it with `axe: false`. When a scan fails
+  (e.g. Playwright isn't installed) the review still runs on the LiveView
+  rules alone and says so in the report's `:warnings`.
 
   The tier is a transparent heuristic over the new findings; a smarter
   judge can be layered on top of the same report. Because it diffs against
@@ -32,12 +38,14 @@ defmodule Excessibility.Review do
           region_count: non_neg_integer(),
           findings: [map()],
           behavioral: [Behavioral.finding()],
+          warnings: [String.t()],
           tier: tier()
         }
 
   @type report :: %{
           changes: [change()],
           behavioral: [Behavioral.finding()],
+          warnings: [String.t()],
           summary: %{auto: non_neg_integer(), review: non_neg_integer(), block: non_neg_integer()}
         }
 
@@ -74,12 +82,14 @@ defmodule Excessibility.Review do
   """
   @spec review_pairs([{String.t(), String.t(), String.t()}], keyword()) :: report()
   def review_pairs(pairs, opts \\ []) do
-    changes =
-      pairs
-      |> Enum.map(fn {view, baseline, current} -> review_pair(view, baseline, current, opts) end)
-      |> Enum.reject(&unchanged?/1)
+    reviewed = Enum.map(pairs, fn {view, baseline, current} -> review_pair(view, baseline, current, opts) end)
 
-    %{changes: changes, summary: summarize(changes)}
+    # Hoist warnings before dropping unchanged views: a view whose scans
+    # failed may report nothing else, but the degradation must still show.
+    warnings = reviewed |> Enum.flat_map(& &1.warnings) |> Enum.uniq()
+    changes = Enum.reject(reviewed, &unchanged?/1)
+
+    %{changes: changes, summary: summarize(changes), warnings: warnings}
   end
 
   @doc """
@@ -117,9 +127,11 @@ defmodule Excessibility.Review do
   def review_pair(view, baseline_html, current_html, opts \\ []) do
     regions = SnapshotDiff.diff(baseline_html, current_html, opts)
 
+    {axe_pair, warnings} = axe_findings_pair(baseline_html, current_html, opts)
+
     findings =
       SnapshotDiff.live_region_findings(baseline_html, current_html, opts) ++
-        new_rule_findings(baseline_html, current_html, opts)
+        new_rule_findings(baseline_html, current_html, axe_pair, opts)
 
     behavioral =
       case Keyword.get(opts, :timeline) do
@@ -133,6 +145,7 @@ defmodule Excessibility.Review do
       region_count: length(regions),
       findings: findings,
       behavioral: behavioral,
+      warnings: warnings,
       tier: tier(findings ++ behavioral)
     }
   end
@@ -157,19 +170,21 @@ defmodule Excessibility.Review do
     end
   end
 
-  # Rule violations present in the current snapshot but not the baseline,
-  # identified by {rule, selector} so pre-existing issues aren't re-flagged.
-  # Counted per fingerprint: a second identical violation behind an existing
-  # one is still new.
-  defp new_rule_findings(baseline_html, current_html, opts) do
+  # Rule violations (LiveView rules + axe) present in the current snapshot
+  # but not the baseline, identified by {rule, selector} so pre-existing
+  # issues aren't re-flagged. Counted per fingerprint: a second identical
+  # violation behind an existing one is still new.
+  defp new_rule_findings(baseline_html, current_html, {axe_baseline, axe_current}, opts) do
     baseline_counts =
       baseline_html
       |> rule_findings(opts)
+      |> Kernel.++(axe_baseline)
       |> Enum.frequencies_by(&fingerprint/1)
 
     {new_findings, _remaining} =
       current_html
       |> rule_findings(opts)
+      |> Kernel.++(axe_current)
       |> Enum.flat_map_reduce(baseline_counts, fn finding, counts ->
         key = fingerprint(finding)
 
@@ -189,6 +204,57 @@ defmodule Excessibility.Review do
   end
 
   defp fingerprint(%{rule: rule, selector: selector}), do: {rule, selector}
+
+  # ── axe-core findings ──────────────────────────────────────────────
+
+  # axe findings for both sides of the pair, via the configured scanner
+  # (each HTML string is scanned from a temp file as file://). When either
+  # scan fails the axe delta would be meaningless — everything on the side
+  # that did scan would look new — so both sides are dropped and a warning
+  # is surfaced instead.
+  defp axe_findings_pair(baseline_html, current_html, opts) do
+    if Keyword.get(opts, :axe, true) and baseline_html != current_html do
+      case {axe_scan(baseline_html), axe_scan(current_html)} do
+        {{:ok, baseline_report}, {:ok, current_report}} ->
+          {{axe_findings(baseline_report), axe_findings(current_report)}, []}
+
+        {baseline_result, current_result} ->
+          {:error, reason} = Enum.find([baseline_result, current_result], &match?({:error, _}, &1))
+          {{[], []}, ["axe scan failed (#{inspect(reason)}) — axe findings are not part of this review"]}
+      end
+    else
+      {{[], []}, []}
+    end
+  end
+
+  defp axe_scan(html) do
+    path = Path.join(System.tmp_dir!(), "excessibility_review_#{System.unique_integer([:positive])}.html")
+    File.write!(path, html)
+
+    try do
+      scanner_mod().scan("file://" <> path, [])
+    after
+      File.rm(path)
+    end
+  end
+
+  # One finding per offending node, so the count-matching delta treats a
+  # second identical violation as new — same as the LiveView rules.
+  defp axe_findings(report) do
+    for violation <- Map.get(report, :violations, []),
+        node <- violation.nodes do
+      %{
+        rule: violation.id,
+        selector: Enum.join(node.target, " "),
+        severity: violation.impact || :moderate,
+        message: violation.help
+      }
+    end
+  end
+
+  defp scanner_mod do
+    Application.get_env(:excessibility, :scanner_mod, Excessibility.Scanner)
+  end
 
   defp unchanged?(%{region_count: 0, findings: [], behavioral: []}), do: true
   defp unchanged?(_), do: false
