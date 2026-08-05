@@ -41,6 +41,7 @@ Built-in rules:
 | `:click_away_without_escape` | `phx-click-away` with no matching `phx-window-keydown` + `phx-key="Escape"` (or `role="dialog"`) — keyboard users can't dismiss the overlay |
 | `:debounce_without_live_region` | `<input phx-debounce>` when the page has no `aria-live` / `role="status"` region anywhere — screen readers never hear that results updated |
 | `:hidden_form_control_without_aria` | Visually hidden `<input type="checkbox\|radio">` whose wrapping `<label>` doesn't expose state via `aria-checked` or `role="checkbox"`/`"radio"` |
+| `:reveal_without_announcement` | An initially hidden element (`hidden` class/attribute or inline `display:none`) revealed from the server via a serialized `JS.show`/`JS.toggle` command — its own `data-*` or another element's `phx-*` `to:` target — with no `role="alert"`/`"status"`/`"log"`, `aria-live`, or live-region ancestor, so screen readers never hear it appear |
 
 On non-Phoenix HTML (no `phx-*` attributes) these rules are no-ops, so
 enabling them never adds noise for projects that don't use LiveView.
