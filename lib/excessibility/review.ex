@@ -159,17 +159,33 @@ defmodule Excessibility.Review do
 
   # Rule violations present in the current snapshot but not the baseline,
   # identified by {rule, selector} so pre-existing issues aren't re-flagged.
+  # Counted per fingerprint: a second identical violation behind an existing
+  # one is still new.
   defp new_rule_findings(baseline_html, current_html, opts) do
-    baseline_keys =
+    baseline_counts =
       baseline_html
-      |> LiveViewRules.scan(opts)
-      |> Map.fetch!(:findings)
-      |> MapSet.new(&fingerprint/1)
+      |> rule_findings(opts)
+      |> Enum.frequencies_by(&fingerprint/1)
 
-    current_html
+    {new_findings, _remaining} =
+      current_html
+      |> rule_findings(opts)
+      |> Enum.flat_map_reduce(baseline_counts, fn finding, counts ->
+        key = fingerprint(finding)
+
+        case counts do
+          %{^key => n} when n > 0 -> {[], Map.put(counts, key, n - 1)}
+          _ -> {[finding], counts}
+        end
+      end)
+
+    new_findings
+  end
+
+  defp rule_findings(html, opts) do
+    html
     |> LiveViewRules.scan(opts)
     |> Map.fetch!(:findings)
-    |> Enum.reject(&MapSet.member?(baseline_keys, fingerprint(&1)))
   end
 
   defp fingerprint(%{rule: rule, selector: selector}), do: {rule, selector}

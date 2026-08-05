@@ -44,6 +44,8 @@ defmodule Mix.Tasks.Excessibility.Review do
 
     fail_on = parse_fail_on(opts[:fail_on])
 
+    warn_if_stale()
+
     report = Review.review(review_opts(opts))
     report = if Keyword.get(opts, :judge, false), do: Review.judge_changes(report), else: report
 
@@ -57,7 +59,54 @@ defmodule Mix.Tasks.Excessibility.Review do
   defp review_opts(opts) do
     case opts[:timeline] do
       nil -> []
-      path -> [timeline: path |> File.read!() |> Jason.decode!(keys: :atoms)]
+      path -> [timeline: load_timeline!(path)]
+    end
+  end
+
+  # keys: :atoms creates atoms from the file, which is fine for a dev tool
+  # reading its own timeline.json (assign names are dynamic, so :atoms!
+  # would raise); don't point this at untrusted input.
+  defp load_timeline!(path) do
+    with {:ok, raw} <- File.read(path),
+         {:ok, timeline} <- Jason.decode(raw, keys: :atoms) do
+      timeline
+    else
+      {:error, %Jason.DecodeError{}} ->
+        Mix.raise("Could not parse timeline JSON at #{path}. Regenerate it with: mix excessibility.debug <test>")
+
+      {:error, reason} ->
+        Mix.raise("Could not read timeline at #{path}: #{inspect(reason)}")
+    end
+  end
+
+  # A report generated from snapshots older than the baseline describes a
+  # previous run, not the current change — say so instead of silently
+  # reporting stale numbers.
+  defp warn_if_stale do
+    with {:ok, newest_snapshot} <- newest_mtime("html_snapshots"),
+         {:ok, newest_baseline} <- newest_mtime("baseline"),
+         true <- newest_snapshot < newest_baseline do
+      Mix.shell().info(
+        "WARNING: current snapshots predate the baseline — run `mix test` to refresh them before trusting this report.\n"
+      )
+    else
+      _ -> :ok
+    end
+  end
+
+  defp newest_mtime(subdir) do
+    output_path = Application.get_env(:excessibility, :excessibility_output_path, "test/excessibility")
+
+    mtimes =
+      output_path
+      |> Path.join(subdir)
+      |> Path.join("*.html")
+      |> Path.wildcard()
+      |> Enum.map(&File.stat!(&1, time: :posix).mtime)
+
+    case mtimes do
+      [] -> :error
+      list -> {:ok, Enum.max(list)}
     end
   end
 

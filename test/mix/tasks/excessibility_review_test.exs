@@ -97,6 +97,45 @@ defmodule Mix.Tasks.Excessibility.ReviewTest do
     assert output =~ "1 auto"
   end
 
+  test "warns when current snapshots predate the baseline" do
+    write_pair("home.html", "<div>a</div>", "<div>a</div>")
+
+    stale_mtime = {{2020, 1, 1}, {0, 0, 0}}
+    File.touch!(Path.join(@snapshot_dir, "home.html"), stale_mtime)
+
+    output = capture_io(fn -> ReviewTask.run([]) end)
+
+    assert output =~ "predate the baseline"
+    assert output =~ "mix test"
+  end
+
+  test "does not warn when snapshots are fresh" do
+    write_pair("home.html", "<div>a</div>", "<div>a</div>")
+
+    output = capture_io(fn -> ReviewTask.run([]) end)
+
+    refute output =~ "predate the baseline"
+  end
+
+  test "--timeline with a missing file raises a friendly error" do
+    write_pair("home.html", "<div>a</div>", "<div>a</div>")
+
+    assert_raise Mix.Error, ~r/Could not read timeline/, fn ->
+      capture_io(fn -> ReviewTask.run(["--timeline", "nope.json"]) end)
+    end
+  end
+
+  test "--timeline with invalid JSON raises a friendly error" do
+    write_pair("home.html", "<div>a</div>", "<div>a</div>")
+    timeline_path = Path.join(@output_dir, "bad_timeline.json")
+    File.write!(timeline_path, "{not json")
+    on_exit(fn -> File.rm_rf!(timeline_path) end)
+
+    assert_raise Mix.Error, ~r/Could not parse timeline JSON/, fn ->
+      capture_io(fn -> ReviewTask.run(["--timeline", timeline_path]) end)
+    end
+  end
+
   test "--timeline loads a telemetry timeline and runs cleanly" do
     timeline_path = Path.join(@output_dir, "timeline.json")
     File.write!(timeline_path, ~s({"test":"x","timeline":[]}))
