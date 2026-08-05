@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.15.3] - 2026-08-05
 
 ### Changed
 - **Content-change findings are opt-in for reviews** ([#139](https://github.com/lessthanseventy/excessibility/issues/139)). `mix excessibility.review` compares a baseline and a current snapshot that normally come from two independent `mix test` runs, where the rendered text differs wherever fixtures do (record ids, generated names) — on one real PR that produced 319 false `content_change_without_live_region` findings. The rule is only meaningful when both sides rendered the same fixture data, so `Excessibility.Review` now folds it in only with `content_diff: true` (`mix excessibility.review --content-diff`). Within-run sequence scanning (`SnapshotDiff.scan_sequence/2`, used by `mix excessibility`) and the MCP `diff_snapshots` tool (before/after around a single edit, same fixtures) keep the rule unconditionally.
