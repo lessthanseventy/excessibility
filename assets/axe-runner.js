@@ -123,7 +123,7 @@ async function installStylesheetTracker(page) {
   // The flag only feeds the wait predicate below. Chromium also fires this
   // error event when the sheet loaded fine but a nested @import failed, so
   // it cannot be used to decide whether the stylesheet itself is missing —
-  // link.sheet is the authoritative signal for that.
+  // the failed network requests are the authoritative signal for that.
   await page.addInitScript(() => {
     window.addEventListener(
       "error",
@@ -165,26 +165,40 @@ async function waitForStylesheets(page, warnings, failedStylesheetRequests, maxW
       );
     });
 
-  // link.sheet is null exactly when the stylesheet did not load or parse,
-  // so a genuinely missing file warns while a loaded sheet whose nested
-  // @import failed does not.
-  const failed = await page
-    .evaluate(() =>
-      [...document.querySelectorAll('link[rel~="stylesheet"]')].filter((l) => !l.sheet).map((l) => l.href),
-    )
-    .catch(() => []);
-  for (const href of failed) {
-    warnings.push(`stylesheet failed to load: ${href} — contrast/layout findings are invalid until it exists`);
+  // link.sheet cannot classify failures: under file:// Chromium attaches a
+  // non-null empty CSSStyleSheet to a <link> whose file is missing. The
+  // network view discriminates instead — a failed stylesheet request whose
+  // URL matches a <link> href is that link failing; any other failed
+  // stylesheet request is a nested @import. The null-sheet list is still
+  // unioned in for sheets that downloaded but failed to parse, where no
+  // request fails.
+  const { linkHrefs, nullSheetHrefs } = await page
+    .evaluate(() => {
+      const links = [...document.querySelectorAll('link[rel~="stylesheet"]')];
+      return {
+        linkHrefs: links.map((l) => l.href),
+        nullSheetHrefs: links.filter((l) => !l.sheet).map((l) => l.href),
+      };
+    })
+    .catch(() => ({ linkHrefs: [], nullSheetHrefs: [] }));
+
+  const linkHrefSet = new Set(linkHrefs);
+  const failedLinks = new Set(nullSheetHrefs);
+  const failedImports = new Set();
+  for (const url of new Set(failedStylesheetRequests)) {
+    if (linkHrefSet.has(url)) {
+      failedLinks.add(url);
+    } else {
+      failedImports.add(url);
+    }
   }
 
-  // A failed stylesheet request that isn't one of the missing <link>s is a
-  // nested @import (e.g. a remote font stylesheet blocked from file://).
+  for (const href of failedLinks) {
+    warnings.push(`stylesheet failed to load: ${href} — contrast/layout findings are invalid until it exists`);
+  }
   // Styling is degraded, not absent — fallback fonts change text metrics.
-  const failedSet = new Set(failed);
-  for (const url of new Set(failedStylesheetRequests)) {
-    if (!failedSet.has(url)) {
-      warnings.push(`stylesheet import failed: ${url} — text metrics may differ from production`);
-    }
+  for (const url of failedImports) {
+    warnings.push(`stylesheet import failed: ${url} — text metrics may differ from production`);
   }
 
   await page.evaluate(() => document.fonts && document.fonts.ready).catch(() => {});

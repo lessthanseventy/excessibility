@@ -115,7 +115,10 @@ defmodule Excessibility.ScannerTest do
       assert report.warnings == []
     end
 
-    test "warns when a linked stylesheet is missing" do
+    test "warns 'failed to load' when a linked stylesheet is missing" do
+      # Under file:// Chromium attaches a non-null empty CSSStyleSheet to a
+      # <link> whose file doesn't exist, so this must classify via the
+      # failed network request, not link.sheet (issue #137).
       path =
         write_tmp_html("""
         <html lang="en"><head><title>Test</title>
@@ -128,9 +131,12 @@ defmodule Excessibility.ScannerTest do
 
       {:ok, report} = Scanner.scan("file://#{path}")
 
-      assert [warning | _] = report.warnings
-      assert warning =~ "stylesheet"
-      assert warning =~ "/nonexistent/assets/app.css"
+      assert Enum.any?(
+               report.warnings,
+               &(&1 =~ "stylesheet failed to load" and &1 =~ "/nonexistent/assets/app.css")
+             )
+
+      refute Enum.any?(report.warnings, &(&1 =~ "stylesheet import failed"))
     end
 
     test "does not warn 'failed to load' when the sheet loaded but a nested @import failed" do
