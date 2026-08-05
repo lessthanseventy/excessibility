@@ -9,6 +9,7 @@ Application.put_env(:excessibility, Excessibility.TestEndpoint,
 
 # Compile test support files
 Code.require_file("test/support/test_endpoint.ex", File.cwd!())
+Code.require_file("test/support/scanner_stub.ex", File.cwd!())
 
 ExUnit.start()
 
@@ -20,6 +21,9 @@ Mox.defmock(Excessibility.ScannerMock, for: Excessibility.ScannerBehaviour)
 Application.put_env(:excessibility, :system_mod, Excessibility.SystemMock)
 Application.put_env(:excessibility, :live_view_mod, Excessibility.LiveViewMock)
 Application.put_env(:excessibility, :browser_mod, Excessibility.BrowserMock)
+# Reviews scan snapshots through :scanner_mod; default to a no-violation
+# stub so unit tests never launch a browser.
+Application.put_env(:excessibility, :scanner_mod, Excessibility.ScannerStub)
 
 # Configure test endpoint for HTML attribute extraction tests
 Application.put_env(:excessibility, :endpoint, Excessibility.TestEndpoint)

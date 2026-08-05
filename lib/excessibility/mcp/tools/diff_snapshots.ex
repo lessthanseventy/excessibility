@@ -50,7 +50,8 @@ defmodule Excessibility.MCP.Tools.DiffSnapshots do
        "tier" => Atom.to_string(change.tier),
        "regions_changed" => change.region_count,
        "regions" => Enum.map(change.regions, &region/1),
-       "findings" => Enum.map(change.findings, &finding/1)
+       "findings" => Enum.map(change.findings, &finding/1),
+       "warnings" => change.warnings
      }}
   end
 
@@ -70,7 +71,8 @@ defmodule Excessibility.MCP.Tools.DiffSnapshots do
 
   defp finding(finding) do
     %{
-      "rule" => Atom.to_string(finding.rule),
+      # axe rule ids are strings, LiveView rule ids are atoms
+      "rule" => to_string(finding.rule),
       "severity" => Atom.to_string(finding.severity),
       "selector" => finding.selector,
       "message" => finding.message
