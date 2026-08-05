@@ -90,6 +90,57 @@ function parseArgs(argv) {
   return opts;
 }
 
+// domcontentloaded/load do not guarantee linked stylesheets are applied,
+// and axe results are invalid on unstyled markup (contrast rules see no
+// colors, hidden containers are visible). Wait until every linked
+// stylesheet has either loaded or errored, then report failures so
+// callers know styled-dependent findings can't be trusted.
+async function installStylesheetTracker(page) {
+  await page.addInitScript(() => {
+    window.__excessibilityFailedStylesheets = [];
+    window.addEventListener(
+      "error",
+      (e) => {
+        const t = e.target;
+        if (t && t.tagName === "LINK" && (t.rel || "").includes("stylesheet")) {
+          t.__excessibilityFailed = true;
+          window.__excessibilityFailedStylesheets.push(t.href);
+        }
+      },
+      true,
+    );
+  });
+}
+
+async function waitForStylesheets(page, warnings, maxWait = 10000) {
+  const hasLinks = await page
+    .evaluate(() => document.querySelectorAll('link[rel~="stylesheet"]').length > 0)
+    .catch(() => false);
+  if (!hasLinks) return;
+
+  await page
+    .waitForFunction(
+      () => {
+        const links = [...document.querySelectorAll('link[rel~="stylesheet"]')];
+        return links.every((l) => l.sheet || l.__excessibilityFailed);
+      },
+      null,
+      { timeout: maxWait },
+    )
+    .catch(() => {
+      warnings.push(
+        `stylesheets did not finish loading within ${maxWait}ms — contrast/layout findings may be invalid`,
+      );
+    });
+
+  const failed = await page.evaluate(() => window.__excessibilityFailedStylesheets || []).catch(() => []);
+  for (const href of failed) {
+    warnings.push(`stylesheet failed to load: ${href} — contrast/layout findings are invalid until it exists`);
+  }
+
+  await page.evaluate(() => document.fonts && document.fonts.ready).catch(() => {});
+}
+
 async function waitForContent(page, maxWait = 8000) {
   const start = Date.now();
   while (Date.now() - start < maxWait) {
@@ -145,8 +196,12 @@ async function main() {
     process.exit(1);
   }
 
+  const warnings = [];
+
   try {
-    const effectiveWaitUntil = waitUntil || (isFileUrl ? "domcontentloaded" : "load");
+    const effectiveWaitUntil = waitUntil || "load";
+
+    await installStylesheetTracker(page);
 
     let response;
     try {
@@ -186,6 +241,8 @@ async function main() {
       await waitForContent(page);
     }
 
+    await waitForStylesheets(page, warnings);
+
     let builder = new AxeBuilder({ page }).withTags(tags);
     if (disableRules.length > 0) builder = builder.disableRules(disableRules);
 
@@ -218,6 +275,7 @@ async function main() {
       incomplete: results.incomplete || [],
       passes_count: (results.passes || []).length,
       inapplicable_count: (results.inapplicable || []).length,
+      warnings,
     };
 
     console.log(JSON.stringify(output));

@@ -148,6 +148,8 @@ defmodule Mix.Tasks.Excessibility do
 
     {passed, failed} = Enum.split_with(results, &file_passed?/1)
 
+    print_scan_warnings(results)
+
     if failed != [] do
       Mix.shell().info("### Issues Found\n")
 
@@ -179,6 +181,19 @@ defmodule Mix.Tasks.Excessibility do
 
   defp file_passed?({_file, {:ok, %{violations: []}}, %{findings: []}}), do: true
   defp file_passed?(_), do: false
+
+  # Scan warnings (e.g. a missing stylesheet) mean the axe numbers can't be
+  # trusted, so they must surface even when every file passes.
+  defp print_scan_warnings(results) do
+    Enum.each(results, fn
+      {file, {:ok, %{warnings: [_ | _] = warnings}}, _lv_result} ->
+        Mix.shell().info("WARNING #{Path.basename(file)}:")
+        Enum.each(warnings, &Mix.shell().info("  #{&1}"))
+
+      _ ->
+        :ok
+    end)
+  end
 
   defp print_axe({:ok, %{violations: []}}), do: :ok
   defp print_axe({:ok, %{violations: violations}}), do: format_violations(violations)
