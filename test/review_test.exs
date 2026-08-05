@@ -113,4 +113,33 @@ defmodule Excessibility.ReviewTest do
       assert [%{rule: :stub}] = report.behavioral
     end
   end
+
+  describe "judge_changes/2" do
+    test "attaches verdicts and recomputes the summary from judged tiers" do
+      report = Review.review_pairs([{"editor", "<div>Save</div>", ~s(<div phx-click="save">Save</div>)}])
+
+      judged = Review.judge_changes(report)
+
+      assert [%{verdict: %{source: :heuristic}, tier: :block}] = judged.changes
+      assert judged.summary.block == 1
+    end
+
+    test "run-level behavioral findings do not escalate per-view tiers" do
+      # An :auto view change plus an unrelated run-level critical finding:
+      # the run-level finding must not mark this view :block.
+      report =
+        [{"search", ~s(<div aria-live="polite">0</div>), ~s(<div aria-live="polite">1</div>)}]
+        |> Review.review_pairs()
+        |> Map.put(:behavioral, [
+          %{severity: :serious, rule: :stub, message: "N+1 in orders", source: :telemetry, events: []}
+        ])
+
+      judged = Review.judge_changes(report)
+
+      assert [%{tier: :auto}] = judged.changes
+      assert judged.summary == %{auto: 1, review: 0, block: 0}
+      # ...but they are preserved at the report level for the exit gate.
+      assert [%{message: "N+1 in orders"}] = judged.behavioral
+    end
+  end
 end

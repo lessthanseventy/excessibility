@@ -34,7 +34,6 @@ defmodule Mix.Tasks.Excessibility.Review do
   use Mix.Task
 
   alias Excessibility.Review
-  alias Excessibility.Review.Judge
 
   @requirements ["app.config"]
 
@@ -46,7 +45,7 @@ defmodule Mix.Tasks.Excessibility.Review do
     fail_on = parse_fail_on(opts[:fail_on])
 
     report = Review.review(review_opts(opts))
-    report = if Keyword.get(opts, :judge, false), do: judge_report(report), else: report
+    report = if Keyword.get(opts, :judge, false), do: Review.judge_changes(report), else: report
 
     print_report(report)
     maybe_exit(report, fail_on)
@@ -60,30 +59,6 @@ defmodule Mix.Tasks.Excessibility.Review do
       nil -> []
       path -> [timeline: path |> File.read!() |> Jason.decode!(keys: :atoms)]
     end
-  end
-
-  # Run the configured judge over each change. The run-level behavioral
-  # findings are attached to every change so the judge weighs behavior
-  # alongside markup; the verdict's tier overrides the heuristic one.
-  defp judge_report(report) do
-    behavioral = Map.get(report, :behavioral, [])
-
-    judged =
-      Enum.map(report.changes, fn change ->
-        change = Map.update(change, :behavioral, behavioral, &(&1 ++ behavioral))
-        verdict = Judge.verdict(change)
-        change |> Map.put(:verdict, verdict) |> Map.put(:tier, verdict.tier)
-      end)
-
-    counts = Enum.frequencies_by(judged, & &1.tier)
-
-    summary = %{
-      auto: Map.get(counts, :auto, 0),
-      review: Map.get(counts, :review, 0),
-      block: Map.get(counts, :block, 0)
-    }
-
-    %{changes: judged, behavioral: behavioral, summary: summary}
   end
 
   defp parse_fail_on(nil), do: :block
@@ -149,6 +124,13 @@ defmodule Mix.Tasks.Excessibility.Review do
     Enum.each(verdict.risks, fn risk ->
       Mix.shell().info("    - [#{risk.severity}] #{risk.area}: #{risk.detail}")
     end)
+
+    if judge_tier = Map.get(verdict, :judge_tier) do
+      Mix.shell().info(
+        "    (judge said #{judge_tier}; floored to #{verdict.tier} — " <>
+          "a judge cannot fully green-light new serious findings)"
+      )
+    end
   end
 
   defp tier_rank(:block), do: 0

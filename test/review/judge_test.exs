@@ -133,4 +133,69 @@ defmodule Excessibility.Review.JudgeTest do
                :heuristic
     end
   end
+
+  describe "verdict/2 tier floor" do
+    defp auto_change do
+      Review.review_pair("home", "<div>hi</div>", "<div>hi</div>")
+    end
+
+    defp completion_replying(tier) do
+      fn _prompt ->
+        {:ok, ~s({"tier":"#{tier}","blast_radius":"model says so","risks":[],"confidence":0.9})}
+      end
+    end
+
+    test "floors a model's :auto verdict to :review when the heuristic says :block" do
+      verdict = Judge.verdict(block_change(), judge: LLM, completion: completion_replying("auto"))
+
+      assert verdict.tier == :review
+      assert verdict.judge_tier == :auto
+      assert verdict.source == :llm
+    end
+
+    test "allows a model to downgrade :block to :review" do
+      verdict = Judge.verdict(block_change(), judge: LLM, completion: completion_replying("review"))
+
+      assert verdict.tier == :review
+      refute Map.has_key?(verdict, :judge_tier)
+    end
+
+    test "allows a judge to raise the tier without restriction" do
+      verdict = Judge.verdict(auto_change(), judge: LLM, completion: completion_replying("block"))
+
+      assert verdict.tier == :block
+    end
+
+    test "a model's :auto verdict on an :auto change is untouched" do
+      verdict = Judge.verdict(auto_change(), judge: LLM, completion: completion_replying("auto"))
+
+      assert verdict.tier == :auto
+      refute Map.has_key?(verdict, :judge_tier)
+    end
+  end
+
+  describe "run-level behavioral context" do
+    test "run_behavioral findings are rendered into the LLM prompt as context" do
+      completion = fn prompt ->
+        send(self(), {:prompt, prompt})
+        {:ok, ~s({"tier":"review","blast_radius":"x","risks":[],"confidence":0.5})}
+      end
+
+      behavioral = [
+        %{
+          severity: :serious,
+          rule: :ecto_query_analysis,
+          message: "N+1 in orders",
+          source: :telemetry,
+          events: []
+        }
+      ]
+
+      Judge.verdict(block_change(), judge: LLM, completion: completion, run_behavioral: behavioral)
+
+      assert_received {:prompt, prompt}
+      assert prompt =~ "N+1 in orders"
+      assert prompt =~ "not attributed"
+    end
+  end
 end
