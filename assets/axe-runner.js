@@ -4,8 +4,8 @@
 // both shapes.
 
 const path = require("path");
-const modulesDir = path.join(__dirname, "node_modules");
-const { chromium } = require(path.join(modulesDir, "playwright"));
+const { resolvePlaywright, launchErrorHint, modulesDir } = require("./resolve-playwright");
+const { chromium } = resolvePlaywright();
 const { AxeBuilder } = require(path.join(modulesDir, "@axe-core", "playwright"));
 
 const USAGE =
@@ -169,7 +169,7 @@ async function main() {
   try {
     browser = await chromium.launch();
   } catch (err) {
-    emitError("playwright_error", `failed to launch chromium: ${err.message}`);
+    emitError("playwright_error", `failed to launch chromium: ${err.message}\n${launchErrorHint()}`);
     process.exit(1);
   }
 

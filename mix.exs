@@ -57,8 +57,10 @@ defmodule Excessibility.MixProject do
       files: [
         "lib",
         "assets/package.json",
+        "assets/package-lock.json",
         "assets/axe-runner.js",
         "assets/axe-crawl.js",
+        "assets/resolve-playwright.js",
         "bin",
         "mix.exs",
         "README*",
