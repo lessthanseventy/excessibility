@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.2] - 2026-08-05
+
+### Fixed
+- **A genuinely missing stylesheet is again reported as `stylesheet failed to load`** ([#137](https://github.com/lessthanseventy/excessibility/issues/137)). The `link.sheet` gate from 0.15.1 assumed a failed sheet leaves `link.sheet` null, but under `file://` Chromium attaches a non-null empty `CSSStyleSheet` to a `<link>` whose file is missing — so the severe warning never fired and the run was understated as `stylesheet import failed`. Failures are now classified by the network signal: a failed stylesheet request matching a `link[rel~="stylesheet"]` href is that link failing (`stylesheet failed to load: … — contrast/layout findings are invalid until it exists`); any other failed stylesheet request is a nested `@import` (`stylesheet import failed: … — text metrics may differ from production`). The null-sheet list is still unioned in for sheets that downloaded but failed to parse, and the 0.15.1 fix for [#132](https://github.com/lessthanseventy/excessibility/issues/132) (loaded sheet with a failing `@import` must not warn `failed to load`) is regression-tested alongside.
+
 ## [0.15.1] - 2026-08-05
 
 ### Fixed
