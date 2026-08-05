@@ -229,6 +229,80 @@ defmodule Excessibility.ScannerTest do
     end
   end
 
+  describe "scan/2 — clipping detection" do
+    # A 300px button whose left edge sits at 250px: fully visible at
+    # 1440px, but only 70px (23%) visible at 320px — axe reports nothing
+    # at either width, which is exactly why the check exists.
+    @clipped_button ~s(<button style="position:absolute; left:250px; width:300px">Ship it</button>)
+
+    @tag timeout: 60_000
+    test "flags interactive elements clipped at narrow widths, per viewport" do
+      path =
+        write_tmp_html("""
+        <html lang="en"><head><title>Test</title></head>
+        <body><h1>Hello</h1>#{@clipped_button}</body></html>
+        """)
+
+      on_exit(fn -> File.rm(path) end)
+
+      {:ok, report} =
+        Scanner.scan("file://#{path}", viewports: [{1440, 900}, {320, 800}], check_clipping: true)
+
+      assert [wide, narrow] = report.results
+
+      assert wide.clipping.clipped == []
+      refute wide.clipping.page_overflow?
+
+      assert [clip] = narrow.clipping.clipped
+      assert clip.selector =~ "button"
+      assert clip.ratio < 0.9
+      assert clip.visible < clip.width
+      assert narrow.clipping.page_overflow?
+    end
+
+    @tag timeout: 60_000
+    test "clipping is nil when not requested" do
+      path =
+        write_tmp_html("""
+        <html lang="en"><head><title>Test</title></head>
+        <body><h1>Hello</h1>#{@clipped_button}</body></html>
+        """)
+
+      on_exit(fn -> File.rm(path) end)
+
+      {:ok, report} = Scanner.scan("file://#{path}", viewports: [{320, 800}])
+
+      assert [narrow] = report.results
+      assert narrow.clipping == nil
+    end
+
+    @tag timeout: 60_000
+    test "works in single-viewport mode and respects :clipping_ratio" do
+      path =
+        write_tmp_html("""
+        <html lang="en"><head><title>Test</title></head>
+        <body><h1>Hello</h1>#{@clipped_button}</body></html>
+        """)
+
+      on_exit(fn -> File.rm(path) end)
+
+      {:ok, report} = Scanner.scan("file://#{path}", viewport: {320, 800}, check_clipping: true)
+      assert [%{selector: _}] = report.clipping.clipped
+
+      # At a 0.1 threshold the 23%-visible button is no longer flagged,
+      # but the page-level overflow is still reported.
+      {:ok, lenient} =
+        Scanner.scan("file://#{path}",
+          viewport: {320, 800},
+          check_clipping: true,
+          clipping_ratio: 0.1
+        )
+
+      assert lenient.clipping.clipped == []
+      assert lenient.clipping.page_overflow?
+    end
+  end
+
   describe "scan/2 — playwright resolution" do
     @tag timeout: 60_000
     test "honors the :playwright_path config override" do

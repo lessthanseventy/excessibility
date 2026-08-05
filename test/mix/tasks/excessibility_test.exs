@@ -247,7 +247,89 @@ defmodule Mix.Tasks.ExcessibilityTest do
     end
   end
 
+  describe "clipping detection (#122 follow-up)" do
+    setup do
+      on_exit(fn -> Application.delete_env(:excessibility, :check_clipping) end)
+      :ok
+    end
+
+    test "--check-clipping failures are attributed to their viewport" do
+      setup_clipping_mock(clipped?: true)
+      File.write!(Path.join(@snapshot_dir, "test.html"), "<html></html>")
+
+      output =
+        capture_io(fn ->
+          assert catch_exit(Excessibility.run(["--viewports", "1440x900,320x800", "--check-clipping"])) == {:shutdown, 1}
+        end)
+
+      assert output =~ "### Issues Found"
+      assert output =~ "@320x800"
+      assert output =~ "button#ship"
+      assert output =~ "18px of 300px visible"
+      assert output =~ "horizontal overflow"
+    end
+
+    test "clean clipping results pass" do
+      setup_clipping_mock(clipped?: false)
+      File.write!(Path.join(@snapshot_dir, "test.html"), "<html></html>")
+
+      output =
+        capture_io(fn ->
+          Excessibility.run(["--viewports", "1440x900,320x800", "--check-clipping"])
+        end)
+
+      assert output =~ "passed accessibility checks"
+    end
+
+    test ":check_clipping config works without the flag" do
+      setup_clipping_mock(clipped?: true)
+      Application.put_env(:excessibility, :check_clipping, true)
+      File.write!(Path.join(@snapshot_dir, "test.html"), "<html></html>")
+
+      output =
+        capture_io(fn ->
+          assert catch_exit(Excessibility.run(["--viewports", "1440x900,320x800"])) ==
+                   {:shutdown, 1}
+        end)
+
+      assert output =~ "button#ship"
+    end
+  end
+
   # --- Mock Helpers ---
+
+  # Emits per-viewport results with clipping data, but only when the
+  # runner actually received --check-clipping.
+  defp setup_clipping_mock(clipped?: clipped?) do
+    narrow_clipping =
+      if clipped? do
+        ~s({page_overflow: true, clipped: [{selector: "button#ship", width: 300, visible: 18, ratio: 0.06, html: "<button id='ship'>"}]})
+      else
+        "{page_overflow: false, clipped: []}"
+      end
+
+    mock_path =
+      create_mock_script("""
+      #!/usr/bin/env node
+      const args = process.argv.slice(2);
+      if (!args.includes("--check-clipping")) {
+        process.stdout.write(JSON.stringify({error: "playwright_error", message: "runner did not receive --check-clipping"}));
+        process.exit(1);
+      }
+      process.stdout.write(JSON.stringify({
+        results: [
+          {viewport: "1440x900", violations: [], incomplete: [], passes_count: 1, inapplicable_count: 0, clipping: {page_overflow: false, clipped: []}},
+          {viewport: "320x800", violations: [], incomplete: [], passes_count: 1, inapplicable_count: 0, clipping: #{narrow_clipping}}
+        ]
+      }));
+      process.exit(0);
+      """)
+
+    Application.put_env(:excessibility, :axe_runner_path, mock_path)
+
+    on_exit(fn -> File.rm_rf!(Path.dirname(mock_path)) end)
+    :ok
+  end
 
   # Emits per-viewport results, but only when the runner actually received
   # --viewports 1440x900,320x800 — otherwise errors, so these tests prove
