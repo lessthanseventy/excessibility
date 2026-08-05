@@ -13,6 +13,21 @@ defmodule Excessibility.TelemetryCapture.Filter do
   - `__meta__` fields
   - `NotLoaded` associations
   """
+  # Matched by name, not by struct expansion — ecto is a test-only dep,
+  # so `%Ecto.Association.NotLoaded{}` must not be required at compile
+  # time (it would break `mix docs`/`:dev` compilation).
+  def filter_ecto_metadata(%module{}) when module == Ecto.Association.NotLoaded, do: nil
+
+  # Structs satisfy is_map/1 but are not Enumerable, so they must be
+  # converted before the reduce below (an Ecto schema in a list of
+  # assigns would otherwise crash the capture).
+  def filter_ecto_metadata(%_{} = struct) do
+    struct
+    |> Map.from_struct()
+    |> Map.delete(:__meta__)
+    |> filter_ecto_metadata()
+  end
+
   def filter_ecto_metadata(assigns) when is_map(assigns) do
     Enum.reduce(assigns, %{}, fn {key, value}, acc ->
       cond do
@@ -23,16 +38,6 @@ defmodule Excessibility.TelemetryCapture.Filter do
         true -> Map.put(acc, key, value)
       end
     end)
-
-    # Skip __meta__ fields
-
-    # Skip NotLoaded associations
-
-    # Recursively filter maps
-
-    # Recursively filter lists
-
-    # Keep everything else
   end
 
   def filter_ecto_metadata(value) when is_list(value) do

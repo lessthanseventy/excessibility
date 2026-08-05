@@ -14,6 +14,12 @@ defmodule Excessibility.TelemetryCapture.FilterTest do
     defstruct [:value, :handler]
   end
 
+  # Shaped like an Ecto schema struct: carries __meta__ and is not Enumerable
+  defmodule Offering do
+    @moduledoc false
+    defstruct [:id, :name, :__meta__]
+  end
+
   describe "filter_ecto_metadata/1" do
     test "removes __meta__ fields from maps" do
       assigns = %{
@@ -74,6 +80,46 @@ defmodule Excessibility.TelemetryCapture.FilterTest do
       result = Filter.filter_ecto_metadata(assigns)
 
       assert result == assigns
+    end
+
+    test "handles a list of Ecto structs without raising" do
+      assigns = %{items: [%Offering{id: 1, name: "A", __meta__: "remove"}]}
+
+      result = Filter.filter_ecto_metadata(assigns)
+
+      assert [item] = result.items
+      assert item.id == 1
+      assert item.name == "A"
+      refute Map.has_key?(item, :__meta__)
+    end
+
+    test "handles a list of Ecto structs nested inside a map" do
+      assigns = %{wrap: %{items: [%Offering{id: 2, name: "B", __meta__: "remove"}]}}
+
+      assert [item] = Filter.filter_ecto_metadata(assigns).wrap.items
+      assert item.id == 2
+      refute Map.has_key?(item, :__meta__)
+    end
+
+    test "handles a struct passed directly" do
+      result = Filter.filter_ecto_metadata(%Offering{id: 3, name: "C", __meta__: "remove"})
+
+      assert result.id == 3
+      refute Map.has_key?(result, :__meta__)
+    end
+
+    test "drops NotLoaded associations inside struct list elements" do
+      not_loaded = %Ecto.Association.NotLoaded{__field__: :posts, __owner__: User}
+      assigns = %{items: [%{id: 1, posts: not_loaded}]}
+
+      assert [item] = Filter.filter_ecto_metadata(assigns).items
+      refute Map.has_key?(item, :posts)
+    end
+
+    test "handles lists of scalars" do
+      assigns = %{ids: [1, 2, 3], tags: ["a"]}
+
+      assert Filter.filter_ecto_metadata(assigns) == assigns
     end
   end
 
