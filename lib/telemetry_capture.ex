@@ -164,6 +164,10 @@ defmodule Excessibility.TelemetryCapture do
   Note: HTML snapshot files are NOT generated from telemetry capture.
   For real accessibility testing, use `html_snapshot(view)` in your tests
   to capture actual rendered HTML.
+
+  Runs in the `on_exit` installed by `use Excessibility`, so a failure
+  here is logged rather than raised — instrumentation must not fail the
+  test it observes.
   """
   def write_snapshots(test_name) do
     snapshots = get_snapshots()
@@ -187,6 +191,13 @@ defmodule Excessibility.TelemetryCapture do
 
       IO.puts("📊 Excessibility: Wrote timeline.json with #{length(snapshots)} events")
     end
+  rescue
+    error ->
+      Logger.warning(
+        "Excessibility: Failed to write timeline for #{inspect(test_name)}: #{Exception.format(:error, error, __STACKTRACE__)}"
+      )
+
+      :ok
   end
 
   # Resolve which enrichers to run based on EXCESSIBILITY_ANALYZERS env var

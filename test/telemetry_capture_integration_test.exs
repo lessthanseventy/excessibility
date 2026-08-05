@@ -1,7 +1,15 @@
 defmodule Excessibility.TelemetryCaptureIntegrationTest do
   use ExUnit.Case
 
+  import ExUnit.CaptureLog
+
   alias Excessibility.TelemetryCapture
+
+  # Shaped like an Ecto schema struct: carries __meta__ and is not Enumerable
+  defmodule FakeSchema do
+    @moduledoc false
+    defstruct [:id, :name, :__meta__]
+  end
 
   setup do
     # Clean up any existing snapshots
@@ -64,6 +72,61 @@ defmodule Excessibility.TelemetryCaptureIntegrationTest do
     # Cleanup
     TelemetryCapture.detach()
     File.rm_rf!("test/excessibility")
+  end
+
+  test "write_snapshots handles a list of Ecto structs in assigns" do
+    TelemetryCapture.attach()
+
+    TelemetryCapture.handle_event(
+      [:phoenix, :live_view, :mount, :stop],
+      %{duration: 100},
+      %{
+        socket: %{
+          assigns: %{product_offerings: [%FakeSchema{id: 1, name: "A", __meta__: :loaded}]},
+          view: MyApp.Live
+        }
+      },
+      nil
+    )
+
+    TelemetryCapture.write_snapshots("struct_list_test")
+
+    timeline_path = "test/excessibility/timeline.json"
+    assert File.exists?(timeline_path)
+    assert %{"test" => "struct_list_test"} = timeline_path |> File.read!() |> Jason.decode!()
+
+    TelemetryCapture.detach()
+    File.rm_rf!("test/excessibility")
+  end
+
+  test "write_snapshots logs instead of raising when the timeline cannot be written" do
+    TelemetryCapture.attach()
+
+    TelemetryCapture.handle_event(
+      [:phoenix, :live_view, :mount, :stop],
+      %{duration: 100},
+      %{socket: %{assigns: %{user_id: 1}, view: MyApp.Live}},
+      nil
+    )
+
+    # A regular file as the output path's parent makes mkdir_p! fail
+    blocker = Path.join(System.tmp_dir!(), "excessibility_blocker_#{System.unique_integer([:positive])}")
+    File.write!(blocker, "not a directory")
+    Application.put_env(:excessibility, :excessibility_output_path, Path.join(blocker, "out"))
+
+    on_exit(fn ->
+      Application.delete_env(:excessibility, :excessibility_output_path)
+      File.rm(blocker)
+    end)
+
+    log =
+      capture_log(fn ->
+        TelemetryCapture.write_snapshots("resilience_test")
+      end)
+
+    assert log =~ "Failed to write timeline"
+
+    TelemetryCapture.detach()
   end
 
   test "write_snapshots generates timeline.json" do
