@@ -3,10 +3,11 @@ defmodule Excessibility.ScannerTest do
 
   alias Excessibility.Scanner
 
+  @moduletag timeout: 60_000
+
   @tmp_dir System.tmp_dir!()
 
   describe "scan/2 — happy paths" do
-    @tag timeout: 60_000
     test "returns a report with violations for inaccessible HTML" do
       path =
         write_tmp_html("""
@@ -28,7 +29,6 @@ defmodule Excessibility.ScannerTest do
       assert is_list(violation.nodes)
     end
 
-    @tag timeout: 60_000
     test "returns an empty violation list for accessible HTML" do
       path =
         write_tmp_html("""
@@ -43,7 +43,6 @@ defmodule Excessibility.ScannerTest do
       refute Enum.any?(report.violations, &(&1.impact == :critical))
     end
 
-    @tag timeout: 60_000
     test "report shape includes all documented fields" do
       path =
         write_tmp_html("""
@@ -70,7 +69,6 @@ defmodule Excessibility.ScannerTest do
       assert report.warnings == []
     end
 
-    @tag timeout: 60_000
     test "captures screenshot when :screenshot option set" do
       html_path =
         write_tmp_html("""
@@ -90,7 +88,6 @@ defmodule Excessibility.ScannerTest do
       assert File.exists?(png_path)
     end
 
-    @tag timeout: 60_000
     test "applies linked CSS before analyzing so hidden content is excluded" do
       css_path = Path.join(@tmp_dir, "scanner_css_#{System.unique_integer([:positive])}.css")
       File.write!(css_path, ".modal { display: none; }")
@@ -118,7 +115,6 @@ defmodule Excessibility.ScannerTest do
       assert report.warnings == []
     end
 
-    @tag timeout: 60_000
     test "warns when a linked stylesheet is missing" do
       path =
         write_tmp_html("""
@@ -137,7 +133,6 @@ defmodule Excessibility.ScannerTest do
       assert warning =~ "/nonexistent/assets/app.css"
     end
 
-    @tag timeout: 60_000
     test "respects :disable_rules option" do
       path =
         write_tmp_html("""
@@ -154,7 +149,6 @@ defmodule Excessibility.ScannerTest do
   end
 
   describe "scan/2 — multiple viewports" do
-    @tag timeout: 60_000
     test "returns per-viewport results and actually applies each width" do
       # The media query hides the unlabeled input below 400px, so axe must
       # report the label violation at 1440px but not at 320px — proving the
@@ -184,7 +178,6 @@ defmodule Excessibility.ScannerTest do
       assert is_list(narrow.incomplete)
     end
 
-    @tag timeout: 60_000
     test "suffixes screenshots per viewport" do
       html_path =
         write_tmp_html("""
@@ -212,7 +205,6 @@ defmodule Excessibility.ScannerTest do
       assert File.exists?(narrow_png)
     end
 
-    @tag timeout: 60_000
     test "single :viewport keeps the flat report shape" do
       path =
         write_tmp_html("""
@@ -235,7 +227,6 @@ defmodule Excessibility.ScannerTest do
     # at either width, which is exactly why the check exists.
     @clipped_button ~s(<button style="position:absolute; left:250px; width:300px">Ship it</button>)
 
-    @tag timeout: 60_000
     test "flags interactive elements clipped at narrow widths, per viewport" do
       path =
         write_tmp_html("""
@@ -260,7 +251,6 @@ defmodule Excessibility.ScannerTest do
       assert narrow.clipping.page_overflow?
     end
 
-    @tag timeout: 60_000
     test "clipping is nil when not requested" do
       path =
         write_tmp_html("""
@@ -276,7 +266,6 @@ defmodule Excessibility.ScannerTest do
       assert narrow.clipping == nil
     end
 
-    @tag timeout: 60_000
     test "works in single-viewport mode and respects :clipping_ratio" do
       path =
         write_tmp_html("""
@@ -304,7 +293,6 @@ defmodule Excessibility.ScannerTest do
   end
 
   describe "scan/2 — playwright resolution" do
-    @tag timeout: 60_000
     test "honors the :playwright_path config override" do
       bundled = Path.expand("assets/node_modules/playwright", File.cwd!())
       Application.put_env(:excessibility, :playwright_path, bundled)
@@ -321,7 +309,6 @@ defmodule Excessibility.ScannerTest do
       assert {:ok, _report} = Scanner.scan("file://#{path}")
     end
 
-    @tag timeout: 60_000
     test "reports an actionable error when :playwright_path is invalid" do
       Application.put_env(:excessibility, :playwright_path, "/nonexistent/playwright")
       on_exit(fn -> Application.delete_env(:excessibility, :playwright_path) end)
@@ -353,7 +340,6 @@ defmodule Excessibility.ScannerTest do
       assert {:error, {:invalid_url, :unsupported_scheme}} = Scanner.scan("ftp://example.com/")
     end
 
-    @tag timeout: 60_000
     test "returns {:error, {:navigation_failed, _}} for nonexistent file" do
       assert {:error, {:navigation_failed, _msg}} = Scanner.scan("file:///nonexistent/path.html")
     end
