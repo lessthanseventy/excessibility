@@ -10,8 +10,7 @@ defmodule Mix.Tasks.Excessibility.Review do
 
     * `block`  — a new critical/serious issue (e.g. a keyboard-inaccessible
       control introduced by this change)
-    * `review` — a new moderate/minor issue, or content that changed
-      without an `aria-live` announcement; worth a human glance
+    * `review` — a new moderate/minor issue; worth a human glance
     * `auto`   — rendering changed but introduced no accessibility issues
 
   ## Usage
@@ -31,6 +30,13 @@ defmodule Mix.Tasks.Excessibility.Review do
       # Skip the axe-core browser scans and review on the LiveView rules only
       mix excessibility.review --no-axe
 
+      # Also flag content that changed without an aria-live announcement.
+      # Only turn this on when both sides rendered the SAME fixture data:
+      # baseline and current usually come from two independent `mix test`
+      # runs, and with non-deterministic fixtures the text delta reports
+      # fixture drift, not accessibility regressions.
+      mix excessibility.review --content-diff
+
   New findings are the union of axe-core violations (scanned per snapshot
   pair through Playwright) and the LiveView rules. If the axe scan fails
   (e.g. Playwright isn't installed), the review degrades to the LiveView
@@ -48,7 +54,9 @@ defmodule Mix.Tasks.Excessibility.Review do
   @impl Mix.Task
   def run(args) do
     {opts, _argv, _invalid} =
-      OptionParser.parse(args, strict: [fail_on: :string, judge: :boolean, timeline: :string, axe: :boolean])
+      OptionParser.parse(args,
+        strict: [fail_on: :string, judge: :boolean, timeline: :string, axe: :boolean, content_diff: :boolean]
+      )
 
     fail_on = parse_fail_on(opts[:fail_on])
 
@@ -65,7 +73,7 @@ defmodule Mix.Tasks.Excessibility.Review do
   # behavioral findings — N+1 queries, dead state, render thrash — inform the
   # review alongside the DOM diff.
   defp review_opts(opts) do
-    base = [axe: Keyword.get(opts, :axe, true)]
+    base = [axe: Keyword.get(opts, :axe, true), content_diff: Keyword.get(opts, :content_diff, false)]
 
     case opts[:timeline] do
       nil -> base
