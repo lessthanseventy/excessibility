@@ -322,6 +322,7 @@ All configuration in `test/test_helper.exs` or `config/test.exs`:
 - `:excessibility_output_path` - Base directory (default: `"test/excessibility"`)
 - `:pa11y_path` - Path to Pa11y executable (auto-detected)
 - `:playwright_path` - Path to an existing Playwright installation to reuse (default: bundled copy in `assets/`)
+- `:node_modules_path` - Path to a host `node_modules` providing `playwright` and `@axe-core/playwright` (default: bundled copy in `assets/`)
 - `:pa11y_config` - Path to pa11y.json (default: `"pa11y.json"`)
 - `:head_render_path` - Route for `<head>` extraction (default: `"/"`)
 - `:custom_enrichers` - List of custom enricher modules (default: `[]`)

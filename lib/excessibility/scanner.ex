@@ -48,7 +48,16 @@ defmodule Excessibility.Scanner do
 
       config :excessibility, playwright_path: "assets/node_modules/playwright"
 
-  Relative paths are expanded from the project root.
+  To skip the bundled `npm install` entirely, point Excessibility at a
+  host `node_modules` directory that provides both `playwright` and
+  `@axe-core/playwright`:
+
+      config :excessibility, node_modules_path: "assets/node_modules"
+
+  Relative paths are expanded from the project root. Note that resolving
+  `@axe-core/playwright` from the host also pins the axe-core version, so
+  `engine.axe_version` in reports follows the host installation — an axe
+  minor bump can change finding sets relative to earlier baselines.
   """
   @behaviour Excessibility.ScannerBehaviour
 
@@ -277,10 +286,15 @@ defmodule Excessibility.Scanner do
   end
 
   defp playwright_env do
-    case Application.get_env(:excessibility, :playwright_path) do
-      nil -> []
-      path -> [{"EXCESSIBILITY_PLAYWRIGHT_PATH", Path.expand(path)}]
-    end
+    Enum.flat_map(
+      [{"EXCESSIBILITY_PLAYWRIGHT_PATH", :playwright_path}, {"EXCESSIBILITY_NODE_MODULES_PATH", :node_modules_path}],
+      fn {var, key} ->
+        case Application.get_env(:excessibility, key) do
+          nil -> []
+          path -> [{var, Path.expand(path)}]
+        end
+      end
+    )
   end
 
   defp parse_output(output, url) do

@@ -340,6 +340,40 @@ defmodule Excessibility.ScannerTest do
       assert {:ok, _report} = Scanner.scan("file://#{path}")
     end
 
+    test "honors the :node_modules_path config override for playwright and the axe wrapper" do
+      bundled = Path.expand("assets/node_modules", File.cwd!())
+      Application.put_env(:excessibility, :node_modules_path, bundled)
+      on_exit(fn -> Application.delete_env(:excessibility, :node_modules_path) end)
+
+      path =
+        write_tmp_html("""
+        <html lang="en"><head><title>Test</title></head>
+        <body><h1>Hello</h1></body></html>
+        """)
+
+      on_exit(fn -> File.rm(path) end)
+
+      assert {:ok, report} = Scanner.scan("file://#{path}")
+      assert report.engine.axe_version
+    end
+
+    test "reports an actionable error when :node_modules_path is invalid" do
+      Application.put_env(:excessibility, :node_modules_path, "/nonexistent/node_modules")
+      on_exit(fn -> Application.delete_env(:excessibility, :node_modules_path) end)
+
+      path =
+        write_tmp_html("""
+        <html lang="en"><head><title>Test</title></head>
+        <body><h1>Hello</h1></body></html>
+        """)
+
+      on_exit(fn -> File.rm(path) end)
+
+      assert {:error, {:playwright_error, message}} = Scanner.scan("file://#{path}", fallback: false)
+      assert message =~ "/nonexistent/node_modules"
+      assert message =~ "EXCESSIBILITY_NODE_MODULES_PATH"
+    end
+
     test "reports an actionable error when :playwright_path is invalid" do
       Application.put_env(:excessibility, :playwright_path, "/nonexistent/playwright")
       on_exit(fn -> Application.delete_env(:excessibility, :playwright_path) end)
