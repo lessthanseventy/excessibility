@@ -49,8 +49,9 @@ defmodule Excessibility.TelemetryCapture.Analyzers.MemoryTest do
     end
 
     test "detects large growth between events" do
-      # 10x growth from event 1 to 2
-      timeline = build_timeline([1000, 10_000, 11_000])
+      # 10x growth from event 1 to 2, above the absolute floor (issue #142:
+      # a ratio off a tiny heap is noise, so sizes must clear a few hundred KB)
+      timeline = build_timeline([300_000, 3_000_000, 3_300_000])
       result = Memory.analyze(timeline, [])
 
       assert result.findings != []
@@ -59,8 +60,8 @@ defmodule Excessibility.TelemetryCapture.Analyzers.MemoryTest do
     end
 
     test "detects memory leak pattern" do
-      # 3+ consecutive increases
-      timeline = build_timeline([1000, 2000, 4000, 8000, 16_000])
+      # 3+ consecutive increases past the absolute floor (issue #142)
+      timeline = build_timeline([300_000, 600_000, 1_200_000, 2_400_000, 4_800_000])
       result = Memory.analyze(timeline, [])
 
       assert result.findings != []

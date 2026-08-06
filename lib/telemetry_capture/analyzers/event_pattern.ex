@@ -39,6 +39,8 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EventPattern do
 
   @behaviour Excessibility.TelemetryCapture.Analyzer
 
+  alias Excessibility.TelemetryCapture.Analyzer
+
   def name, do: :event_pattern
   def default_enabled?, do: true
   def requires_enrichers, do: []
@@ -57,20 +59,28 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EventPattern do
     }
   end
 
+  # Patterns are detected within a view: a journey test interleaves
+  # LiveViews, so mounts of two different views sitting next to each other
+  # aren't "consecutive duplicate" events, and a mount count summed across
+  # views isn't a single view mounting excessively (issue #142). Stats stay
+  # global — they describe the whole run.
   defp detect_patterns(timeline) do
-    consecutive_findings = detect_consecutive_duplicates(timeline)
-    excessive_findings = detect_excessive_events(timeline)
-    optimization_findings = suggest_optimizations(timeline)
-
-    consecutive_findings ++ excessive_findings ++ optimization_findings
+    timeline
+    |> Analyzer.group_by_view()
+    |> Enum.flat_map(fn events ->
+      detect_consecutive_duplicates(events) ++
+        detect_excessive_events(events) ++
+        suggest_optimizations(events)
+    end)
   end
 
   defp detect_consecutive_duplicates(timeline) do
     timeline
     |> Enum.chunk_by(& &1.event)
     |> Enum.flat_map(fn chunk ->
-      if length(chunk) >= 3 do
-        event_type = List.first(chunk).event
+      event_type = List.first(chunk).event
+
+      if length(chunk) >= 3 and not lifecycle_event?(event_type) do
         sequences = Enum.map(chunk, & &1.sequence)
 
         [
@@ -134,7 +144,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EventPattern do
   defp detect_rapid_events(timeline) do
     timeline
     |> Enum.chunk_by(& &1.event)
-    |> Enum.filter(fn chunk -> length(chunk) >= 4 end)
+    |> Enum.filter(fn chunk -> length(chunk) >= 4 and not lifecycle_event?(List.first(chunk).event) end)
     |> Enum.map(fn chunk ->
       event_type = List.first(chunk).event
       sequences = Enum.map(chunk, & &1.sequence)
@@ -163,6 +173,17 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EventPattern do
       common_sequences: common_seqs
     }
   end
+
+  # Lifecycle events (mount, handle_params) are not user-driven repeats or
+  # render churn — consecutive mounts come from `LiveViewTest.live/2`'s
+  # disconnected+connected double-mount and re-navigation, so flagging them as
+  # "unnecessary re-renders" is a capture artifact (issue #142). The rapid-fire
+  # heuristics target handle_event:* and render only.
+  defp lifecycle_event?(event) when is_binary(event) do
+    event == "mount" or String.starts_with?(event, "handle_params")
+  end
+
+  defp lifecycle_event?(_event), do: false
 
   defp count_events(timeline) do
     timeline

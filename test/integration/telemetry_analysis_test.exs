@@ -23,10 +23,11 @@ defmodule Integration.TelemetryAnalysisTest do
     end
 
     test "analyzers detect issues in timeline" do
-      # Create timeline with deliberate memory bloat
+      # Create timeline with deliberate memory bloat above the absolute floor
+      # (issue #142: a ratio off a tiny heap is noise, so sizes must be large)
       snapshots =
         Enum.map(1..5, fn i ->
-          size = if i == 3, do: 10_000, else: 100
+          size = if i == 3, do: 600_000, else: 1000
           assigns = %{data: String.duplicate("x", size)}
           build_snapshot("event_#{i}", assigns)
         end)
@@ -67,9 +68,10 @@ defmodule Integration.TelemetryAnalysisTest do
     end
 
     test "complete flow: snapshots -> timeline -> analysis -> markdown" do
-      # Build snapshots with memory leak pattern
+      # Build snapshots with a memory leak pattern above the absolute floor
+      # (issue #142: leaks of ordinary-sized heaps aren't worth flagging)
       snapshots =
-        [100, 200, 400, 800, 1600]
+        [300_000, 600_000, 1_200_000, 2_400_000, 4_800_000]
         |> Enum.with_index(1)
         |> Enum.map(fn {size, i} ->
           build_snapshot("event_#{i}", %{data: String.duplicate("x", size)})

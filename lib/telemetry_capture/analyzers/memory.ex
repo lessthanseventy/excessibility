@@ -37,6 +37,14 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Memory do
 
   @behaviour Excessibility.TelemetryCapture.Analyzer
 
+  alias Excessibility.TelemetryCapture.Analyzer
+
+  # A ratio off a tiny denominator (issue #142: a 220-byte freshly-mounted
+  # view followed by a 109 KB loaded view reads as "507x growth") is noise:
+  # 109 KB is an ordinary LiveView heap. A memory finding therefore requires
+  # the larger side to clear an absolute floor, regardless of ratio.
+  @min_notable_bytes 262_144
+
   def name, do: :memory
   def default_enabled?, do: true
   def requires_enrichers, do: [:assign_sizes]
@@ -126,50 +134,61 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Memory do
     bloat_findings ++ leak_findings
   end
 
+  # Consecutive-event comparisons run per view: a journey test interleaves
+  # LiveViews, so adjacent events can belong to different processes (#142).
   defp detect_bloat(timeline, stats) do
     timeline
-    |> Enum.chunk_every(2, 1, :discard)
-    |> Enum.flat_map(fn [prev, curr] ->
-      delta = curr.total_memory - prev.total_memory
-      multiplier = if prev.total_memory > 0, do: delta / prev.total_memory, else: 0
+    |> Analyzer.group_by_view()
+    |> Enum.flat_map(&Enum.chunk_every(&1, 2, 1, :discard))
+    |> Enum.flat_map(fn [prev, curr] -> bloat_for_pair(prev, curr, stats) end)
+  end
 
-      cond do
-        # Critical: 10x growth, or 10x median delta, or > mean + 2std_dev
-        multiplier >= 10 or delta > stats.median_delta * 10 or
-            curr.total_memory > stats.avg + 2 * stats.std_dev ->
-          [
-            %{
-              severity: :critical,
-              message:
-                "Memory grew #{format_multiplier(multiplier)}x between events (#{format_bytes(prev.total_memory)} → #{format_bytes(curr.total_memory)})",
-              events: [prev.sequence, curr.sequence],
-              metadata: %{growth_multiplier: Float.round(multiplier, 1), delta_bytes: delta}
-            }
-          ]
+  defp bloat_for_pair(prev, curr, stats) do
+    delta = curr.total_memory - prev.total_memory
+    # `factor` (curr/prev) is what the message reports, so "grew 1.5x" means
+    # the heap is 1.5x its previous size — not the confusing "grew 0.5x" that
+    # delta/prev produced. The thresholds themselves use delta/prev.
+    factor = if prev.total_memory > 0, do: curr.total_memory / prev.total_memory, else: 0
 
-        # Warning: 3x growth or 3x median delta
-        multiplier >= 3 or delta > stats.median_delta * 3 ->
-          [
-            %{
-              severity: :warning,
-              message:
-                "Memory grew #{format_multiplier(multiplier)}x between events (#{format_bytes(prev.total_memory)} → #{format_bytes(curr.total_memory)})",
-              events: [prev.sequence, curr.sequence],
-              metadata: %{growth_multiplier: Float.round(multiplier, 1), delta_bytes: delta}
-            }
-          ]
+    cond do
+      # An ordinary-sized heap never bloats on ratio alone.
+      curr.total_memory < @min_notable_bytes -> []
+      critical_bloat?(prev, curr, delta, stats) -> [bloat_finding(:critical, prev, curr, factor, delta)]
+      warning_bloat?(prev, delta, stats) -> [bloat_finding(:warning, prev, curr, factor, delta)]
+      true -> []
+    end
+  end
 
-        true ->
-          []
-      end
-    end)
+  # Critical: 10x growth, or 10x median delta, or beyond mean + 2 std_dev.
+  defp critical_bloat?(prev, curr, delta, stats) do
+    ratio(delta, prev.total_memory) >= 10 or delta > stats.median_delta * 10 or
+      curr.total_memory > stats.avg + 2 * stats.std_dev
+  end
+
+  # Warning: 3x growth or 3x median delta.
+  defp warning_bloat?(prev, delta, stats) do
+    ratio(delta, prev.total_memory) >= 3 or delta > stats.median_delta * 3
+  end
+
+  defp ratio(_delta, 0), do: 0
+  defp ratio(delta, prev), do: delta / prev
+
+  defp bloat_finding(severity, prev, curr, factor, delta) do
+    %{
+      severity: severity,
+      message:
+        "Memory grew #{format_multiplier(factor)}x between events (#{format_bytes(prev.total_memory)} → #{format_bytes(curr.total_memory)})",
+      events: [prev.sequence, curr.sequence],
+      metadata: %{growth_multiplier: Float.round(factor, 1), delta_bytes: delta}
+    }
   end
 
   defp detect_leaks(timeline, stats) do
     timeline
-    |> Enum.chunk_every(3, 1, :discard)
+    |> Analyzer.group_by_view()
+    |> Enum.flat_map(&Enum.chunk_every(&1, 3, 1, :discard))
     |> Enum.flat_map(fn chunk ->
-      if significant_consecutive_increases?(chunk, stats) do
+      if significant_consecutive_increases?(chunk, stats) and notable_chunk?(chunk) do
         sequences = Enum.map(chunk, & &1.sequence)
         sizes = Enum.map(chunk, & &1.total_memory)
 
@@ -186,6 +205,12 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Memory do
         []
       end
     end)
+  end
+
+  # Grouping by view can expose a monotonic run that the interleaving used
+  # to mask; a run of ordinary-sized heaps still isn't a leak worth flagging.
+  defp notable_chunk?(chunk) do
+    chunk |> Enum.map(& &1.total_memory) |> Enum.max() >= @min_notable_bytes
   end
 
   defp significant_consecutive_increases?([a, b, c], stats) do

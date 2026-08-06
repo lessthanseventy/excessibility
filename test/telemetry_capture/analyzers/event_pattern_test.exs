@@ -195,5 +195,40 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EventPatternTest do
         assert finding.events != []
       end
     end
+
+    test "mounts of different interleaved views are not consecutive duplicates (issue #142)" do
+      # One Index mount next to two Login mounts is not "3 consecutive mounts"
+      # of one view — grouping by view keeps the counts honest.
+      timeline = %{
+        timeline: [
+          %{sequence: 1, event: "mount", view_module: "AppWeb.Index"},
+          %{sequence: 2, event: "mount", view_module: "AppWeb.Login"},
+          %{sequence: 3, event: "mount", view_module: "AppWeb.Login"}
+        ]
+      }
+
+      result = EventPattern.analyze(timeline, [])
+
+      refute Enum.any?(result.findings, &(&1.message =~ "consecutive")),
+             "expected no consecutive-duplicate finding across views, got: #{inspect(result.findings)}"
+    end
+
+    test "consecutive mounts are not flagged as unnecessary re-renders (issue #142)" do
+      # Repeated mounts come from LiveViewTest's disconnected+connected mount
+      # and re-navigation — a capture artifact, not render churn.
+      timeline = %{
+        timeline: [
+          %{sequence: 1, event: "mount", view_module: "AppWeb.Index"},
+          %{sequence: 2, event: "mount", view_module: "AppWeb.Index"},
+          %{sequence: 3, event: "mount", view_module: "AppWeb.Index"},
+          %{sequence: 4, event: "mount", view_module: "AppWeb.Index"}
+        ]
+      }
+
+      result = EventPattern.analyze(timeline, [])
+
+      refute Enum.any?(result.findings, &(&1.message =~ "consecutive" or &1.message =~ "Rapid")),
+             "expected no consecutive/rapid finding for mounts, got: #{inspect(result.findings)}"
+    end
   end
 end

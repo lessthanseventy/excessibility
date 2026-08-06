@@ -43,6 +43,8 @@ defmodule Excessibility.TelemetryCapture.Analyzers.StateMachine do
 
   @behaviour Excessibility.TelemetryCapture.Analyzer
 
+  alias Excessibility.TelemetryCapture.Analyzer
+
   def name, do: :state_machine
   def default_enabled?, do: true
   def requires_enrichers, do: [:state]
@@ -66,9 +68,14 @@ defmodule Excessibility.TelemetryCapture.Analyzers.StateMachine do
     }
   end
 
+  # Transitions are computed within a view: a journey test interleaves
+  # LiveViews, so a pair spanning two views (e.g. an Index render followed by
+  # a UserLoginLive mount) would diff two unrelated processes' key sets and
+  # report phantom "keys added/removed" and "unstable state" (issue #142).
   defp detect_transitions(timeline) do
     timeline
-    |> Enum.chunk_every(2, 1, :discard)
+    |> Analyzer.group_by_view()
+    |> Enum.flat_map(&Enum.chunk_every(&1, 2, 1, :discard))
     |> Enum.map(fn [prev, curr] ->
       prev_keys = MapSet.new(Map.get(prev, :state_keys, []))
       curr_keys = MapSet.new(Map.get(curr, :state_keys, []))

@@ -200,5 +200,22 @@ defmodule Excessibility.TelemetryCapture.Analyzers.StateMachineTest do
       # Should not crash, treat as no state data
       assert result.findings == []
     end
+
+    test "does not report phantom transitions across interleaved views (issue #142)" do
+      # An Index render followed by a Login mount is two different processes;
+      # diffing their key sets would report keys added/removed and unstable
+      # state that never happened. Grouping by view removes the phantom.
+      timeline = %{
+        timeline: [
+          %{sequence: 1, event: "render", view_module: "AppWeb.Index", state_keys: [:products, :cart]},
+          %{sequence: 2, event: "mount", view_module: "AppWeb.Login", state_keys: [:email]},
+          %{sequence: 3, event: "render", view_module: "AppWeb.Index", state_keys: [:products, :cart]}
+        ]
+      }
+
+      result = StateMachine.analyze(timeline, [])
+
+      assert result.findings == []
+    end
   end
 end

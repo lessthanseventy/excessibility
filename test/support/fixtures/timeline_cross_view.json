@@ -1,0 +1,126 @@
+{
+  "test": "MarketplaceLive journey (healthy)",
+  "duration_ms": 200,
+  "timeline": [
+    {
+      "sequence": 0,
+      "event": "mount",
+      "view_module": "MyAppWeb.MarketplaceLive.Index",
+      "total_memory": 24012,
+      "event_duration_ms": 40,
+      "duration_since_previous_ms": null,
+      "changes": {"page": ["", "index"]},
+      "list_sizes": {"products": 100, "order_form.source.changes.items": 0}
+    },
+    {
+      "sequence": 1,
+      "event": "handle_params",
+      "view_module": "MyAppWeb.MarketplaceLive.Index",
+      "total_memory": 24030,
+      "event_duration_ms": 0,
+      "duration_since_previous_ms": 1,
+      "changes": {"params": ["", "loaded"]},
+      "list_sizes": {"products": 100, "order_form.source.changes.items": 0}
+    },
+    {
+      "sequence": 2,
+      "event": "mount",
+      "view_module": "MyAppWeb.MarketplaceLive.Index",
+      "total_memory": 24012,
+      "event_duration_ms": 4,
+      "duration_since_previous_ms": 93,
+      "changes": {"page": ["", "index"]},
+      "list_sizes": {"products": 100, "order_form.source.changes.items": 0}
+    },
+    {
+      "sequence": 3,
+      "event": "handle_params",
+      "view_module": "MyAppWeb.MarketplaceLive.Index",
+      "total_memory": 24030,
+      "event_duration_ms": 0,
+      "duration_since_previous_ms": 0,
+      "changes": {"params": ["", "loaded"]},
+      "list_sizes": {"products": 100, "order_form.source.changes.items": 0}
+    },
+    {
+      "sequence": 4,
+      "event": "render",
+      "view_module": "MyAppWeb.MarketplaceLive.Index",
+      "total_memory": 24030,
+      "event_duration_ms": 2,
+      "duration_since_previous_ms": 3,
+      "changes": {},
+      "list_sizes": {"products": 100, "order_form.source.changes.items": 0}
+    },
+    {
+      "sequence": 5,
+      "event": "render",
+      "view_module": "MyAppWeb.MarketplaceLive.Index",
+      "total_memory": 36831,
+      "event_duration_ms": 14,
+      "duration_since_previous_ms": 38,
+      "changes": {"products": ["old", "new"]},
+      "list_sizes": {"products": 100, "order_form.source.changes.items": 0}
+    },
+    {
+      "sequence": 6,
+      "event": "mount",
+      "view_module": "MyAppWeb.UserLoginLive",
+      "total_memory": 220,
+      "event_duration_ms": 0,
+      "duration_since_previous_ms": 10,
+      "changes": {"form": ["", "blank"]},
+      "list_sizes": {"login_form.errors": 0}
+    },
+    {
+      "sequence": 7,
+      "event": "render",
+      "view_module": "MyAppWeb.MarketplaceLive.Index",
+      "total_memory": 111919,
+      "event_duration_ms": 0,
+      "duration_since_previous_ms": 27,
+      "changes": {},
+      "list_sizes": {"products": 100, "order_form.source.changes.items": 1}
+    },
+    {
+      "sequence": 8,
+      "event": "mount",
+      "view_module": "MyAppWeb.UserLoginLive",
+      "total_memory": 220,
+      "event_duration_ms": 0,
+      "duration_since_previous_ms": 12,
+      "changes": {"form": ["", "blank"]},
+      "list_sizes": {"login_form.errors": 0}
+    },
+    {
+      "sequence": 9,
+      "event": "handle_event:event",
+      "view_module": "MyAppWeb.MarketplaceLive.Index",
+      "total_memory": 111989,
+      "event_duration_ms": 0,
+      "duration_since_previous_ms": 3,
+      "changes": {"cart": ["empty", "one"]},
+      "list_sizes": {"products": 100, "order_form.source.changes.items": 1}
+    },
+    {
+      "sequence": 10,
+      "event": "render",
+      "view_module": "MyAppWeb.MarketplaceLive.Index",
+      "total_memory": 111989,
+      "event_duration_ms": 7,
+      "duration_since_previous_ms": 8,
+      "changes": {"cart": ["empty", "one"]},
+      "list_sizes": {"products": 100, "order_form.source.changes.items": 1}
+    },
+    {
+      "sequence": 11,
+      "event": "mount",
+      "view_module": "MyAppWeb.UserLoginLive",
+      "total_memory": 220,
+      "event_duration_ms": 0,
+      "duration_since_previous_ms": 5,
+      "changes": {"form": ["", "blank"]},
+      "list_sizes": {"login_form.errors": 0}
+    }
+  ]
+}
