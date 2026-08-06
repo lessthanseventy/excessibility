@@ -159,6 +159,126 @@ defmodule Mix.Tasks.Excessibility.ReviewTest do
     assert output =~ "orders.html"
   end
 
+  describe "behavioral findings gating (issue #142)" do
+    # A single-view timeline with a genuine serious memory finding (10x+ growth
+    # past the absolute floor), so the exit behavior is exercised for real.
+    @serious_timeline ~s({
+      "test": "x",
+      "duration_ms": 100,
+      "timeline": [
+        {"sequence": 0, "event": "mount", "view_module": "AppWeb.Index", "total_memory": 300000},
+        {"sequence": 1, "event": "render", "view_module": "AppWeb.Index", "total_memory": 5000000},
+        {"sequence": 2, "event": "render", "view_module": "AppWeb.Index", "total_memory": 5100000}
+      ]
+    })
+
+    setup do
+      timeline_path = Path.join(@output_dir, "serious_timeline.json")
+      File.write!(timeline_path, @serious_timeline)
+      on_exit(fn -> File.rm_rf!(timeline_path) end)
+      {:ok, timeline_path: timeline_path}
+    end
+
+    test "a serious behavioral finding is advisory and does not exit by default", %{timeline_path: path} do
+      write_pair("home.html", "<div>a</div>", "<div>a</div>")
+
+      output = capture_io(fn -> ReviewTask.run(["--timeline", path]) end)
+
+      assert output =~ "### Behavioral (telemetry analyzers)"
+      assert output =~ "[serious] memory"
+    end
+
+    test "--fail-on-behavioral exits non-zero on a serious behavioral finding", %{timeline_path: path} do
+      write_pair("home.html", "<div>a</div>", "<div>a</div>")
+
+      capture_io(fn ->
+        assert catch_exit(ReviewTask.run(["--timeline", path, "--fail-on-behavioral"])) == {:shutdown, 1}
+      end)
+    end
+
+    test "--fail-on never still lets --fail-on-behavioral exit", %{timeline_path: path} do
+      write_pair("home.html", "<div>a</div>", "<div>a</div>")
+
+      capture_io(fn ->
+        assert catch_exit(ReviewTask.run(["--timeline", path, "--fail-on", "never", "--fail-on-behavioral"])) ==
+                 {:shutdown, 1}
+      end)
+    end
+  end
+
+  describe "JSON output (issue #143)" do
+    test "--format json emits a single parseable object with the report shape" do
+      write_pair("editor.html", "<div>Save</div>", ~s(<div phx-click="save">Save</div>))
+
+      output =
+        capture_io(fn ->
+          assert catch_exit(ReviewTask.run(["--format", "json"])) == {:shutdown, 1}
+        end)
+
+      json = Jason.decode!(output)
+
+      assert is_binary(json["excessibility_version"])
+      assert json["summary"]["block"] == 1
+      assert is_list(json["warnings"])
+      assert is_list(json["behavioral"])
+
+      change = Enum.find(json["changes"], &(&1["view"] == "editor.html"))
+      assert change["tier"] == "block"
+
+      finding = Enum.find(change["findings"], &(&1["rule"] == "phx_click_on_non_interactive"))
+      assert finding["source"] == "live_view_rules"
+      assert finding["severity"] in ["serious", "critical"]
+      assert is_binary(finding["selector"])
+    end
+
+    test "--json is an alias for --format json" do
+      write_pair("home.html", "<div>a</div>", "<div>a</div>")
+
+      output = capture_io(fn -> ReviewTask.run(["--json"]) end)
+
+      assert {:ok, decoded} = Jason.decode(output)
+      assert Map.has_key?(decoded, "summary")
+      # The human report text must not leak onto stdout in JSON mode.
+      refute output =~ "Blast radius"
+    end
+
+    test "behavioral findings appear in JSON with a telemetry source", %{} do
+      timeline_path = Path.join(@output_dir, "json_timeline.json")
+
+      File.write!(
+        timeline_path,
+        ~s({"test":"x","duration_ms":100,"timeline":[
+          {"sequence":0,"event":"mount","view_module":"AppWeb.Index","total_memory":300000},
+          {"sequence":1,"event":"render","view_module":"AppWeb.Index","total_memory":5000000},
+          {"sequence":2,"event":"render","view_module":"AppWeb.Index","total_memory":5100000}
+        ]})
+      )
+
+      on_exit(fn -> File.rm_rf!(timeline_path) end)
+      write_pair("home.html", "<div>a</div>", "<div>a</div>")
+
+      output = capture_io(fn -> ReviewTask.run(["--json", "--timeline", timeline_path]) end)
+      json = Jason.decode!(output)
+
+      assert [finding | _] = json["behavioral"]
+      assert finding["source"] == "telemetry"
+      assert finding["rule"] == "memory"
+      assert finding["severity"] == "serious"
+    end
+
+    test "the stale-snapshot notice moves into the JSON warnings array" do
+      write_pair("home.html", "<div>a</div>", "<div>a</div>")
+      File.touch!(Path.join(@snapshot_dir, "home.html"), {{2020, 1, 1}, {0, 0, 0}})
+
+      output = capture_io(fn -> ReviewTask.run(["--json"]) end)
+      json = Jason.decode!(output)
+
+      assert Enum.any?(json["warnings"], &(&1 =~ "predate the baseline"))
+      # No bare WARNING line on stdout to corrupt the JSON.
+      refute output =~ "WARNING:"
+    end
+  end
+
   describe "axe-core findings" do
     setup :verify_on_exit!
 
