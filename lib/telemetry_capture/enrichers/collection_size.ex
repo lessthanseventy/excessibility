@@ -28,6 +28,11 @@ defmodule Excessibility.TelemetryCapture.Enrichers.CollectionSize do
   def name, do: :collection_size
   def cost, do: :expensive
 
+  # Library structs whose internals are machinery, not app state. Stopping
+  # here keeps changeset internals and timestamp microsecond tuples out of the
+  # tracked list paths even when assign filtering is disabled (issue #142).
+  @opaque_structs [Date, Time, DateTime, NaiveDateTime, Decimal, Ecto.Changeset]
+
   def enrich(assigns, _opts) do
     {list_sizes, total_items} = count_lists(assigns, [])
 
@@ -44,6 +49,8 @@ defmodule Excessibility.TelemetryCapture.Enrichers.CollectionSize do
       total_list_items: total_items
     }
   end
+
+  defp count_lists(%mod{}, _path) when mod in @opaque_structs, do: {%{}, 0}
 
   defp count_lists(value, path) when is_struct(value) do
     value

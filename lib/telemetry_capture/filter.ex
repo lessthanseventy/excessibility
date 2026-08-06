@@ -6,6 +6,26 @@ defmodule Excessibility.TelemetryCapture.Filter do
   and other noise to improve signal-to-noise ratio for debugging.
   """
 
+  # Library structs that are machinery, not actionable app state. Descending
+  # into them tracks changeset internals (`.types`, `.mappings`, `.validations`)
+  # and explodes timestamp microsecond tuples into 2-element lists, which the
+  # data_growth analyzer then mistakes for app state (issue #142). They are
+  # collapsed to a scalar leaf instead. Referenced by module atom so Ecto and
+  # Decimal stay optional deps (matching the NotLoaded handling below).
+  @opaque_structs [Date, Time, DateTime, NaiveDateTime, Decimal, Ecto.Changeset]
+
+  @doc false
+  def opaque_struct?(value) when is_struct(value), do: value.__struct__ in @opaque_structs
+  def opaque_struct?(_), do: false
+
+  @doc false
+  def opaque_leaf(struct) do
+    case struct.__struct__ do
+      Ecto.Changeset -> "#Ecto.Changeset<valid?: #{inspect(Map.get(struct, :valid?))}>"
+      _ -> to_string(struct)
+    end
+  end
+
   @doc """
   Removes Ecto-related metadata from assigns.
 
@@ -91,6 +111,10 @@ defmodule Excessibility.TelemetryCapture.Filter do
     |> filter_functions()
   end
 
+  def filter_functions(%mod{} = struct) when mod in @opaque_structs do
+    opaque_leaf(struct)
+  end
+
   def filter_functions(struct) when is_struct(struct) do
     struct
     |> Map.from_struct()
@@ -102,6 +126,9 @@ defmodule Excessibility.TelemetryCapture.Filter do
       cond do
         is_function(value) ->
           acc
+
+        opaque_struct?(value) ->
+          Map.put(acc, key, opaque_leaf(value))
 
         is_struct(value) ->
           # Convert struct to map and filter recursively
