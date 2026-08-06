@@ -159,7 +159,7 @@ This generates `timeline.json` with event flow, memory usage, and pattern analys
 - `cascade_effect` - Detects rapid event cascades (use `--analyze=cascade_effect`)
 - `hypothesis` - Root cause suggestions (use `--analyze=hypothesis`)
 - `code_pointer` - Maps events to source locations (use `--analyze=code_pointer`)
-- `message_flooding` - Detects high-frequency handle_info patterns (dormant: LiveView emits no handle_info telemetry yet, use `--analyze=message_flooding`)
+- `message_flooding` - Detects high-frequency handle_info patterns (needs the opt-in `on_mount Excessibility.TelemetryCapture` hook, then `--analyze=message_flooding`)
 - `accessibility_correlation` - Flags state changes with a11y implications (use `--analyze=accessibility_correlation`)
 - `component_rerender` - Detects unnecessary component re-renders (use `--analyze=component_rerender`)
 - `push_event_volume` - Detects excessive push_event volume to JS hooks (use `--analyze=push_event_volume`)

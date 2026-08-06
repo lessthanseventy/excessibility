@@ -66,8 +66,12 @@ each event ran. Capture attaches to each configured repo's `[..., :query]`
 telemetry event and attributes queries to the in-flight LiveView event — set
 `config :excessibility, ecto_repos: [MyApp.Repo]` to enable it. Without it,
 capture logs that N+1 detection is off rather than reporting an empty section.
-`message_flooding` is dormant (opt-in) until the capture layer emits
-`handle_info` events, which LiveView does not provide by default.
+`message_flooding` (handle_info floods) needs the opt-in
+`Excessibility.TelemetryCapture` `on_mount` hook — LiveView emits no
+`handle_info` telemetry, so the hook (`attach_hook/4` on the `:handle_info`
+stage) is the seam. Wire it in one line on a router `live_session`:
+`live_session :default, on_mount: [Excessibility.TelemetryCapture]`, then
+enable the analyzer with `--analyze=message_flooding`.
 
 **Example:**
 ```elixir
