@@ -159,6 +159,11 @@ defmodule Mix.Tasks.Excessibility.Debug do
         ]
       end
 
+    # Carry the analyzer-selection flags through: parse_analyzer_selection reads
+    # these off filter_opts, so without them --analyze/--no-analyze/--profile
+    # are silently ignored and the run always falls back to the default set.
+    filter_opts = Keyword.merge(filter_opts, Keyword.take(opts, [:analyze, :no_analyze, :profile]))
+
     # Parse highlight fields if provided
     case Keyword.get(opts, :highlight) do
       nil ->
