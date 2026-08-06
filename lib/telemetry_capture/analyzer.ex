@@ -63,6 +63,27 @@ defmodule Excessibility.TelemetryCapture.Analyzer do
         }
 
   @doc """
+  Splits a timeline's events into per-view sublists, preserving order.
+
+  A journey test drives several LiveViews, so a raw timeline interleaves
+  unrelated processes. Analyzers that compare *consecutive* events (memory
+  growth, render efficiency) must not treat a `UserLoginLive` mount sitting
+  next to a `MarketplaceLive.Index` render as a transition — that's an
+  artifact of the interleaving, not the code (issue #142).
+
+  Events are grouped by `:view_module`; groups appear in first-seen order
+  and events keep their relative order within a group. Events without a
+  `:view_module` (older fixtures, single-view timelines) collapse to one
+  group, so the ungrouped case is unchanged.
+  """
+  @spec group_by_view([map()]) :: [[map()]]
+  def group_by_view(events) do
+    order = events |> Enum.map(&Map.get(&1, :view_module)) |> Enum.uniq()
+    grouped = Enum.group_by(events, &Map.get(&1, :view_module))
+    Enum.map(order, &Map.fetch!(grouped, &1))
+  end
+
+  @doc """
   Gets required enrichers for an analyzer module.
   Returns empty list if not defined.
   """

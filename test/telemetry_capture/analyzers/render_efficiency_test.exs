@@ -44,9 +44,17 @@ defmodule Excessibility.TelemetryCapture.Analyzers.RenderEfficiencyTest do
     end
 
     test "detects wasted render with no changes" do
+      # 6 renders repainting identical state. The first is the initial paint
+      # (never wasted); the other 5 are wasted — enough samples for the
+      # percentage-based critical (issue #142: a % claim over a couple of
+      # renders is sample-size noise).
       timeline =
         build_timeline([
           %{event: "mount", changes: nil},
+          %{event: "render", changes: %{}},
+          %{event: "render", changes: %{}},
+          %{event: "render", changes: %{}},
+          %{event: "render", changes: %{}},
           %{event: "render", changes: %{}},
           %{event: "render", changes: %{}}
         ])
@@ -54,18 +62,38 @@ defmodule Excessibility.TelemetryCapture.Analyzers.RenderEfficiencyTest do
       result = RenderEfficiency.analyze(timeline, [])
 
       assert result.findings != []
-      # 100% wasted (2/2) triggers critical threshold (>30%)
       assert Enum.any?(result.findings, &(&1.severity == :critical))
-      assert result.stats.wasted_render_count == 2
+      assert result.stats.wasted_render_count == 5
+    end
+
+    test "a render following a real state change is not wasted (issue #142)" do
+      # LiveView captures a handle_event and its render as two events, so the
+      # render's own diff is empty even though the interaction changed state.
+      timeline =
+        build_timeline([
+          %{event: "mount", changes: nil},
+          %{event: "render", changes: %{}},
+          %{event: "handle_event:add", changes: %{cart: {[], [1]}}},
+          %{event: "render", changes: %{}},
+          %{event: "handle_event:add", changes: %{cart: {[1], [2, 1]}}},
+          %{event: "render", changes: %{}}
+        ])
+
+      result = RenderEfficiency.analyze(timeline, [])
+
+      assert result.stats.wasted_render_count == 0
+      assert result.findings == []
     end
 
     test "critical when >30% wasted" do
-      # 4 renders, 2 wasted = 50%
+      # 6 renders, 3 wasted = 50%, above the minimum sample size (issue #142)
       timeline =
         build_timeline([
           %{event: "render", changes: %{a: {1, 2}}},
           %{event: "render", changes: %{}},
           %{event: "render", changes: %{b: {1, 2}}},
+          %{event: "render", changes: %{}},
+          %{event: "render", changes: %{c: {1, 2}}},
           %{event: "render", changes: %{}}
         ])
 

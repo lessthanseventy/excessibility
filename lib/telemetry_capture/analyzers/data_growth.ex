@@ -43,6 +43,15 @@ defmodule Excessibility.TelemetryCapture.Analyzers.DataGrowth do
 
   @behaviour Excessibility.TelemetryCapture.Analyzer
 
+  alias Excessibility.TelemetryCapture.Analyzer
+
+  # A list going from empty to a single element is normal (issue #142): an
+  # unbounded ratio off a zero baseline (`0 → 1 = ∞x`) isn't a useful
+  # severity input. A from-zero list only warns once it reaches a size worth
+  # a second look; a genuinely large from-zero list still trips the
+  # pagination critical below.
+  @appeared_min 10
+
   def name, do: :data_growth
   def default_enabled?, do: true
   def requires_enrichers, do: [:collection_size]
@@ -52,9 +61,15 @@ defmodule Excessibility.TelemetryCapture.Analyzers.DataGrowth do
   end
 
   def analyze(%{timeline: timeline}, _opts) do
-    list_paths = discover_list_paths(timeline)
-    findings = detect_growth(timeline, list_paths)
-    stats = calculate_stats(list_paths, timeline)
+    # Track each list's size within a single view; a journey test interleaves
+    # LiveViews, so a path that goes `0 → 1` in one view with unrelated events
+    # between must not be compared across the gap (issue #142).
+    findings =
+      timeline
+      |> Analyzer.group_by_view()
+      |> Enum.flat_map(fn events -> detect_growth(events, discover_list_paths(events)) end)
+
+    stats = calculate_stats(discover_list_paths(timeline), timeline)
 
     %{
       findings: findings,
@@ -121,7 +136,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.DataGrowth do
       critical_growth?(growth_multiplier, max_step_growth, last_size) ->
         [build_finding(:critical, path, sizes, growth_multiplier, last_size, sequences)]
 
-      warning_growth?(growth_multiplier) ->
+      warning_growth?(growth_multiplier, last_size) ->
         [build_finding(:warning, path, sizes, growth_multiplier, last_size, sequences)]
 
       true ->
@@ -134,9 +149,10 @@ defmodule Excessibility.TelemetryCapture.Analyzers.DataGrowth do
       (last_size > 100 and (growth_multiplier == :infinity or growth_multiplier >= 3))
   end
 
-  defp warning_growth?(growth_multiplier) do
-    growth_multiplier == :infinity or growth_multiplier >= 3
-  end
+  # A from-zero list (`:infinity` multiplier) only warns once it has grown to
+  # a size worth a second look — `0 → 1` is just an item appearing (#142).
+  defp warning_growth?(:infinity, last_size), do: last_size >= @appeared_min
+  defp warning_growth?(growth_multiplier, _last_size), do: growth_multiplier >= 3
 
   defp build_finding(severity, path, sizes, growth_multiplier, last_size, sequences) do
     suggest_pagination? = severity == :critical and last_size > 100

@@ -42,6 +42,14 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Performance do
 
   @behaviour Excessibility.TelemetryCapture.Analyzer
 
+  # On a short timeline *some* event is always the majority of total time and
+  # some event is always the relative outlier — that's a statement about
+  # sample size, not the code (issue #142: a 40 ms first mount reported as
+  # "6.7x average" and "60% of total time"). Slow/bottleneck findings
+  # therefore require an absolute duration floor; genuinely slow events
+  # (>1000 ms) still escalate on their own.
+  @min_notable_ms 100
+
   def name, do: :performance
   def default_enabled?, do: true
   def requires_enrichers, do: [:duration]
@@ -133,7 +141,22 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Performance do
       multiplier = if stats.avg_duration > 0, do: duration / stats.avg_duration, else: 0.0
 
       cond do
-        duration > 1000 or duration > threshold_critical ->
+        # A genuinely slow event escalates regardless of the rest of the run.
+        duration > 1000 ->
+          [
+            %{
+              severity: :critical,
+              message: "Very slow event (#{duration}ms, #{format_multiplier(multiplier)}x average)",
+              events: [event.sequence],
+              metadata: %{duration_ms: duration, multiplier: round_float(multiplier, 1)}
+            }
+          ]
+
+        # Below the floor, "Nx average" is sample-size noise, not a problem.
+        duration < @min_notable_ms ->
+          []
+
+        duration > threshold_critical ->
           [
             %{
               severity: :critical,
@@ -165,7 +188,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Performance do
     Enum.flat_map(timeline, fn event ->
       duration = Map.get(event, :event_duration_ms)
 
-      if is_nil(duration) or duration <= threshold do
+      if is_nil(duration) or duration <= threshold or duration < @min_notable_ms do
         []
       else
         percentage = round(duration / stats.total_duration * 100)
