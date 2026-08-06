@@ -6,11 +6,15 @@ defmodule Excessibility.TelemetryCapture do
   snapshots when LiveView events occur, with no test code changes required.
   """
 
+  alias Excessibility.TelemetryCapture.Enrichers.EctoQueries
   alias Excessibility.TelemetryCapture.Formatter
   alias Excessibility.TelemetryCapture.Registry
   alias Excessibility.TelemetryCapture.Timeline
 
   require Logger
+
+  @ecto_handler_id "excessibility-ecto-capture"
+  @ecto_process_key :excessibility_ecto_queries
 
   @doc """
   Attaches telemetry handlers for automatic snapshot capture.
@@ -34,6 +38,8 @@ defmodule Excessibility.TelemetryCapture do
       &handle_event/4,
       nil
     )
+
+    attach_ecto()
   end
 
   @doc """
@@ -41,6 +47,81 @@ defmodule Excessibility.TelemetryCapture do
   """
   def detach do
     :telemetry.detach("excessibility-capture")
+    :telemetry.detach(@ecto_handler_id)
+  rescue
+    _ -> :ok
+  end
+
+  # Ecto queries fire in the LiveView process while it handles an event, but
+  # the enrichment that reads them runs post-hoc from ETS snapshots — so we
+  # accumulate queries in the emitting process's dictionary and flush them
+  # onto each captured event (issue #147). Without configured repos there is
+  # no query event to attach to, so ecto_query_analysis stays dark; say so
+  # once instead of silently reporting a green (empty) N+1 section.
+  defp attach_ecto do
+    case configured_repos() do
+      [] ->
+        Logger.info(
+          "Excessibility: ecto_query_analysis is enabled but no :ecto_repos are configured, " <>
+            "so N+1 detection is off. Set `config :excessibility, ecto_repos: [MyApp.Repo]`."
+        )
+
+      _repos ->
+        :telemetry.attach_many(@ecto_handler_id, ecto_query_events(), &handle_ecto_query/4, nil)
+    end
+
+    :ok
+  rescue
+    # A misconfigured/unstarted repo must never break capture.
+    error ->
+      Logger.warning("Excessibility: could not attach Ecto query capture: #{inspect(error)}")
+      :ok
+  end
+
+  defp configured_repos do
+    Application.get_env(:excessibility, :ecto_repos, [])
+  end
+
+  @doc """
+  The Ecto `[..., :query]` telemetry events for the configured `:ecto_repos`.
+  """
+  def ecto_query_events do
+    Enum.map(configured_repos(), &query_event/1)
+  end
+
+  # An Ecto repo emits queries at `telemetry_prefix ++ [:query]`. The prefix
+  # defaults to the repo module's segments as atoms (MyApp.Repo -> [:my_app,
+  # :repo]); a repo that overrides `:telemetry_prefix` is honored.
+  defp query_event(repo) do
+    prefix =
+      case repo_telemetry_prefix(repo) do
+        nil -> repo |> Module.split() |> Enum.map(&(&1 |> Macro.underscore() |> String.to_atom()))
+        prefix -> prefix
+      end
+
+    prefix ++ [:query]
+  end
+
+  defp repo_telemetry_prefix(repo) do
+    if function_exported?(repo, :config, 0), do: repo.config()[:telemetry_prefix]
+  rescue
+    _ -> nil
+  end
+
+  defp handle_ecto_query(_event, measurements, metadata, _config) do
+    record = EctoQueries.build_query_record(measurements, metadata)
+    Process.put(@ecto_process_key, [record | Process.get(@ecto_process_key, [])])
+  end
+
+  @doc """
+  Returns and clears the Ecto queries accumulated in the current process
+  since the last flush, oldest first. Called at each captured event so
+  queries are attributed to the event that ran them.
+  """
+  def flush_ecto_queries do
+    queries = @ecto_process_key |> Process.get([]) |> Enum.reverse()
+    Process.delete(@ecto_process_key)
+    queries
   end
 
   @doc """
@@ -76,8 +157,9 @@ defmodule Excessibility.TelemetryCapture do
     if socket do
       clean_assigns = extract_clean_assigns(socket)
       view_module = extract_view_module(socket, metadata)
+      ecto_queries = flush_ecto_queries()
 
-      store_snapshot(event_type, clean_assigns, view_module, metadata, measurements)
+      store_snapshot(event_type, clean_assigns, view_module, metadata, measurements, ecto_queries)
     else
       Logger.debug("Excessibility: No socket in metadata for #{event_type}")
     end
@@ -108,7 +190,7 @@ defmodule Excessibility.TelemetryCapture do
     end
   end
 
-  defp store_snapshot(event_type, clean_assigns, view_module, metadata, measurements) do
+  defp store_snapshot(event_type, clean_assigns, view_module, metadata, measurements, ecto_queries) do
     key = {DateTime.utc_now(), :erlang.unique_integer([:monotonic])}
 
     snapshot = %{
@@ -117,7 +199,8 @@ defmodule Excessibility.TelemetryCapture do
       timestamp: DateTime.utc_now(),
       view_module: view_module,
       metadata_keys: Map.keys(metadata),
-      measurements: measurements
+      measurements: measurements,
+      ecto_queries: ecto_queries
     }
 
     :ets.insert(:excessibility_snapshots, {key, snapshot})
