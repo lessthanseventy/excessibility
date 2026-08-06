@@ -183,9 +183,13 @@ defmodule Excessibility.Review do
   # — unlike `SnapshotDiff.scan_sequence/2`, which diffs consecutive
   # snapshots within one run and keeps it unconditionally.
   defp content_change_findings(baseline_html, current_html, opts) do
-    if Keyword.get(opts, :content_diff, false),
-      do: SnapshotDiff.live_region_findings(baseline_html, current_html, opts),
-      else: []
+    if Keyword.get(opts, :content_diff, false) do
+      baseline_html
+      |> SnapshotDiff.live_region_findings(current_html, opts)
+      |> Enum.map(&Map.put(&1, :source, :live_view_rules))
+    else
+      []
+    end
   end
 
   # Rule violations (LiveView rules + axe) present in the current snapshot
@@ -219,6 +223,7 @@ defmodule Excessibility.Review do
     html
     |> LiveViewRules.scan(opts)
     |> Map.fetch!(:findings)
+    |> Enum.map(&Map.put(&1, :source, :live_view_rules))
   end
 
   # Selectors embed DOM ids, and Phoenix idiomatically derives those from
@@ -270,7 +275,8 @@ defmodule Excessibility.Review do
         rule: violation.id,
         selector: Enum.join(node.target, " "),
         severity: violation.impact || :moderate,
-        message: violation.help
+        message: violation.help,
+        source: :axe
       }
     end
   end

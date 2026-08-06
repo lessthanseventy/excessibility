@@ -23,6 +23,15 @@ defmodule Mix.Tasks.Excessibility.Review do
       mix excessibility.review --fail-on review
       mix excessibility.review --fail-on never
 
+      # Emit one machine-readable JSON object on stdout instead of the human
+      # report (for CI/PR bots — see the schema below). --json is an alias.
+      mix excessibility.review --format json
+
+      # Also fail the build on a serious *behavioral* finding. Off by default:
+      # behavioral findings have no baseline (they're absolute measurements of
+      # a single run), so they're advisory unless you opt in.
+      mix excessibility.review --timeline test/excessibility/timeline.json --fail-on-behavioral
+
       # Fold in behavioral findings from a telemetry timeline (N+1 queries,
       # dead state, render thrash) captured by `mix excessibility.debug`
       mix excessibility.review --timeline test/excessibility/timeline.json --judge
@@ -55,18 +64,39 @@ defmodule Mix.Tasks.Excessibility.Review do
   def run(args) do
     {opts, _argv, _invalid} =
       OptionParser.parse(args,
-        strict: [fail_on: :string, judge: :boolean, timeline: :string, axe: :boolean, content_diff: :boolean]
+        strict: [
+          fail_on: :string,
+          fail_on_behavioral: :boolean,
+          judge: :boolean,
+          timeline: :string,
+          axe: :boolean,
+          content_diff: :boolean,
+          format: :string,
+          json: :boolean
+        ]
       )
 
     fail_on = parse_fail_on(opts[:fail_on])
+    fail_on_behavioral? = Keyword.get(opts, :fail_on_behavioral, false)
+    json? = json_output?(opts)
 
-    warn_if_stale()
+    stale_warning = stale_warning()
 
     report = Review.review(review_opts(opts))
     report = if Keyword.get(opts, :judge, false), do: Review.judge_changes(report), else: report
 
-    print_report(report)
-    maybe_exit(report, fail_on)
+    if json? do
+      report |> with_run_warnings(stale_warning) |> print_json()
+    else
+      if stale_warning, do: Mix.shell().info(stale_warning <> "\n")
+      print_report(report)
+    end
+
+    maybe_exit(report, fail_on, fail_on_behavioral?)
+  end
+
+  defp json_output?(opts) do
+    Keyword.get(opts, :json, false) or opts[:format] == "json"
   end
 
   # Load a telemetry timeline (mix excessibility.debug writes timeline.json) so
@@ -99,17 +129,26 @@ defmodule Mix.Tasks.Excessibility.Review do
 
   # A report generated from snapshots older than the baseline describes a
   # previous run, not the current change — say so instead of silently
-  # reporting stale numbers.
-  defp warn_if_stale do
+  # reporting stale numbers. Returns the warning text (or nil) so both the
+  # human report and the JSON output can surface it.
+  defp stale_warning do
     with {:ok, newest_snapshot} <- newest_mtime("html_snapshots"),
          {:ok, newest_baseline} <- newest_mtime("baseline"),
          true <- newest_snapshot < newest_baseline do
-      Mix.shell().info(
-        "WARNING: current snapshots predate the baseline — run `mix test` to refresh them before trusting this report.\n"
-      )
+      "WARNING: current snapshots predate the baseline — run `mix test` to refresh them before trusting this report."
     else
-      _ -> :ok
+      _ -> nil
     end
+  end
+
+  # In JSON mode the stale-snapshot notice belongs in the report's warnings
+  # array, not on stdout (which must carry only the JSON object). The
+  # "WARNING: " prefix is stripped so the array holds prose, not log lines.
+  defp with_run_warnings(report, nil), do: report
+
+  defp with_run_warnings(report, stale_warning) do
+    text = String.replace_prefix(stale_warning, "WARNING: ", "")
+    Map.update(report, :warnings, [text], &[text | &1])
   end
 
   defp newest_mtime(subdir) do
@@ -213,19 +252,75 @@ defmodule Mix.Tasks.Excessibility.Review do
   defp tier_rank(:review), do: 1
   defp tier_rank(:auto), do: 2
 
-  defp maybe_exit(report, fail_on) do
-    block? = report.summary.block > 0 or behavioral_serious?(report)
+  # Accessibility tiers gate the build via --fail-on (default :block).
+  # Behavioral findings are advisory by default (they have no baseline, so
+  # they're absolute single-run measurements, issue #142) and only gate the
+  # build when the user opts in with --fail-on-behavioral.
+  defp maybe_exit(report, fail_on, fail_on_behavioral?) do
+    a11y_block? = report.summary.block > 0
+    behavioral_block? = fail_on_behavioral? and behavioral_serious?(report)
 
     cond do
-      fail_on == :block and block? -> exit({:shutdown, 1})
-      fail_on == :review and (block? or report.summary.review > 0) -> exit({:shutdown, 1})
+      behavioral_block? -> exit({:shutdown, 1})
+      fail_on == :block and a11y_block? -> exit({:shutdown, 1})
+      fail_on == :review and (a11y_block? or report.summary.review > 0) -> exit({:shutdown, 1})
       true -> :ok
     end
   end
 
-  # A critical analyzer finding (normalized to :serious) fails the run even
-  # without --judge, the same as a serious accessibility regression.
   defp behavioral_serious?(report) do
     Enum.any?(Map.get(report, :behavioral, []), &(&1.severity == :serious))
+  end
+
+  # ── JSON output (issue #143) ───────────────────────────────────────
+  #
+  # One object on stdout so CI can consume the report without scraping the
+  # human-readable text. Rule ids and severities are atoms internally, so
+  # they're stringified on the way out; each finding carries a `source`
+  # (`live_view_rules` / `axe` / `telemetry`) that the printed report only
+  # implies.
+  defp print_json(report) do
+    report
+    |> json_map()
+    |> Jason.encode!(pretty: true)
+    |> Mix.shell().info()
+  end
+
+  defp json_map(report) do
+    %{
+      excessibility_version: to_string(Application.spec(:excessibility, :vsn)),
+      summary: report.summary,
+      warnings: Map.get(report, :warnings, []),
+      behavioral: Enum.map(Map.get(report, :behavioral, []), &json_behavioral/1),
+      changes: Enum.map(report.changes, &json_change/1)
+    }
+  end
+
+  defp json_behavioral(finding) do
+    %{
+      rule: to_string(finding.rule),
+      severity: to_string(finding.severity),
+      source: to_string(Map.get(finding, :source, :telemetry)),
+      message: finding.message
+    }
+  end
+
+  defp json_change(change) do
+    %{
+      view: change.view,
+      tier: to_string(change.tier),
+      region_count: change.region_count,
+      findings: Enum.map(change.findings, &json_finding/1)
+    }
+  end
+
+  defp json_finding(finding) do
+    %{
+      rule: to_string(finding.rule),
+      severity: to_string(finding.severity),
+      source: to_string(Map.get(finding, :source, :live_view_rules)),
+      selector: Map.get(finding, :selector),
+      message: finding.message
+    }
   end
 end
