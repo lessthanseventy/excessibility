@@ -22,7 +22,8 @@ Excessibility helps you test your Phoenix apps for accessibility (WCAG complianc
 2. **After tests**, run `mix excessibility` to check all snapshots with axe-core for WCAG violations
 3. **Lock baselines** with `mix excessibility.baseline` when snapshots represent a known-good state
 4. **Compare changes** with `mix excessibility.compare` to review what changed and approve/reject
-5. **In CI**, axe-core reports accessibility violations alongside your test failures
+5. **Review the blast radius** with `mix excessibility.review` to see which accessibility issues a change newly introduced (JSON output for CI via `--format json`)
+6. **In CI**, axe-core reports accessibility violations alongside your test failures
 
 ## LiveView-Aware Rules
 
@@ -519,6 +520,79 @@ mix excessibility.compare --keep good   # Keep all baselines (reject all changes
 mix excessibility.compare --keep bad    # Accept all new versions as baseline
 ```
 
+## Blast-Radius Review
+
+Where `mix excessibility` checks each snapshot in isolation, `mix excessibility.review` answers a sharper question — *what did this change actually do?* It diffs every current snapshot against its baseline and, per view, reports the regions that changed and the accessibility findings the change **newly introduced** (axe-core violations + LiveView rules), each with a risk tier:
+
+- `block` — a new critical/serious issue (e.g. a keyboard-inaccessible control)
+- `review` — a new moderate/minor issue; worth a human glance
+- `auto` — rendering changed but introduced no accessibility issues
+
+```bash
+# Generate/refresh snapshots, then review against the baseline
+mix test
+mix excessibility.review
+
+# Fail the build on :block (default), :review, or never
+mix excessibility.review --fail-on review
+mix excessibility.review --fail-on never
+
+# Skip the axe-core browser scans and review on the LiveView rules only
+mix excessibility.review --no-axe
+```
+
+### Machine-readable output for CI
+
+Pass `--format json` (or `--json`) to emit a single JSON object on stdout instead of the human report — a stable API for CI and PR bots, so you never scrape printed text:
+
+```bash
+mix excessibility.review --format json
+```
+
+```json
+{
+  "excessibility_version": "0.16.0",
+  "summary": { "block": 1, "review": 0, "auto": 55 },
+  "warnings": [],
+  "behavioral": [],
+  "changes": [
+    {
+      "view": "checkout_review.html",
+      "tier": "block",
+      "region_count": 1,
+      "findings": [
+        {
+          "rule": "reveal_without_announcement",
+          "severity": "serious",
+          "source": "live_view_rules",
+          "selector": "div#cap-reached-banner",
+          "message": "..."
+        }
+      ]
+    }
+  ]
+}
+```
+
+Every finding carries a `source` — `live_view_rules`, `axe`, or `telemetry` — so a consumer can tell which layer produced it (and, when axe degrades, that the results are rules-only). The exit code is unchanged in JSON mode, so CI can gate on the exit status and read the JSON for detail.
+
+### Behavioral findings (telemetry)
+
+With `--timeline`, the review folds in behavioral findings from a telemetry timeline captured by `mix excessibility.debug` — memory leaks, unbounded list growth, render thrash, N+1 queries:
+
+```bash
+mix excessibility.debug test/my_journey_test.exs        # writes test/excessibility/timeline.json
+mix excessibility.review --timeline test/excessibility/timeline.json
+```
+
+Behavioral findings are **advisory by default**. Unlike accessibility findings — which are a true delta against the baseline — they have no baseline and are absolute measurements of a single run, so they don't fail the build. Opt in with `--fail-on-behavioral`:
+
+```bash
+mix excessibility.review --timeline test/excessibility/timeline.json --fail-on-behavioral
+```
+
+The analyzers group events by LiveView before comparing, so a journey test that drives several LiveViews doesn't produce cross-view artifacts (a freshly-mounted view sitting next to a loaded one is not "memory growth").
+
 ## Configuration
 
 All configuration goes in `test/test_helper.exs` or `config/test.exs`:
@@ -592,6 +666,10 @@ Screenshots are saved alongside HTML files with `.png` extension. Playwright is 
 | `mix excessibility.compare` | Compare snapshots against baseline, resolve diffs interactively |
 | `mix excessibility.compare --keep good` | Keep all baseline versions (reject changes) |
 | `mix excessibility.compare --keep bad` | Accept all new versions as baseline |
+| `mix excessibility.review` | Report the accessibility blast radius of changes vs the baseline |
+| `mix excessibility.review --format json` | Emit the review as a single JSON object for CI (`--json` alias) |
+| `mix excessibility.review --fail-on block\|review\|never` | Choose which tier fails the build (default: `block`) |
+| `mix excessibility.review --timeline <file> --fail-on-behavioral` | Fold in behavioral findings and gate on serious ones |
 | `mix excessibility.debug [test args]` | Run tests with telemetry, generate debug report (passthrough to mix test) |
 | `mix excessibility.debug [test args] --format=json` | Output debug report as JSON |
 | `mix excessibility.debug [test args] --format=package` | Create debug package directory |

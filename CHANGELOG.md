@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0] - 2026-08-06
+
+### Added
+- **`mix excessibility.review --format json`** (`--json` alias) ([#143](https://github.com/lessthanseventy/excessibility/issues/143)). Emits the review as a single JSON object on stdout — `excessibility_version`, `summary`, `warnings`, `behavioral`, and per-change `view`/`tier`/`region_count`/`findings` — so CI and PR bots consume a stable API instead of scraping the printed report. Every finding carries a `source` (`live_view_rules` / `axe` / `telemetry`), which makes "axe degraded, so these results are rules-only" expressible without matching prose. The human report stays the default; the stale-snapshot notice moves into the `warnings` array so stdout is only the JSON object.
+- **`mix excessibility.review --fail-on-behavioral`** ([#142](https://github.com/lessthanseventy/excessibility/issues/142)). Opt in to failing the build on a serious behavioral (telemetry) finding.
+
+### Changed
+- **Behavioral findings are advisory by default** ([#142](https://github.com/lessthanseventy/excessibility/issues/142)). A serious behavioral finding (memory bloat, render thrash, etc.) no longer fails `mix excessibility.review`. Unlike accessibility findings — a true delta against the baseline — behavioral findings are absolute measurements of a single run, so they are advisory unless you opt in with `--fail-on-behavioral`. Accessibility tiers still gate the build via `--fail-on` (default `block`).
+
+### Fixed
+- **Behavioral analyzers no longer compare across different LiveViews** ([#142](https://github.com/lessthanseventy/excessibility/issues/142)). A journey test drives several LiveViews, so the timeline interleaves unrelated processes; the analyzers compared consecutive events without grouping by view, producing 5 serious findings (and exit 1) on a healthy 12-event timeline. `memory`, `data_growth`, `render_efficiency`, `state_machine`, and `event_pattern` now group events by `view_module` before any consecutive-event comparison, so a freshly-mounted 220-byte `UserLoginLive` sitting next to a loaded 109 KB render is no longer read as "507x memory growth", and an Index→Login boundary is no longer phantom "keys added/removed" or "unstable state".
+- **Absolute floors alongside ratios** ([#142](https://github.com/lessthanseventy/excessibility/issues/142)). Memory findings require the larger side to clear ~256 KB regardless of ratio (109 KB is an ordinary LiveView heap); a list going `0 → 1` is treated as "appeared", not `∞x` growth. Performance slow/bottleneck findings require an absolute duration floor, so a 40 ms first mount that is "60% of total time" on a short timeline is not flagged.
+- **`render_efficiency` no longer flags healthy renders as wasted** ([#142](https://github.com/lessthanseventy/excessibility/issues/142)). LiveView captures a `handle_event` and its `render` as two events, so the render's own diff is empty even though the interaction changed state. Wasted renders are now measured against the *previous render in the same view*, and the initial paint is never wasted — so a `render_click` that genuinely changed state is not reported as a wasted render.
+- **Consecutive mounts are not flagged as unnecessary re-renders** ([#142](https://github.com/lessthanseventy/excessibility/issues/142)). Repeated mounts come from `LiveViewTest.live/2`'s disconnected+connected double-mount and re-navigation — a capture artifact, not render churn — so `event_pattern`'s rapid-repeat heuristics skip lifecycle events (`mount`, `handle_params`).
+- **Assign traversal stops at opaque library structs** ([#142](https://github.com/lessthanseventy/excessibility/issues/142)). `Ecto.Changeset`, `DateTime`/`Date`/`Time`/`NaiveDateTime`, and `Decimal` collapse to a scalar leaf instead of being walked, so changeset internals (`.types`, `.mappings`, `.validations`) and timestamp microsecond tuples no longer surface as tracked app state in `data_growth`.
+- **Memory growth messages report the actual factor** ([#142](https://github.com/lessthanseventy/excessibility/issues/142)). "Memory grew 0.5x" (which printed `delta/prev`) now reads "grew 1.5x" (`curr/prev`), so the number matches the byte sizes shown alongside it.
+
+
 ## [0.15.3] - 2026-08-05
 
 ### Changed

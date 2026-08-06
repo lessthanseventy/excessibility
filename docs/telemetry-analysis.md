@@ -31,9 +31,24 @@ end
 
 **Purpose:** Detect patterns across complete timelines.
 
-**When they run:** After timeline completion, invoked by `mix excessibility.debug`.
+**When they run:** After timeline completion, invoked by `mix excessibility.debug`
+(and folded into `mix excessibility.review --timeline`).
 
 **Output:** Map with `:findings` (list of issues) and `:stats` (summary data).
+
+**Per-view analysis.** A journey test drives several LiveViews, so a raw
+timeline interleaves unrelated processes. Analyzers that compare consecutive
+events (memory growth, render efficiency, state transitions, event patterns)
+group events by `view_module` first, via `Analyzer.group_by_view/1` — an
+adjacent pair spanning two views is an artifact of the interleaving, not the
+code. Findings also apply absolute floors alongside ratios (e.g. memory
+requires the larger side to clear ~256 KB regardless of ratio) so an ordinary
+heap or a `0 → 1` list isn't flagged.
+
+**In reviews.** When surfaced through `mix excessibility.review`, behavioral
+findings are **advisory by default** — unlike accessibility findings they have
+no baseline, so they're absolute measurements of a single run. They only gate
+the build with `--fail-on-behavioral`.
 
 **Example:**
 ```elixir
@@ -96,7 +111,8 @@ Memory range: 2.3 KB → 890 KB (avg: 145 KB)
 ### Basic Analysis
 
 ```bash
-# Run with default analyzers (currently: memory)
+# Run with the default-enabled analyzers (memory, performance, data_growth,
+# render_efficiency, state_machine, event_pattern, and more)
 mix excessibility.debug test/my_test.exs
 ```
 
