@@ -124,6 +124,70 @@ defmodule Excessibility.TelemetryCapture do
     queries
   end
 
+  @handle_info_hook_id :excessibility_handle_info
+
+  @doc """
+  An **opt-in** `on_mount` hook that records a LiveView's `handle_info`
+  messages as timeline events.
+
+  Phoenix LiveView emits telemetry for `mount`/`handle_params`/`handle_event`/
+  `render` but not for the message-driven callbacks, so there is no global
+  event to attach to (issue #147). This hook is the seam: it uses
+  `Phoenix.LiveView.attach_hook/4` on the `:handle_info` stage, which does
+  need to be installed per LiveView — so it is opt-in, never forced.
+
+  Wire it wherever you want that coverage — a router `live_session` covers
+  every route in the session in one line:
+
+      live_session :default, on_mount: [Excessibility.TelemetryCapture] do
+        # ...routes...
+      end
+
+  or your web module's `live_view/0` to cover every LiveView. It attaches
+  nothing unless telemetry capture is running (`mix excessibility.debug`) and
+  the socket is connected, so it is safe to leave wired in all environments.
+  Pair it with the (also opt-in) `message_flooding` analyzer.
+  """
+  def on_mount(_name, _params, _session, socket) do
+    if capture_running?() and Phoenix.LiveView.connected?(socket) do
+      {:cont, Phoenix.LiveView.attach_hook(socket, @handle_info_hook_id, :handle_info, &handle_info_hook/2)}
+    else
+      {:cont, socket}
+    end
+  end
+
+  defp capture_running? do
+    System.get_env("EXCESSIBILITY_TELEMETRY_CAPTURE") == "true"
+  end
+
+  # Runs before the LiveView's own handle_info (so assigns are pre-callback,
+  # which is fine — message_flooding cares about the event, not the state).
+  defp handle_info_hook(message, socket) do
+    record_handle_info(message, socket)
+    {:cont, socket}
+  end
+
+  defp record_handle_info(message, socket) do
+    clean_assigns = extract_clean_assigns(socket)
+    view_module = extract_view_module(socket, %{})
+    store_snapshot("handle_info:#{message_name(message)}", clean_assigns, view_module, %{}, %{}, flush_ecto_queries())
+  rescue
+    error -> Logger.warning("Excessibility: failed to record handle_info: #{inspect(error)}")
+  end
+
+  # A stable, low-cardinality name for grouping: the atom, or a tagged tuple's
+  # tag (`{:tick, _}` -> `tick`); anything else collapses to "message".
+  defp message_name(message) when is_atom(message), do: message
+
+  defp message_name(message) when is_tuple(message) and tuple_size(message) > 0 do
+    case elem(message, 0) do
+      tag when is_atom(tag) -> tag
+      _ -> "message"
+    end
+  end
+
+  defp message_name(_message), do: "message"
+
   @doc """
   Handles telemetry events and captures snapshots.
   """

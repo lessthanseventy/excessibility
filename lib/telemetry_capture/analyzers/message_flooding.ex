@@ -7,11 +7,14 @@ defmodule Excessibility.TelemetryCapture.Analyzers.MessageFlooding do
 
   > #### Opt-in {: .warning}
   >
-  > This analyzer reads `handle_info:*` timeline events, but Phoenix LiveView
-  > does not emit `handle_info` telemetry and the capture layer does not hook
-  > it, so nothing populates those events yet (issue #147). It is therefore
-  > **not** in the default set — enabling it would imply working coverage
-  > while staying silent. Enable it explicitly once handle_info capture lands.
+  > This analyzer reads `handle_info:*` timeline events. Phoenix LiveView emits
+  > no `handle_info` telemetry, so those events are only captured when you opt
+  > into the `Excessibility.TelemetryCapture` `on_mount` hook (issue #147) —
+  > e.g. `live_session :default, on_mount: [Excessibility.TelemetryCapture]`.
+  > Because that wiring is opt-in, the analyzer is **not** in the default set
+  > (a default-on analyzer with no hook would imply coverage while staying
+  > silent). Enable it explicitly (`--analyze=message_flooding` or via config)
+  > once the hook is wired.
 
   ## Detection
 
@@ -39,7 +42,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.MessageFlooding do
   @total_threshold 20
 
   def name, do: :message_flooding
-  # Opt-in until the capture layer emits handle_info events (issue #147).
+  # Opt-in: needs the (opt-in) TelemetryCapture on_mount hook to have data (#147).
   def default_enabled?, do: false
   def requires_enrichers, do: []
 
@@ -75,11 +78,9 @@ defmodule Excessibility.TelemetryCapture.Analyzers.MessageFlooding do
     events
     |> Enum.chunk_every(@window_threshold, 1, :discard)
     |> Enum.flat_map(fn window ->
-      first_ts = List.first(window).timestamp
-      last_ts = List.last(window).timestamp
-      span_ms = DateTime.diff(last_ts, first_ts, :millisecond)
+      span_ms = window_span_ms(window)
 
-      if span_ms <= @window_ms do
+      if span_ms && span_ms <= @window_ms do
         sequences = Enum.map(window, & &1.sequence)
         info_name = String.replace_prefix(event_type, "handle_info:", "")
 
@@ -102,6 +103,25 @@ defmodule Excessibility.TelemetryCapture.Analyzers.MessageFlooding do
     end)
     |> Enum.take(1)
   end
+
+  # Wall-clock span of a window, using the JSON-safe epoch-ms time. Falls back
+  # to a %DateTime{} timestamp (in-memory timelines and tests); nil if neither
+  # is available, in which case the window is skipped rather than crashing.
+  defp window_span_ms(window) do
+    first_ms = event_ms(List.first(window))
+    last_ms = event_ms(List.last(window))
+    if first_ms && last_ms, do: last_ms - first_ms
+  end
+
+  defp event_ms(event) do
+    case Map.get(event, :timestamp_ms) do
+      ms when is_integer(ms) -> ms
+      _ -> datetime_ms(Map.get(event, :timestamp))
+    end
+  end
+
+  defp datetime_ms(%DateTime{} = datetime), do: DateTime.to_unix(datetime, :millisecond)
+  defp datetime_ms(_), do: nil
 
   defp detect_total_flooding(events) do
     events

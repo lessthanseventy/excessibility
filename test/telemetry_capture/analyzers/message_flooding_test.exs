@@ -49,6 +49,25 @@ defmodule Excessibility.TelemetryCapture.Analyzers.MessageFloodingTest do
       assert finding.message =~ "tick"
     end
 
+    test "uses the JSON-safe timestamp_ms without crashing (issue #147)" do
+      # A timeline loaded from timeline.json has no %DateTime{} — timestamps
+      # serialize to a struct-map that doesn't round-trip. The numeric
+      # timestamp_ms is what survives, and the sliding window must use it.
+      events =
+        for i <- 1..15 do
+          %{
+            sequence: i,
+            event: "handle_info:tick",
+            timestamp_ms: 1_700_000_000_000 + i * 5,
+            duration_since_previous_ms: 5
+          }
+        end
+
+      result = MessageFlooding.analyze(%{timeline: events}, [])
+
+      assert Enum.any?(result.findings, &(&1.message =~ "handle_info(:tick)"))
+    end
+
     test "detects excessive total count of handle_info events" do
       events =
         for i <- 1..25 do
