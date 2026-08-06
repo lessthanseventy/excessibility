@@ -5,17 +5,33 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Performance do
   Detects:
   - Slow events using adaptive thresholds (> mean + 2std_dev)
   - Bottlenecks (events taking >50% of total time)
-  - Very slow events (>1000ms)
+  - Very slow events (over an absolute ceiling, 1000ms by default)
 
   Uses data from the Duration enricher (event_duration_ms) to identify
   performance issues.
+
+  ## What this does *not* catch
+
+  This is a **relative** signal, not a latency budget. Findings fire on
+  outliers (an event much slower than the rest of the run), on the single
+  event that dominates total time, and on anything over the absolute ceiling.
+  **Uniformly slow code is invisible to it:** if every event takes a sluggish
+  400ms, nothing is an outlier, nothing dominates the total, and nothing
+  crosses the ceiling — so the section stays green.
+
+  That is deliberate. These durations come from a test run (ExUnit +
+  `Ecto.Sandbox` + cold first-mounts), so absolute timings are unreliable and
+  an absolute per-event threshold would mostly flag a slow CI box. Treat a
+  green performance section as "no relative regression in this run", not as
+  "fast". If your test timings are representative and you want an absolute
+  budget, lower the ceiling with `config :excessibility, slow_event_ms: 400`.
 
   ## Algorithm
 
   1. Calculate baseline stats (mean, std deviation)
   2. Detect slow events:
      - Warning: Duration > mean + 2std_dev
-     - Critical: Duration > 1000ms OR > mean + 3std_dev
+     - Critical: Duration > `:slow_event_ms` (default 1000ms) OR > mean + 3std_dev
   3. Detect bottlenecks: Events taking >50% of total time
 
   ## Output
@@ -50,6 +66,12 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Performance do
   # (>1000 ms) still escalate on their own.
   @min_notable_ms 100
 
+  # The absolute "very slow" ceiling: an event over this fires regardless of
+  # how the rest of the run looks, so uniformly-slow-but-representative code
+  # can be caught by lowering it (issue: performance is otherwise a relative
+  # signal). Default 1000ms; override with `config :excessibility, slow_event_ms: 400`.
+  @default_slow_event_ms 1000
+
   def name, do: :performance
   def default_enabled?, do: true
   def requires_enrichers, do: [:duration]
@@ -58,14 +80,14 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Performance do
     %{findings: [], stats: %{}}
   end
 
-  def analyze(%{timeline: timeline}, _opts) do
+  def analyze(%{timeline: timeline}, opts) do
     durations = extract_durations(timeline)
 
     if Enum.empty?(durations) do
       %{findings: [], stats: %{}}
     else
       stats = calculate_stats(durations)
-      findings = detect_issues(timeline, stats)
+      findings = detect_issues(timeline, stats, opts)
 
       %{
         findings: findings,
@@ -112,26 +134,32 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Performance do
     :math.sqrt(variance)
   end
 
-  defp detect_issues(timeline, stats) do
-    slow_findings = detect_slow_events(timeline, stats)
+  defp detect_issues(timeline, stats, opts) do
+    slow_findings = detect_slow_events(timeline, stats, slow_event_ms(opts))
     bottleneck_findings = detect_bottlenecks(timeline, stats)
 
     slow_findings ++ bottleneck_findings
   end
 
-  defp detect_slow_events(timeline, stats) do
+  # The absolute ceiling, from opts first (hermetic for callers/tests) then
+  # config (`config :excessibility, slow_event_ms: 400`), default 1000ms.
+  defp slow_event_ms(opts) do
+    Keyword.get(opts, :slow_event_ms) || Application.get_env(:excessibility, :slow_event_ms, @default_slow_event_ms)
+  end
+
+  defp detect_slow_events(timeline, stats, slow_ms) do
     threshold_warning = stats.avg_duration + 2 * stats.std_dev
     threshold_critical = stats.avg_duration + 3 * stats.std_dev
 
     Enum.flat_map(timeline, fn event ->
-      check_event_duration(event, stats, threshold_warning, threshold_critical)
+      check_event_duration(event, stats, threshold_warning, threshold_critical, slow_ms)
     end)
 
-    # Critical: >1000ms OR > mean + 3std_dev
+    # Critical: over the absolute ceiling (:slow_event_ms) OR > mean + 3std_dev
     # Warning: > mean + 2std_dev
   end
 
-  defp check_event_duration(event, stats, threshold_warning, threshold_critical) do
+  defp check_event_duration(event, stats, threshold_warning, threshold_critical, slow_ms) do
     duration = Map.get(event, :event_duration_ms)
 
     if is_nil(duration) do
@@ -142,7 +170,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Performance do
 
       cond do
         # A genuinely slow event escalates regardless of the rest of the run.
-        duration > 1000 ->
+        duration > slow_ms ->
           [
             %{
               severity: :critical,

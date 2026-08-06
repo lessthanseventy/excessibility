@@ -110,6 +110,38 @@ defmodule Excessibility.TelemetryCapture.Analyzers.PerformanceTest do
       assert result.stats == %{}
     end
 
+    test "uniformly slow code is invisible by default (relative signal, not a budget)" do
+      # Every event is a sluggish 400ms: no outlier, no bottleneck, and none
+      # crosses the default 1000ms ceiling — so nothing fires.
+      timeline = %{
+        timeline: [
+          %{sequence: 1, event: "mount", event_duration_ms: 400},
+          %{sequence: 2, event: "handle_event", event_duration_ms: 400},
+          %{sequence: 3, event: "handle_event", event_duration_ms: 400},
+          %{sequence: 4, event: "handle_event", event_duration_ms: 400}
+        ]
+      }
+
+      assert Performance.analyze(timeline, []).findings == []
+    end
+
+    test "lowering the ceiling catches uniformly slow code" do
+      timeline = %{
+        timeline: [
+          %{sequence: 1, event: "mount", event_duration_ms: 400},
+          %{sequence: 2, event: "handle_event", event_duration_ms: 400},
+          %{sequence: 3, event: "handle_event", event_duration_ms: 400},
+          %{sequence: 4, event: "handle_event", event_duration_ms: 400}
+        ]
+      }
+
+      # :slow_event_ms comes from opts (or `config :excessibility, slow_event_ms`).
+      result = Performance.analyze(timeline, slow_event_ms: 300)
+
+      assert Enum.count(result.findings, &(&1.severity == :critical)) == 4
+      assert Enum.all?(result.findings, &(&1.message =~ "Very slow event"))
+    end
+
     test "handles timeline without duration data" do
       timeline = %{
         timeline: [
