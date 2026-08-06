@@ -50,6 +50,25 @@ findings are **advisory by default** — unlike accessibility findings they have
 no baseline, so they're absolute measurements of a single run. They only gate
 the build with `--fail-on-behavioral`.
 
+**Performance is a relative signal.** The `performance` analyzer flags
+outliers (an event much slower than the rest of the run), the single event
+that dominates total time, and anything over an absolute ceiling
+(`:slow_event_ms`, default 1000ms). It does **not** flag uniformly slow code —
+if every event takes 400ms, nothing is an outlier and nothing crosses the
+ceiling. That is deliberate: these are test timings (sandbox, cold mounts),
+not production latency, so absolute per-event thresholds would mostly flag a
+slow CI box. Treat a green performance section as "no relative regression",
+not "fast"; lower `config :excessibility, slow_event_ms: 400` if your timings
+are representative and you want an absolute budget.
+
+**Ecto query capture.** `ecto_query_analysis` (N+1 detection) needs the queries
+each event ran. Capture attaches to each configured repo's `[..., :query]`
+telemetry event and attributes queries to the in-flight LiveView event — set
+`config :excessibility, ecto_repos: [MyApp.Repo]` to enable it. Without it,
+capture logs that N+1 detection is off rather than reporting an empty section.
+`message_flooding` is dormant (opt-in) until the capture layer emits
+`handle_info` events, which LiveView does not provide by default.
+
 **Example:**
 ```elixir
 defmodule MyAnalyzer do

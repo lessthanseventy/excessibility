@@ -145,9 +145,8 @@ This generates `timeline.json` with event flow, memory usage, and pattern analys
 - `performance` - Identifies slow events and bottlenecks
 - `data_growth` - Analyzes list growth patterns
 - `event_pattern` - Detects inefficient event patterns
-- `ecto_query_analysis` - Full Ecto query analysis with N+1 detection
+- `ecto_query_analysis` - Full Ecto query analysis with N+1 detection (requires `config :excessibility, ecto_repos: [MyApp.Repo]`)
 - `assign_diff` - Detects large assigns re-diffed over the wire
-- `message_flooding` - Detects high-frequency handle_info patterns
 - `state_machine` - Analyzes state transitions
 - `render_efficiency` - Detects wasted renders with no state changes
 - `assign_lifecycle` - Finds dead state (assigns that never change)
@@ -160,6 +159,7 @@ This generates `timeline.json` with event flow, memory usage, and pattern analys
 - `cascade_effect` - Detects rapid event cascades (use `--analyze=cascade_effect`)
 - `hypothesis` - Root cause suggestions (use `--analyze=hypothesis`)
 - `code_pointer` - Maps events to source locations (use `--analyze=code_pointer`)
+- `message_flooding` - Detects high-frequency handle_info patterns (dormant: LiveView emits no handle_info telemetry yet, use `--analyze=message_flooding`)
 - `accessibility_correlation` - Flags state changes with a11y implications (use `--analyze=accessibility_correlation`)
 - `component_rerender` - Detects unnecessary component re-renders (use `--analyze=component_rerender`)
 - `push_event_volume` - Detects excessive push_event volume to JS hooks (use `--analyze=push_event_volume`)
@@ -325,6 +325,7 @@ All configuration in `test/test_helper.exs` or `config/test.exs`:
 - `:node_modules_path` - Path to a host `node_modules` providing `playwright` and `@axe-core/playwright` (default: bundled copy in `assets/`)
 - `:pa11y_config` - Path to pa11y.json (default: `"pa11y.json"`)
 - `:head_render_path` - Route for `<head>` extraction (default: `"/"`)
+- `:ecto_repos` - Repos to capture query telemetry from for N+1/query analysis (default: `[]`, e.g. `[MyApp.Repo]`)
 - `:custom_enrichers` - List of custom enricher modules (default: `[]`)
 - `:custom_analyzers` - List of custom analyzer modules (default: `[]`)
 
