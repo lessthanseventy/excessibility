@@ -371,6 +371,47 @@ defmodule Excessibility.TelemetryCapture.FilterTest do
     end
   end
 
+  describe "opaque library structs (issue #142)" do
+    test "prunes Ecto.Changeset and DateTime to scalar leaves instead of exploding them" do
+      changeset = %Ecto.Changeset{
+        data: %{},
+        changes: %{items: [%{id: 1}]},
+        types: %{name: :string},
+        valid?: true
+      }
+
+      assigns = %{
+        order_form: %{source: changeset},
+        created_at: ~U[2024-01-01 12:00:00.123456Z],
+        keep: "value"
+      }
+
+      result = Filter.filter_assigns(assigns)
+
+      # The changeset collapses to a leaf, not a nested map of its internals.
+      refute is_map(result.order_form.source)
+      refute is_struct(result.order_form.source)
+
+      # The datetime collapses too, so its microsecond tuple never becomes a
+      # 2-element list that data_growth would count.
+      refute is_map(result.created_at)
+
+      assert result.keep == "value"
+      # Everything stays JSON-encodable.
+      assert {:ok, _json} = Jason.encode(result)
+    end
+
+    test "leaves opaque structs alone when function filtering is disabled (--full)" do
+      assigns = %{created_at: ~U[2024-01-01 12:00:00Z]}
+
+      result = Filter.filter_assigns(assigns, filter_functions: false)
+
+      # --full keeps the raw struct; opaque pruning rides along with function
+      # filtering, which is where struct traversal happens.
+      assert is_struct(result.created_at, DateTime)
+    end
+  end
+
   describe "filter_assigns/2" do
     test "applies all filters by default" do
       callback = fn -> :ok end

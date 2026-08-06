@@ -21,6 +21,36 @@ defmodule Excessibility.TelemetryCapture.Enrichers.CollectionSizeTest do
       assert Map.has_key?(result, :total_list_items)
     end
 
+    test "stops at opaque library structs instead of counting their internals (issue #142)" do
+      # A Phoenix form's changeset carries Ecto machinery (types, mappings,
+      # validations) and schema timestamps carry microsecond tuples — none of
+      # which is actionable app state. The traversal must treat these as leaves.
+      changeset = %Ecto.Changeset{
+        data: %{},
+        changes: %{items: [%{id: 1}]},
+        types: %{name: :string, code: {:parameterized, :enum, %{mappings: [a: 1, b: 2]}}},
+        valid?: true
+      }
+
+      assigns = %{
+        order_form: %{source: changeset},
+        created_at: ~U[2024-01-01 12:00:00.123456Z],
+        products: [1, 2, 3]
+      }
+
+      result = CollectionSize.enrich(assigns, [])
+
+      keys = Enum.map(Map.keys(result.list_sizes), &to_string/1)
+
+      # Without a stop, the changeset's own list fields (constraints, errors,
+      # empty_values, changes.items) all leak in as `order_form.source.*`.
+      refute Enum.any?(keys, &(&1 =~ "source")),
+             "expected no changeset internals in list_sizes, got: #{inspect(keys)}"
+
+      # Real app lists are still tracked.
+      assert result.list_sizes[:products] == 3
+    end
+
     test "counts lists at top level" do
       assigns = %{
         products: [1, 2, 3],
