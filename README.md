@@ -593,6 +593,22 @@ mix excessibility.review --timeline test/excessibility/timeline.json --fail-on-b
 
 The analyzers group events by LiveView before comparing, so a journey test that drives several LiveViews doesn't produce cross-view artifacts (a freshly-mounted view sitting next to a loaded one is not "memory growth").
 
+Two signals are opt-in because they need extra wiring:
+
+- **N+1 / query analysis** needs `config :excessibility, ecto_repos: [MyApp.Repo]` (capture attaches to the repo's query telemetry).
+- **`handle_info` flooding** needs the `on_mount` hook (LiveView emits no `handle_info` telemetry). Add it once to a `live_session`, then enable the analyzer:
+
+  ```elixir
+  # router.ex
+  live_session :default, on_mount: [Excessibility.TelemetryCapture] do
+    # ...your live routes...
+  end
+  ```
+
+  ```bash
+  mix excessibility.debug test/my_test.exs --analyze=message_flooding
+  ```
+
 ## Configuration
 
 All configuration goes in `test/test_helper.exs` or `config/test.exs`:

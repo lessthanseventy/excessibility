@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0] - 2026-08-06
+
+### Added
+- **Opt-in `handle_info` capture, reviving `message_flooding`** ([#147](https://github.com/lessthanseventy/excessibility/issues/147)). Phoenix LiveView emits no `handle_info` telemetry, so there was nothing to attach to globally. `Excessibility.TelemetryCapture` now exports an `on_mount/4` hook that uses `Phoenix.LiveView.attach_hook/4` on the `:handle_info` stage to record each message as a `handle_info:<name>` timeline event. It is opt-in — wire it where you want it, e.g. one line on a router `live_session`: `live_session :default, on_mount: [Excessibility.TelemetryCapture]`. It attaches nothing unless telemetry capture is running and the socket is connected, so it is safe in all environments. Pair it with the (still opt-in) `message_flooding` analyzer.
+
+### Fixed
+- **`message_flooding` no longer crashes on a captured timeline** ([#147](https://github.com/lessthanseventy/excessibility/issues/147)). Its sliding window called `DateTime.diff` on `event.timestamp`, but a timeline read back from `timeline.json` has no `%DateTime{}` — timestamps serialize to a struct-map that does not round-trip. Timeline events now carry a JSON-safe numeric `timestamp_ms`, and the window uses it (falling back to a `%DateTime{}` when present, e.g. in-memory).
+- **`mix excessibility.debug --analyze` / `--no-analyze` / `--profile` are honored** ([#147](https://github.com/lessthanseventy/excessibility/issues/147)). These flags were dropped while building the internal filter options, so analyzer selection silently always fell back to the default set — which is why enabling an opt-in analyzer (or `--analyze=all`) appeared to do nothing.
+
+
 ## [0.17.0] - 2026-08-06
 
 ### Added
