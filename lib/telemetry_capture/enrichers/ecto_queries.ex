@@ -82,21 +82,29 @@ defmodule Excessibility.TelemetryCapture.Enrichers.EctoQueries do
   end
 
   defp handle_query_event(_event, measurements, metadata, _config) do
+    record_query(build_query_record(measurements, metadata))
+  end
+
+  @doc """
+  Builds a normalized query record from an Ecto `[..., :query]` telemetry
+  event's measurements and metadata. Shared so the live capture layer
+  (`Excessibility.TelemetryCapture`) attributes queries to events using the
+  same shape this enricher reads back.
+  """
+  def build_query_record(measurements, metadata) do
     duration_ms =
       case Map.get(measurements, :total_time) do
         nil -> 0.0
         native -> System.convert_time_unit(native, :native, :microsecond) / 1000
       end
 
-    query_record = %{
+    %{
       source: Map.get(metadata, :source, "unknown"),
       operation: extract_operation(Map.get(metadata, :query, "")),
       duration_ms: Float.round(duration_ms, 2),
       query: Map.get(metadata, :query, ""),
       repo: Map.get(metadata, :repo)
     }
-
-    record_query(query_record)
   end
 
   defp extract_operation(query) when is_binary(query) do

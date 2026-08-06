@@ -5,6 +5,14 @@ defmodule Excessibility.TelemetryCapture.Analyzers.MessageFlooding do
   LiveViews subscribing to PubSub or using timers can receive messages
   faster than useful, causing unnecessary processing and renders.
 
+  > #### Opt-in {: .warning}
+  >
+  > This analyzer reads `handle_info:*` timeline events, but Phoenix LiveView
+  > does not emit `handle_info` telemetry and the capture layer does not hook
+  > it, so nothing populates those events yet (issue #147). It is therefore
+  > **not** in the default set — enabling it would imply working coverage
+  > while staying silent. Enable it explicitly once handle_info capture lands.
+
   ## Detection
 
   - Sliding window: >10 same-name handle_info events within 200ms
@@ -31,7 +39,8 @@ defmodule Excessibility.TelemetryCapture.Analyzers.MessageFlooding do
   @total_threshold 20
 
   def name, do: :message_flooding
-  def default_enabled?, do: true
+  # Opt-in until the capture layer emits handle_info events (issue #147).
+  def default_enabled?, do: false
   def requires_enrichers, do: []
 
   def analyze(%{timeline: []}, _opts), do: %{findings: [], stats: %{}}

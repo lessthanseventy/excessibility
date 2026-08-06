@@ -155,9 +155,14 @@ defmodule Excessibility.TelemetryCapture.Timeline do
         enrichers
       end
 
-    # Pass measurements through opts for enrichers that need them
+    # Pass measurements and captured Ecto queries through opts for enrichers
+    # that need them (the ecto_queries enricher attributes queries per event).
     measurements = Map.get(snapshot, :measurements, %{})
-    enricher_opts = Keyword.put(opts, :measurements, measurements)
+
+    enricher_opts =
+      opts
+      |> Keyword.put(:measurements, measurements)
+      |> Keyword.put(:ecto_queries, Map.get(snapshot, :ecto_queries, []))
 
     Enum.reduce(enrichers, %{}, fn enricher, acc ->
       enrichment = enricher.enrich(assigns, enricher_opts)

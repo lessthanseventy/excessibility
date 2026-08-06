@@ -10,8 +10,8 @@ defmodule Excessibility.TelemetryCapture.Analyzers.MessageFloodingTest do
   end
 
   describe "default_enabled?/0" do
-    test "returns true" do
-      assert MessageFlooding.default_enabled?() == true
+    test "returns false — opt-in until handle_info capture lands (issue #147)" do
+      assert MessageFlooding.default_enabled?() == false
     end
   end
 
