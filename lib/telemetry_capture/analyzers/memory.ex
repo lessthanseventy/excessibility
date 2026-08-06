@@ -45,6 +45,12 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Memory do
   # the larger side to clear an absolute floor, regardless of ratio.
   @min_notable_bytes 262_144
 
+  # The floor gates the size, but not the growth: a run that holds steady at
+  # 1.3 MB is a global outlier that clears the floor yet grew 0% (issue #146,
+  # reported as "grew 1.0x"). A "grew Nx" finding therefore also requires the
+  # ratio to clear a minimum — a flat or shrinking transition isn't bloat.
+  @min_growth_factor 1.2
+
   def name, do: :memory
   def default_enabled?, do: true
   def requires_enrichers, do: [:assign_sizes]
@@ -148,16 +154,26 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Memory do
     # `factor` (curr/prev) is what the message reports, so "grew 1.5x" means
     # the heap is 1.5x its previous size — not the confusing "grew 0.5x" that
     # delta/prev produced. The thresholds themselves use delta/prev.
-    factor = if prev.total_memory > 0, do: curr.total_memory / prev.total_memory, else: 0
+    factor = growth_factor(prev.total_memory, curr.total_memory)
 
     cond do
       # An ordinary-sized heap never bloats on ratio alone.
       curr.total_memory < @min_notable_bytes -> []
+      # A flat or shrinking transition isn't growth, even at a large size.
+      not growth?(factor) -> []
       critical_bloat?(prev, curr, delta, stats) -> [bloat_finding(:critical, prev, curr, factor, delta)]
       warning_bloat?(prev, delta, stats) -> [bloat_finding(:warning, prev, curr, factor, delta)]
       true -> []
     end
   end
+
+  # curr/prev, with sentinels for the (near-impossible) zero-previous case.
+  defp growth_factor(prev, curr) when prev > 0, do: curr / prev
+  defp growth_factor(_prev, curr) when curr > 0, do: :infinity
+  defp growth_factor(_prev, _curr), do: 1.0
+
+  defp growth?(:infinity), do: true
+  defp growth?(factor), do: factor >= @min_growth_factor
 
   # Critical: 10x growth, or 10x median delta, or beyond mean + 2 std_dev.
   defp critical_bloat?(prev, curr, delta, stats) do
@@ -179,7 +195,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Memory do
       message:
         "Memory grew #{format_multiplier(factor)}x between events (#{format_bytes(prev.total_memory)} → #{format_bytes(curr.total_memory)})",
       events: [prev.sequence, curr.sequence],
-      metadata: %{growth_multiplier: Float.round(factor, 1), delta_bytes: delta}
+      metadata: %{growth_multiplier: format_multiplier(factor), delta_bytes: delta}
     }
   end
 
@@ -229,6 +245,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Memory do
     end
   end
 
+  defp format_multiplier(:infinity), do: "∞"
   defp format_multiplier(mult) when mult >= 1, do: Float.round(mult, 1)
   defp format_multiplier(mult), do: Float.round(mult, 2)
 
