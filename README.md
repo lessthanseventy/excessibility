@@ -611,6 +611,8 @@ All configuration goes in `test/test_helper.exs` or `config/test.exs`:
 | `:check_clipping` | No | `false` | Flag interactive elements mostly outside the visible area, plus page-level horizontal overflow |
 | `:clipping_ratio` | No | `0.9` | Minimum visible-width ratio before an element counts as clipped |
 | `:head_render_path` | No | `"/"` | Route used for rendering `<head>` content |
+| `:ecto_repos` | No | `[]` | Repos to capture query telemetry from, enabling N+1 / query analysis in `mix excessibility.debug` and `--timeline` reviews (e.g. `[MyApp.Repo]`) |
+| `:slow_event_ms` | No | `1000` | Absolute "very slow event" ceiling for the performance analyzer. Performance findings are otherwise **relative** (outliers, bottleneck-share) and computed from test timings, so uniformly-slow code isn't flagged — lower this only if your test timings are representative of production |
 | `:custom_enrichers` | No | `[]` | List of custom enricher modules (see Timeline Analysis section above) |
 | `:custom_analyzers` | No | `[]` | List of custom analyzer modules (see Timeline Analysis section above) |
 

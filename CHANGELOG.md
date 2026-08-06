@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0] - 2026-08-06
+
+### Added
+- **Ecto query capture, so `ecto_query_analysis` can actually fire** ([#147](https://github.com/lessthanseventy/excessibility/issues/147)). The analyzer reads `ecto_queries`/`ecto_query_count`, but nothing populated them — the capture layer only attached to LiveView telemetry, so N+1 detection (the most common real LiveView performance defect) silently never ran. Capture now attaches to each configured repo's `[..., :query]` telemetry event, accumulates queries in the emitting process, and attributes them to the LiveView event that ran them. Configure the repos to watch: `config :excessibility, ecto_repos: [MyApp.Repo]`. When `ecto_query_analysis` would run but no repos are configured, capture logs that N+1 detection is off instead of reporting a green (empty) section.
+
+### Changed
+- **`message_flooding` is no longer enabled by default** ([#147](https://github.com/lessthanseventy/excessibility/issues/147)). It reads `handle_info:*` timeline events, but Phoenix LiveView emits no `handle_info` telemetry and the capture layer doesn't hook it, so the analyzer could never fire — shipping it enabled implied working coverage while staying silent. It is now opt-in until `handle_info` capture lands.
+- **The performance analyzer's "very slow" ceiling is configurable, and its relative nature is documented.** It is an outlier detector (an event much slower than the rest of the run, the event dominating total time, or one over an absolute ceiling) computed from test timings — so *uniformly* slow code in the ~100 ms–1 s band isn't flagged. That's deliberate (sandbox/cold-mount timings aren't production latency), but it's now called out in the analyzer docs and README, and the absolute ceiling is tunable for teams with representative timings via `config :excessibility, slow_event_ms: 400` (default 1000).
+
+### Fixed
+- **Memory analyzer no longer reports a flat plateau as growth** ([#146](https://github.com/lessthanseventy/excessibility/issues/146)). The 0.16.0 absolute floor gated the size but not the ratio, so a run holding steady at 1.3 MB (a global outlier above the floor) was reported `[serious] Memory grew 1.0x`. A "grew Nx" finding now also requires the ratio to clear a minimum — a flat or shrinking transition isn't bloat. (The `consecutive growth` leak path already required a strict increase, so a flat plateau never qualified there.)
+
+
 ## [0.16.0] - 2026-08-06
 
 ### Added
