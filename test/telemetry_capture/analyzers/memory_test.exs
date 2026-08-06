@@ -68,6 +68,25 @@ defmodule Excessibility.TelemetryCapture.Analyzers.MemoryTest do
       assert Enum.any?(result.findings, &String.contains?(&1.message, "leak"))
     end
 
+    test "a flat plateau at a large size is not growth (issue #146)" do
+      # A run of small events that jumps once to ~300 KB and then holds steady.
+      # The jump (events 10->11) is a real finding; the flat 300 KB -> 300 KB
+      # transition must not be reported as "grew 1.0x" just because 300 KB is a
+      # global outlier that clears the absolute floor.
+      timeline = build_timeline(List.duplicate(1_000, 10) ++ [300_000, 300_000])
+      result = Memory.analyze(timeline, [])
+
+      # The real jump is still flagged.
+      assert Enum.any?(result.findings, &(&1.events == [10, 11]))
+
+      # No finding describes a flat transition.
+      refute Enum.any?(result.findings, &String.contains?(&1.message, "grew 1.0x")),
+             "flat plateau reported as growth: #{inspect(Enum.map(result.findings, & &1.message))}"
+
+      refute Enum.any?(result.findings, &(&1.events == [11, 12])),
+             "flat transition flagged: #{inspect(result.findings)}"
+    end
+
     test "handles single event timeline" do
       timeline = build_timeline([1000])
       result = Memory.analyze(timeline, [])
