@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.18.1] - 2026-08-07
 
 ### Fixed
 - **`ecto_query_analysis` N+1 detection fires on the `--timeline` path** ([#151](https://github.com/lessthanseventy/excessibility/issues/151)). `detect_n_plus_one` filtered on `operation == :select` (an atom), but `mix excessibility.review --timeline` loads with `Jason.decode(keys: :atoms)`, which atomises keys and leaves values as strings — so `operation` was `"select"`, every query was dropped, and the precise, `:critical`, table-naming N+1 finding never appeared (only the raw count survived). The comparison is now string-tolerant, so the shape detector fires on both the in-process and reloaded-timeline paths.
