@@ -1,0 +1,1096 @@
+# SPDX-FileCopyrightText: 2024 igniter contributors <https://github.com/ash-project/igniter/graphs/contributors>
+#
+# SPDX-License-Identifier: MIT
+
+defmodule Igniter.Project.Module do
+  @moduledoc "Codemods and utilities for interacting with modules"
+
+  alias Igniter.Code.Common
+  alias Sourceror.Zipper
+  require Logger
+
+  @typedoc """
+  Placement instruction for a module.
+
+  - `:source_folder` - The first source folder of the project
+  - `{:source_folder, path}` - The selected source folder, i.e `"lib"`
+  - `:test` - Creating a test file
+  - `:test_support` - Creating a test support file
+  """
+  @type location_type :: :source_folder | {:source_folder, String.t()} | :test | :test_support
+
+  @doc """
+  Determines where a module should be placed in a project.
+  """
+  @spec proper_location(Igniter.t(), module(), location_type()) :: String.t()
+  def proper_location(igniter, module_name, type \\ :source_folder) do
+    type =
+      case type do
+        :source_folder ->
+          igniter
+          |> Igniter.Project.IgniterConfig.get(:source_folders)
+          |> Enum.at(0)
+          |> then(&{:source_folder, &1})
+
+        :test_support ->
+          {:source_folder, "test/support"}
+
+        type ->
+          type
+      end
+
+    do_proper_location(igniter, module_name, type)
+  end
+
+  @doc "Given a suffix, returns a module name with the prefix of the current project."
+  @spec module_name(Igniter.t(), String.t()) :: module()
+  def module_name(igniter, suffix) do
+    Module.concat(module_name_prefix(igniter), suffix)
+  end
+
+  @doc "The module name prefix based on the mix project's module name"
+  @spec module_name_prefix(Igniter.t()) :: module()
+  def module_name_prefix(igniter) do
+    zipper =
+      igniter
+      |> Igniter.include_existing_file("mix.exs")
+      |> Map.get(:rewrite)
+      |> Rewrite.source!("mix.exs")
+      |> Rewrite.Source.get(:quoted)
+      |> Sourceror.Zipper.zip()
+
+    with {:ok, zipper} <- Igniter.Code.Module.move_to_defmodule(zipper),
+         {:ok, zipper} <- Igniter.Code.Function.move_to_nth_argument(zipper, 0) do
+      case Igniter.Code.Common.expand_alias(zipper) do
+        %Zipper{node: module_name} when is_atom(module_name) ->
+          module_name
+          |> Module.split()
+          |> :lists.droplast()
+          |> Module.concat()
+
+        %Zipper{node: {:__aliases__, _, parts}} ->
+          parts
+          |> :lists.droplast()
+          |> Module.concat()
+      end
+    else
+      _ ->
+        raise """
+        Failed to parse the module name from mix.exs.
+
+        Please ensure that you are defining a Mix.Project module in your mix.exs file.
+        """
+    end
+  end
+
+  @doc """
+  Finds a module, raising an error if its not found.
+
+  See `find_module/2` for more information.
+  """
+  @spec find_module!(Igniter.t(), module()) ::
+          {Igniter.t(), Rewrite.Source.t(), Zipper.t()} | no_return
+  def find_module!(igniter, module_name) do
+    case find_module(igniter, module_name) do
+      {:ok, {igniter, source, zipper}} ->
+        {igniter, source, zipper}
+
+      {:error, _igniter} ->
+        raise "Could not find module `#{inspect(module_name)}`"
+    end
+  end
+
+  @doc """
+  Finds a module and updates its contents wherever it is.
+
+  If the module does not yet exist, it is created with the provided contents. In that case,
+  the path is determined with `Igniter.Code.Module.proper_location/2`, but may optionally be overwritten with options below.
+
+  # Options
+
+  - `:path` - Path where to create the module, relative to the project root. Default: `nil` (uses `:kind` to determine the path).
+  """
+  def find_and_update_or_create_module(igniter, module_name, contents, updater, opts \\ [])
+
+  def find_and_update_or_create_module(
+        igniter,
+        module_name,
+        contents,
+        updater,
+        opts
+      )
+      when is_list(opts) do
+    case find_and_update_module(igniter, module_name, updater) do
+      {:ok, igniter} ->
+        igniter
+
+      {:error, igniter} ->
+        create_module(igniter, module_name, contents, opts)
+    end
+  end
+
+  def find_and_update_or_create_module(
+        igniter,
+        module_name,
+        contents,
+        updater,
+        path
+      )
+      when is_binary(path) do
+    Logger.warning("You should use `opts` instead of `path` and pass `path` as a keyword.")
+    find_and_update_or_create_module(igniter, module_name, contents, updater, path: path)
+  end
+
+  @doc """
+  Creates a new file & module in its appropriate location.
+
+  ## Options
+
+  - `:location` - A location type. See `t:location_type/0` for more.
+  """
+  def create_module(igniter, module_name, contents, opts \\ []) do
+    contents =
+      """
+      defmodule #{inspect(module_name)} do
+        #{contents}
+      end
+      """
+
+    location =
+      case Keyword.get(opts, :path, nil) do
+        nil ->
+          proper_location(igniter, module_name, opts[:location] || :source_folder)
+
+        path ->
+          path
+      end
+
+    igniter
+    |> Igniter.create_new_file(location, contents)
+    |> put_module_index(
+      module_name,
+      Igniter.Util.BackwardsCompat.relative_to_cwd(location, force: true)
+    )
+  end
+
+  @doc "Checks if a module is defined somewhere in the project. The returned igniter should not be discarded."
+  @deprecated "Use `module_exists/2` instead."
+  def module_exists?(igniter, module_name) do
+    module_exists(igniter, module_name)
+  end
+
+  @doc "Checks if a module is defined somewhere in the project. The returned igniter should not be discarded."
+  @spec module_exists(Igniter.t(), module()) :: {boolean(), Igniter.t()}
+  def module_exists(igniter, module_name) do
+    case find_module(igniter, module_name) do
+      {:ok, {igniter, _, _}} -> {true, igniter}
+      {:error, igniter} -> {false, igniter}
+    end
+  end
+
+  @doc "Finds a module and updates its contents. Raises an error if it doesn't exist"
+  @spec find_and_update_module!(Igniter.t(), module(), (Zipper.t() -> {:ok, Zipper.t()} | :error)) ::
+          Igniter.t()
+  def find_and_update_module!(igniter, module_name, updater) do
+    case find_and_update_module(igniter, module_name, updater) do
+      {:ok, igniter} -> igniter
+      {:error, _igniter} -> raise "Could not find module #{inspect(module_name)}"
+    end
+  end
+
+  @doc "Finds a module and updates its contents. Returns `{:error, igniter}` if the module could not be found. Do not discard this igniter."
+  @spec find_and_update_module(Igniter.t(), module(), (Zipper.t() -> {:ok, Zipper.t()} | :error)) ::
+          {:ok, Igniter.t()} | {:error, Igniter.t()}
+  def find_and_update_module(igniter, module_name, updater) do
+    case find_module(igniter, module_name) do
+      {:ok, {igniter, source, zipper}} ->
+        case Common.move_to_do_block(zipper) do
+          {:ok, zipper} ->
+            case updater.(zipper) do
+              {:ok, zipper} ->
+                new_quoted =
+                  zipper
+                  |> Zipper.topmost()
+                  |> Zipper.node()
+
+                new_source = Igniter.update_source(source, igniter, :quoted, new_quoted)
+
+                {:ok,
+                 %{igniter | rewrite: Rewrite.update!(igniter.rewrite, new_source)}
+                 |> Igniter.format([source.path])}
+
+              {:error, error} ->
+                {:ok, Igniter.add_issue(igniter, error)}
+
+              {:warning, error} ->
+                {:ok, Igniter.add_warning(igniter, error)}
+            end
+
+          _ ->
+            {:error, igniter}
+        end
+
+      {:error, igniter} ->
+        {:error, igniter}
+    end
+  end
+
+  @spec find_all_matching_modules(igniter :: Igniter.t(), (module(), Zipper.t() -> boolean)) ::
+          {Igniter.t(), [module()]}
+  def find_all_matching_modules(igniter, predicate) do
+    igniter =
+      igniter
+      |> Igniter.include_all_elixir_files()
+
+    matching_modules =
+      igniter.rewrite
+      |> Rewrite.sources()
+      |> Enum.filter(&match?(%Rewrite.Source{filetype: %Rewrite.Source.Ex{}}, &1))
+      |> Task.async_stream(
+        fn source ->
+          source
+          |> Rewrite.Source.get(:quoted)
+          |> Zipper.zip()
+          |> Zipper.traverse([], fn zipper, acc ->
+            case zipper.node do
+              {:defmodule, _, [_, _]} ->
+                {:ok, mod_zipper} = Igniter.Code.Function.move_to_nth_argument(zipper, 0)
+
+                module_name =
+                  mod_zipper
+                  |> Igniter.Code.Common.expand_alias()
+                  |> Zipper.node()
+                  |> Igniter.Project.Module.to_module_name()
+
+                with module_name when not is_nil(module_name) <- module_name,
+                     {:ok, do_zipper} <- Igniter.Code.Common.move_to_do_block(zipper),
+                     true <- predicate.(module_name, do_zipper) do
+                  {zipper, [module_name | acc]}
+                else
+                  _ ->
+                    {zipper, acc}
+                end
+
+              _ ->
+                {zipper, acc}
+            end
+          end)
+          |> elem(1)
+        end,
+        timeout: :infinity
+      )
+      |> Enum.flat_map(fn {:ok, v} ->
+        v
+      end)
+      |> Enum.uniq()
+
+    {igniter, matching_modules}
+  end
+
+  @doc """
+  Finds a module, returning a new igniter, and the source and zipper location. This new igniter should not be discarded.
+
+  In general, you should not use the returned source and zipper to update the module, instead, use this to interrogate
+  the contents or source in some way, and then call `find_and_update_module/3` with a function to perform an update.
+  """
+  @spec find_module(Igniter.t(), module()) ::
+          {:ok, {Igniter.t(), Rewrite.Source.t(), Zipper.t()}} | {:error, Igniter.t()}
+  def find_module(igniter, module_name) do
+    igniter = ensure_module_index_initialized(igniter)
+
+    manifest_known = get_in(igniter.assigns, [:private, :manifest_known_files]) || MapSet.new()
+
+    manifest_searched =
+      if MapSet.size(manifest_known) == 0 do
+        manifest_known
+      else
+        modified_paths =
+          igniter.rewrite
+          |> Enum.filter(fn source ->
+            MapSet.member?(manifest_known, source.path) and
+              (Rewrite.Source.updated?(source) or Rewrite.Source.from?(source, :string))
+          end)
+          |> MapSet.new(& &1.path)
+
+        MapSet.difference(manifest_known, modified_paths)
+      end
+
+    with {:miss, igniter} <- check_module_index(igniter, module_name),
+         {:miss, igniter} <- try_compiled_source(igniter, module_name),
+         {:miss, igniter} <- try_conventional_path(igniter, module_name),
+         {:miss, igniter, searched} <-
+           try_filename_match(igniter, module_name, manifest_searched),
+         {:miss, igniter, searched} <- try_directory_search(igniter, module_name, searched),
+         {:miss, igniter} <- try_full_scan(igniter, module_name, searched) do
+      {:error, igniter}
+    else
+      {:ok, {igniter, source, zipper}} ->
+        {:ok, {put_module_index(igniter, module_name, source.path), source, zipper}}
+    end
+  end
+
+  defp check_module_index(igniter, module_name) do
+    case get_in(igniter.assigns, [:private, :module_index, module_name]) do
+      path when is_binary(path) ->
+        igniter = Igniter.include_existing_file(igniter, path)
+
+        case Rewrite.source(igniter.rewrite, path) do
+          {:ok, source} ->
+            case source
+                 |> Rewrite.Source.get(:quoted)
+                 |> Zipper.zip()
+                 |> Igniter.Code.Module.move_to_defmodule(module_name) do
+              {:ok, zipper} ->
+                {:ok,
+                 {log_find_module_strategy(igniter, module_name, :module_index), source, zipper}}
+
+              _ ->
+                {:miss, evict_module_index(igniter, module_name)}
+            end
+
+          _ ->
+            {:miss, evict_module_index(igniter, module_name)}
+        end
+
+      _ ->
+        {:miss, igniter}
+    end
+  end
+
+  defp try_compiled_source(igniter, module_name) do
+    path =
+      with true <- Code.ensure_loaded?(module_name),
+           source when not is_nil(source) <- module_name.module_info()[:compile][:source],
+           path =
+             Igniter.Util.BackwardsCompat.relative_to_cwd(List.to_string(source), force: true),
+           false <- String.starts_with?(path, "..") do
+        path
+      else
+        _ -> nil
+      end
+
+    case path do
+      nil ->
+        {:miss, igniter}
+
+      path ->
+        case check_file_for_module(igniter, path, module_name) do
+          {:ok, {igniter, source, zipper}} ->
+            {:ok,
+             {log_find_module_strategy(igniter, module_name, :compiled_source), source, zipper}}
+
+          _ ->
+            {:miss, igniter}
+        end
+    end
+  end
+
+  defp try_conventional_path(igniter, module_name) do
+    paths = conventional_paths(igniter, module_name)
+
+    Enum.reduce_while(paths, {:miss, igniter}, fn path, {:miss, igniter} ->
+      case check_file_for_module(igniter, path, module_name) do
+        {:ok, {igniter, source, zipper}} ->
+          {:halt,
+           {:ok,
+            {log_find_module_strategy(igniter, module_name, :conventional_path), source, zipper}}}
+
+        {:miss, igniter} ->
+          {:cont, {:miss, igniter}}
+      end
+    end)
+  end
+
+  defp try_filename_match(igniter, module_name, searched) do
+    last_segment =
+      module_name
+      |> Module.split()
+      |> List.last()
+      |> to_string()
+      |> Macro.underscore()
+
+    source_folders = Igniter.Project.IgniterConfig.get(igniter, :source_folders)
+
+    igniter =
+      Enum.reduce(source_folders, igniter, fn source_folder, igniter ->
+        Igniter.include_glob(igniter, Path.join(source_folder, "**/#{last_segment}.{ex,exs}"))
+      end)
+
+    igniter = Igniter.include_glob(igniter, "test/**/#{last_segment}.{ex,exs}")
+
+    igniter.rewrite
+    |> Enum.filter(fn source ->
+      searchable_source?(source, module_name, searched) and
+        Path.basename(source.path, Path.extname(source.path)) == last_segment
+    end)
+    |> search_sources_for_module(igniter, module_name, searched)
+    |> case do
+      {:ok, {igniter, source, zipper}} ->
+        {:ok, {log_find_module_strategy(igniter, module_name, :filename_match), source, zipper}}
+
+      miss ->
+        miss
+    end
+  end
+
+  defp try_directory_search(igniter, module_name, searched) do
+    segments =
+      module_name
+      |> Module.split()
+      |> Enum.map(fn s -> s |> to_string() |> Macro.underscore() end)
+      |> Enum.reverse()
+      |> Enum.drop(1)
+
+    source_folders = Igniter.Project.IgniterConfig.get(igniter, :source_folders)
+
+    Enum.reduce_while(segments, {:miss, igniter, searched}, fn segment,
+                                                               {:miss, igniter, searched} ->
+      igniter =
+        Enum.reduce(source_folders, igniter, fn source_folder, igniter ->
+          Igniter.include_glob(
+            igniter,
+            Path.join(source_folder, "**/#{segment}/**/*.{ex,exs}")
+          )
+        end)
+
+      igniter.rewrite
+      |> Enum.filter(fn source ->
+        searchable_source?(source, module_name, searched) and
+          String.contains?(source.path, "/#{segment}/")
+      end)
+      |> search_sources_for_module(igniter, module_name, searched)
+      |> case do
+        {:ok, {igniter, source, zipper}} ->
+          {:halt,
+           {:ok,
+            {log_find_module_strategy(igniter, module_name, :directory_search), source, zipper}}}
+
+        {:miss, igniter, searched} ->
+          {:cont, {:miss, igniter, searched}}
+      end
+    end)
+  end
+
+  defp try_full_scan(igniter, module_name, searched) do
+    igniter = Igniter.include_all_elixir_files(igniter)
+
+    to_search =
+      igniter
+      |> Map.get(:rewrite)
+      |> Enum.filter(&searchable_source?(&1, module_name, searched))
+
+    {string_matches, rest} =
+      Enum.split_with(to_search, &source_might_define_module?(&1, module_name))
+
+    result =
+      string_matches
+      |> Task.async_stream(
+        fn source ->
+          {source
+           |> Rewrite.Source.get(:quoted)
+           |> Zipper.zip()
+           |> Igniter.Code.Module.move_to_defmodule(module_name), source}
+        end,
+        timeout: :infinity
+      )
+      |> Enum.find_value(fn
+        {:ok, {{:ok, zipper}, source}} ->
+          {:ok, {igniter, source, zipper}}
+
+        _other ->
+          false
+      end)
+
+    result =
+      result ||
+        rest
+        |> Enum.filter(&multiple_defmodules?/1)
+        |> Task.async_stream(
+          fn source ->
+            {source
+             |> Rewrite.Source.get(:quoted)
+             |> Zipper.zip()
+             |> Igniter.Code.Module.move_to_defmodule(module_name), source}
+          end,
+          timeout: :infinity
+        )
+        |> Enum.find_value(fn
+          {:ok, {{:ok, zipper}, source}} ->
+            {:ok, {igniter, source, zipper}}
+
+          _other ->
+            false
+        end)
+
+    case result do
+      {:ok, {igniter, source, zipper}} ->
+        {:ok, {log_find_module_strategy(igniter, module_name, :full_scan), source, zipper}}
+
+      nil ->
+        {:miss, igniter}
+    end
+  end
+
+  defp source_might_define_module?(source, module_name) do
+    content = Rewrite.Source.get(source, :content)
+    String.contains?(content, "defmodule #{inspect(module_name)} do")
+  end
+
+  defp multiple_defmodules?(source) do
+    content = Rewrite.Source.get(source, :content)
+
+    case :binary.match(content, "defmodule ") do
+      :nomatch ->
+        false
+
+      {pos, len} ->
+        :binary.match(content, "defmodule ", scope: {pos + len, byte_size(content) - pos - len}) !=
+          :nomatch
+    end
+  end
+
+  defp searchable_source?(source, module_name, searched) do
+    match?(%Rewrite.Source{filetype: %Rewrite.Source.Ex{}}, source) and
+      not MapSet.member?(searched, source.path) and
+      (not String.ends_with?(source.path, "_test.exs") or
+         String.ends_with?(inspect(module_name), "Test"))
+  end
+
+  defp check_file_for_module(igniter, path, module_name) do
+    igniter = Igniter.include_existing_file(igniter, path)
+
+    case Rewrite.source(igniter.rewrite, path) do
+      {:ok, source} ->
+        case source
+             |> Rewrite.Source.get(:quoted)
+             |> Zipper.zip()
+             |> Igniter.Code.Module.move_to_defmodule(module_name) do
+          {:ok, zipper} -> {:ok, {igniter, source, zipper}}
+          _ -> {:miss, igniter}
+        end
+
+      _ ->
+        {:miss, igniter}
+    end
+  end
+
+  defp search_sources_for_module(sources, igniter, module_name, searched) do
+    searched = Enum.reduce(sources, searched, fn source, acc -> MapSet.put(acc, source.path) end)
+
+    {string_matches, rest} =
+      Enum.split_with(sources, &source_might_define_module?(&1, module_name))
+
+    case zipper_search(string_matches, module_name) do
+      {:ok, {source, zipper}} ->
+        {:ok, {igniter, source, zipper}}
+
+      nil ->
+        case zipper_search(Enum.filter(rest, &multiple_defmodules?/1), module_name) do
+          {:ok, {source, zipper}} ->
+            {:ok, {igniter, source, zipper}}
+
+          nil ->
+            {:miss, igniter, searched}
+        end
+    end
+  end
+
+  defp zipper_search(sources, module_name) do
+    Enum.find_value(sources, fn source ->
+      case source
+           |> Rewrite.Source.get(:quoted)
+           |> Zipper.zip()
+           |> Igniter.Code.Module.move_to_defmodule(module_name) do
+        {:ok, zipper} -> {:ok, {source, zipper}}
+        _ -> nil
+      end
+    end)
+  end
+
+  defp conventional_paths(igniter, module_name) do
+    segments =
+      case Module.split(module_name) do
+        ["Mix", "Tasks" | rest] ->
+          suffix =
+            rest
+            |> Enum.map(&to_string/1)
+            |> Enum.map_join(".", &Macro.underscore/1)
+
+          ["mix", "tasks", suffix]
+
+        _other ->
+          module_name
+          |> Module.split()
+          |> Enum.map(&to_string/1)
+          |> Enum.map(&Macro.underscore/1)
+      end
+
+    last = List.last(segments)
+    leading = :lists.droplast(segments)
+
+    source_folders = Igniter.Project.IgniterConfig.get(igniter, :source_folders)
+
+    standard = for sf <- source_folders, do: Path.join([sf | leading] ++ ["#{last}.ex"])
+
+    inside_folder =
+      for sf <- source_folders, do: Path.join([sf | leading] ++ [last, "#{last}.ex"])
+
+    standard ++ inside_folder
+  end
+
+  defp ensure_module_index_initialized(igniter) do
+    if igniter.assigns[:test_mode?] ||
+         get_in(igniter.assigns, [:private, :module_index_initialized?]) do
+      igniter
+    else
+      {module_to_file, known_files} = read_beam_index()
+      private = igniter.assigns[:private] || %{}
+
+      private =
+        private
+        |> Map.put(:module_index, module_to_file)
+        |> Map.put(:manifest_known_files, known_files)
+        |> Map.put(:module_index_initialized?, true)
+
+      %{igniter | assigns: Map.put(igniter.assigns, :private, private)}
+    end
+  end
+
+  # Reads beam files from the compile path to build a module-to-file index.
+  # Uses :beam_lib.chunks/2 to read compile info without loading modules.
+  # A source file is "known" (non-stale) if its mtime <= its beam's mtime.
+  #
+  # Returns {module_to_file, known_files} where:
+  # - module_to_file: %{module => relative_source_path} for non-stale modules
+  # - known_files: MapSet of non-stale source paths that don't need to be searched
+  defp read_beam_index do
+    compile_path = Mix.Project.compile_path()
+    beams = Path.wildcard(Path.join(compile_path, "*.beam"))
+
+    {module_to_file, known_files} =
+      Enum.reduce(beams, {%{}, MapSet.new()}, fn beam_path, {mod_index, known} ->
+        with {:ok, {mod, chunks}} <-
+               :beam_lib.chunks(String.to_charlist(beam_path), [:compile_info]),
+             compile_info when is_list(compile_info) <- chunks[:compile_info],
+             source_charlist when is_list(source_charlist) <- compile_info[:source],
+             source_path = List.to_string(source_charlist),
+             rel_path =
+               Igniter.Util.BackwardsCompat.relative_to_cwd(source_path, force: true),
+             false <- String.starts_with?(rel_path, ".."),
+             {:ok, beam_stat} <- File.stat(beam_path, time: :posix),
+             {:ok, source_stat} <- File.stat(source_path, time: :posix),
+             true <- source_stat.mtime <= beam_stat.mtime do
+          {Map.put(mod_index, mod, rel_path), MapSet.put(known, rel_path)}
+        else
+          _ -> {mod_index, known}
+        end
+      end)
+
+    {module_to_file, known_files}
+  rescue
+    _ -> {%{}, MapSet.new()}
+  end
+
+  defp put_module_index(igniter, module_name, path) do
+    private = igniter.assigns[:private] || %{}
+    module_index = Map.get(private, :module_index, %{})
+    module_index = Map.put(module_index, module_name, path)
+    private = Map.put(private, :module_index, module_index)
+    %{igniter | assigns: Map.put(igniter.assigns, :private, private)}
+  end
+
+  defp evict_module_index(igniter, module_name) do
+    case get_in(igniter.assigns, [:private, :module_index]) do
+      index when is_map(index) ->
+        private =
+          Map.put(igniter.assigns[:private], :module_index, Map.delete(index, module_name))
+
+        %{igniter | assigns: Map.put(igniter.assigns, :private, private)}
+
+      _ ->
+        igniter
+    end
+  end
+
+  defp log_find_module_strategy(igniter, module_name, strategy) do
+    if igniter.assigns[:test_mode?] do
+      private = igniter.assigns[:private] || %{}
+      log = Map.get(private, :find_module_log, [])
+      private = Map.put(private, :find_module_log, log ++ [{module_name, strategy}])
+      %{igniter | assigns: Map.put(igniter.assigns, :private, private)}
+    else
+      igniter
+    end
+  end
+
+  @doc false
+  def move_files(igniter, opts \\ []) do
+    module_location_config = Igniter.Project.IgniterConfig.get(igniter, :module_location)
+    dont_move_files = Igniter.Project.IgniterConfig.get(igniter, :dont_move_files)
+
+    igniter =
+      if opts[:move_all?] do
+        Igniter.include_all_elixir_files(igniter)
+      else
+        igniter
+      end
+
+    igniter.rewrite
+    |> Stream.filter(&(Path.extname(&1.path) in [".ex", ".exs"]))
+    |> Stream.reject(&non_movable_file?(&1.path, dont_move_files))
+    |> Enum.reduce(igniter, fn source, igniter ->
+      zipper =
+        source
+        |> Rewrite.Source.get(:quoted)
+        |> Zipper.zip()
+
+      with {:ok, zipper} <- Igniter.Code.Module.move_to_defmodule(zipper),
+           {:ok, zipper} <- Igniter.Code.Function.move_to_nth_argument(zipper, 0),
+           module <-
+             zipper
+             |> Igniter.Code.Common.expand_alias()
+             |> Zipper.node(),
+           module when not is_nil(module) <- to_module_name(module),
+           new_path when not is_nil(new_path) <-
+             should_move_file_to(igniter, source, module, module_location_config, opts) do
+        new_path = Path.rootname(new_path) <> Path.extname(source.path)
+        Igniter.move_file(igniter, source.path, new_path, error_if_exists?: false)
+      else
+        _ ->
+          igniter
+      end
+    end)
+  end
+
+  defp non_movable_file?(path, dont_move_files) do
+    Enum.any?(dont_move_files, fn
+      exclusion_pattern when is_binary(exclusion_pattern) ->
+        path == exclusion_pattern
+
+      exclusion_pattern when is_struct(exclusion_pattern, Regex) ->
+        Regex.match?(exclusion_pattern, path)
+    end)
+  end
+
+  defp should_move_file_to(igniter, source, module, module_location_config, opts) do
+    paths_created =
+      igniter.rewrite
+      |> Enum.filter(fn source ->
+        Rewrite.Source.from?(source, :string)
+      end)
+      |> Enum.map(& &1.path)
+
+    split_path =
+      source.path
+      |> Igniter.Util.BackwardsCompat.relative_to_cwd(force: true)
+      |> Path.split()
+
+    igniter
+    |> Igniter.Project.IgniterConfig.get(:source_folders)
+    |> Enum.filter(fn source_folder ->
+      List.starts_with?(split_path, Path.split(source_folder))
+    end)
+    |> Enum.max_by(
+      fn source_folder ->
+        source_folder
+        |> Path.split()
+        |> Enum.zip(split_path)
+        |> Enum.take_while(fn {l, r} -> l == r end)
+        |> Enum.count()
+      end,
+      fn -> nil end
+    )
+    |> case do
+      nil ->
+        if Enum.at(split_path, 0) == "test" &&
+             String.ends_with?(source.path, "_test.exs") do
+          {:ok, proper_location(igniter, module, :test), :test}
+        else
+          :error
+        end
+
+      source_folder ->
+        {:ok, proper_location(igniter, module, {:source_folder, source_folder}),
+         {:source_folder, source_folder}}
+    end
+    |> case do
+      :error ->
+        nil
+
+      {:ok, proper_location, location_type} ->
+        case module_location_config do
+          :inside_matching_folder ->
+            {[filename, folder], rest} =
+              proper_location
+              |> Path.split()
+              |> Enum.reverse()
+              |> Enum.split(2)
+
+            inside_matching_folder =
+              [filename, Path.rootname(filename), folder]
+              |> Enum.concat(rest)
+              |> Enum.reverse()
+              |> Path.join()
+
+            inside_matching_folder_dirname = Path.dirname(inside_matching_folder)
+
+            just_created_folder? =
+              Enum.any?(paths_created, fn path ->
+                List.starts_with?(Path.split(path), Path.split(inside_matching_folder_dirname))
+              end)
+
+            if opts[:move_all?] || Rewrite.Source.from?(source, :string) do
+              if dir?(igniter, inside_matching_folder_dirname) || just_created_folder? do
+                inside_matching_folder
+              end
+            else
+              if source.path == proper_location(igniter, module, location_type) &&
+                   !dir?(igniter, inside_matching_folder_dirname) && just_created_folder? do
+                inside_matching_folder
+              end
+            end
+
+          :outside_matching_folder ->
+            if opts[:move_all?] || Rewrite.Source.from?(source, :string) do
+              proper_location
+            end
+        end
+    end
+  end
+
+  defp dir?(igniter, folder) do
+    if igniter.assigns[:test_mode?] do
+      igniter.assigns[:test_files]
+      |> Map.keys()
+      |> Enum.any?(fn file_path ->
+        List.starts_with?(Path.split(file_path), Path.split(folder))
+      end)
+    else
+      File.dir?(folder)
+    end
+  end
+
+  @doc false
+  def to_module_name({:__aliases__, _, parts}), do: Module.concat(parts)
+  def to_module_name(value) when is_atom(value) and not is_nil(value), do: value
+  def to_module_name(_), do: nil
+
+  defp do_proper_location(igniter, module_name, kind) do
+    path =
+      module_name
+      |> Module.split()
+      |> case do
+        ["Mix", "Tasks" | rest] ->
+          suffix =
+            rest
+            |> Enum.map(&to_string/1)
+            |> Enum.map_join(".", &Macro.underscore/1)
+
+          ["mix", "tasks", suffix]
+
+        _other ->
+          modified_module_name =
+            case kind do
+              :test ->
+                string_module = to_string(module_name)
+
+                if String.ends_with?(string_module, "Test") do
+                  Module.concat([String.slice(string_module, 0..-5//1)])
+                else
+                  module_name
+                end
+
+              _ ->
+                module_name
+            end
+
+          module_name_mapping_path(igniter, modified_module_name, kind)
+          |> case do
+            nil -> module_to_path(igniter, modified_module_name, module_name)
+            path -> path
+          end
+      end
+
+    last = List.last(path)
+    leading = :lists.droplast(path)
+
+    case kind do
+      :test ->
+        if String.ends_with?(last, "_test") do
+          Path.join(["test" | leading] ++ ["#{last}.exs"])
+        else
+          Path.join(["test" | leading] ++ ["#{last}_test.exs"])
+        end
+
+      {:source_folder, "test/support"} ->
+        case leading do
+          [] ->
+            Path.join(["test/support", "#{last}.ex"])
+
+          [_prefix | leading_rest] ->
+            Path.join(["test/support" | leading_rest] ++ ["#{last}.ex"])
+        end
+
+      {:source_folder, source_folder} ->
+        Path.join([source_folder | leading] ++ ["#{last}.ex"])
+    end
+  end
+
+  defp module_to_path(igniter, module, original) do
+    Enum.reduce_while(
+      igniter.assigns[:igniter_exs][:extensions] || [],
+      :error,
+      fn {extension, opts}, status ->
+        case extension.proper_location(igniter, module, opts) do
+          :error ->
+            {:cont, status}
+
+          :keep ->
+            {:cont, :keep}
+
+          {:ok, path} ->
+            {:halt, {:ok, path}}
+        end
+      end
+    )
+    |> case do
+      :keep ->
+        case find_module(igniter, original) do
+          {:ok, {_, source, _}} ->
+            split_path =
+              source.path
+              |> Path.rootname(".ex")
+              |> Path.rootname(".exs")
+              |> Path.split()
+
+            igniter
+            |> Igniter.Project.IgniterConfig.get(:source_folders)
+            |> Enum.concat(["test"])
+            |> Enum.uniq()
+            |> Enum.map(&Path.split/1)
+            |> Enum.sort_by(&(-length(&1)))
+            |> Enum.find(fn source_folder ->
+              List.starts_with?(split_path, Path.split(source_folder))
+            end)
+            |> case do
+              nil ->
+                default_location(module)
+
+              source_path ->
+                Enum.drop(split_path, Enum.count(source_path))
+            end
+
+          _ ->
+            default_location(module)
+        end
+
+      :error ->
+        default_location(module)
+
+      {:ok, path} ->
+        path
+        |> Path.rootname(".ex")
+        |> Path.rootname(".exs")
+        |> Path.split()
+    end
+  end
+
+  defp module_name_mapping_path(igniter, module, kind) do
+    module_names = Igniter.Project.IgniterConfig.get(igniter, :module_names) || []
+    module_string = inspect(module)
+
+    exact_match_destination =
+      Enum.find_value(module_names, fn
+        {match, destination} when is_binary(match) and match == module_string ->
+          resolve_module_name_destination(destination, module)
+
+        _ ->
+          nil
+      end)
+
+    regex_match_destination =
+      Enum.find_value(module_names, fn
+        {match, destination} when is_struct(match, Regex) ->
+          if Regex.match?(match, module_string) do
+            resolve_module_name_destination(destination, module)
+          end
+
+        _ ->
+          nil
+      end)
+
+    case exact_match_destination || regex_match_destination do
+      nil ->
+        nil
+
+      destination ->
+        destination_to_path_segments(destination, module, kind)
+    end
+  end
+
+  defp resolve_module_name_destination(destination, _module) when is_binary(destination) do
+    destination
+  end
+
+  # We only support path strings today, but keeping this isolated
+  # allows introducing function-based destination mapping later.
+  defp resolve_module_name_destination(destination, module) when is_function(destination, 1) do
+    case destination.(module) do
+      resolved when is_binary(resolved) -> resolved
+      _ -> nil
+    end
+  end
+
+  defp resolve_module_name_destination(_, _), do: nil
+
+  defp destination_to_path_segments(destination, module, kind) do
+    segments =
+      if Path.extname(destination) in [".ex", ".exs"] do
+        destination
+        |> Path.rootname(".ex")
+        |> Path.rootname(".exs")
+        |> Path.split()
+      else
+        destination
+        |> Path.join("#{module_filename(module)}.ex")
+        |> Path.rootname(".ex")
+        |> Path.split()
+      end
+
+    strip_source_folder_prefix(segments, kind)
+  end
+
+  defp strip_source_folder_prefix(segments, {:source_folder, source_folder}) do
+    source_segments = Path.split(source_folder)
+
+    if List.starts_with?(segments, source_segments) do
+      Enum.drop(segments, length(source_segments))
+    else
+      segments
+    end
+  end
+
+  defp strip_source_folder_prefix(segments, _kind), do: segments
+
+  defp module_filename(module) do
+    module
+    |> Module.split()
+    |> List.last()
+    |> Macro.underscore()
+  end
+
+  defp default_location(module) do
+    module
+    |> Module.split()
+    |> Enum.map(&to_string/1)
+    |> Enum.map(&Macro.underscore/1)
+  end
+
+  @doc "Parses a string into a module name"
+  @spec parse(String.t()) :: module()
+  def parse(module_name) do
+    module_name
+    |> String.split(".")
+    |> Module.concat()
+  end
+end

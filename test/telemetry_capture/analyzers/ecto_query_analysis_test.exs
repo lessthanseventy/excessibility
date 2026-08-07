@@ -50,20 +50,47 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EctoQueryAnalysisTest do
     end
 
     test "detects excessive queries per event" do
+      # Distinct sources so the N+1 detector stays quiet and we exercise the
+      # count detector in isolation. Threshold is conservative (issue #151).
       queries =
-        for _ <- 1..8,
-            do: %{source: "products", operation: :select, duration_ms: 1.0, query: "SELECT * FROM products"}
+        for i <- 1..12,
+            do: %{source: "table_#{i}", operation: :select, duration_ms: 1.0, query: "SELECT"}
 
       timeline = %{
         timeline: [
-          %{sequence: 1, event: "handle_event:load", ecto_queries: queries, ecto_query_count: 8, ecto_total_query_ms: 8.0}
+          %{
+            sequence: 1,
+            event: "handle_event:load",
+            ecto_queries: queries,
+            ecto_query_count: 12,
+            ecto_total_query_ms: 12.0
+          }
         ]
       }
 
       result = EctoQueryAnalysis.analyze(timeline, [])
 
-      assert result.findings != []
-      assert Enum.any?(result.findings, &(&1.severity in [:warning, :critical]))
+      excessive = Enum.find(result.findings, &(&1.metadata[:pattern] == :excessive))
+      assert excessive
+      assert excessive.severity in [:warning, :critical]
+    end
+
+    test "does not flag a moderate query count below the conservative threshold" do
+      # A healthy view doing ~8 queries across distinct sources must stay silent
+      # (issue #151: the old threshold of 5 fired on every real mount).
+      queries =
+        for i <- 1..8,
+            do: %{source: "table_#{i}", operation: :select, duration_ms: 1.0, query: "SELECT"}
+
+      timeline = %{
+        timeline: [
+          %{sequence: 1, event: "mount", ecto_queries: queries, ecto_query_count: 8, ecto_total_query_ms: 8.0}
+        ]
+      }
+
+      result = EctoQueryAnalysis.analyze(timeline, [])
+
+      refute Enum.any?(result.findings, &(&1.metadata[:pattern] == :excessive))
     end
 
     test "detects N+1 pattern — multiple SELECTs on same table" do
@@ -128,6 +155,57 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EctoQueryAnalysisTest do
       result = EctoQueryAnalysis.analyze(timeline, [])
 
       assert Enum.any?(result.findings, &(&1.message =~ "600"))
+    end
+
+    test "detects N+1 when operation values are strings (JSON --timeline round-trip)" do
+      # `mix excessibility.review --timeline` loads with Jason.decode(keys: :atoms),
+      # which atomises keys but leaves values as strings. The N+1 detector must
+      # still fire — issue #151.
+      queries =
+        for _ <- 1..15,
+            do: %{source: "categories", operation: "select", duration_ms: 1.0, query: "SELECT"}
+
+      timeline = %{
+        timeline: [
+          %{
+            sequence: 1,
+            event: "handle_event:event",
+            ecto_queries: queries,
+            ecto_query_count: 15,
+            ecto_total_query_ms: 15.0
+          }
+        ]
+      }
+
+      result = EctoQueryAnalysis.analyze(timeline, [])
+
+      n_plus_one_finding = Enum.find(result.findings, &(&1.metadata[:pattern] == :n_plus_one))
+      assert n_plus_one_finding
+      assert n_plus_one_finding.message =~ "categories"
+      assert n_plus_one_finding.message =~ "N+1"
+    end
+
+    test "detects N+1 through a real JSON round-trip" do
+      queries =
+        for _ <- 1..25,
+            do: %{source: "categories", operation: :select, duration_ms: 1.0, query: "SELECT"}
+
+      timeline = %{
+        timeline: [
+          %{
+            sequence: 1,
+            event: "handle_event:event",
+            ecto_queries: queries,
+            ecto_query_count: 25,
+            ecto_total_query_ms: 25.0
+          }
+        ]
+      }
+
+      round_tripped = timeline |> Jason.encode!() |> Jason.decode!(keys: :atoms)
+      result = EctoQueryAnalysis.analyze(round_tripped, [])
+
+      assert Enum.any?(result.findings, &(&1.metadata[:pattern] == :n_plus_one))
     end
 
     test "handles empty timeline" do

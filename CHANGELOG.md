@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **`ecto_query_analysis` N+1 detection fires on the `--timeline` path** ([#151](https://github.com/lessthanseventy/excessibility/issues/151)). `detect_n_plus_one` filtered on `operation == :select` (an atom), but `mix excessibility.review --timeline` loads with `Jason.decode(keys: :atoms)`, which atomises keys and leaves values as strings — so `operation` was `"select"`, every query was dropped, and the precise, `:critical`, table-naming N+1 finding never appeared (only the raw count survived). The comparison is now string-tolerant, so the shape detector fires on both the in-process and reloaded-timeline paths.
+- **Test-setup queries are no longer attributed to `mount`** ([#151](https://github.com/lessthanseventy/excessibility/issues/151)). Ecto queries accumulate in the emitting process's dictionary and only clear on flush at each captured event's `:stop`. Seed INSERTs from a test's `setup` block run before the LiveView exists — in the same process as the static mount — so they flushed onto `mount`, inflating exactly the event most likely to be flagged. Capture now resets the accumulator on the LiveView `mount` `:start`, keeping pre-mount queries out of the timeline.
+
+### Changed
+- **The excessive-query count detector uses a conservative threshold** ([#151](https://github.com/lessthanseventy/excessibility/issues/151)). Real Phoenix mounts with nested preloads routinely run more than a handful of queries, so the old absolute threshold of 5 flagged every healthy view as `:serious`. The floor is now 10 (with `:critical` reserved for >20); the precise signal is the shape-based N+1 detector, and this count remains a coarse backstop for genuinely high volume. (A per-view budget/baseline for this detector is still open in #151.)
+
+
 ## [0.18.0] - 2026-08-06
 
 ### Added

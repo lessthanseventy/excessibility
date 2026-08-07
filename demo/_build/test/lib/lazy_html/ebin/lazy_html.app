@@ -1,0 +1,1 @@
+{application,lazy_html,[{modules,['Elixir.Enumerable.LazyHTML','Elixir.Inspect.LazyHTML','Elixir.LazyHTML','Elixir.LazyHTML.NIF','Elixir.LazyHTML.Tree']},{compile_env,[{lazy_html,[inspect_extra_newline],error}]},{optional_applications,[]},{applications,[kernel,stdlib,elixir,logger]},{description,"Efficient parsing and querying of HTML documents"},{registered,[]},{vsn,"0.1.12"}]}.

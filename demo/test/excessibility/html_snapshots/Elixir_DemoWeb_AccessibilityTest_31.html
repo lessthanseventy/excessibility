@@ -1,0 +1,94 @@
+<!--
+Excessibility Snapshot
+Test: DemoWeb.AccessibilityTest test messy widgets page
+Sequence: 1
+Event: initial
+Timestamp: 2026-08-06 20:13:29.191418Z
+Assigns: %{note: ""}
+Previous: none
+-->
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <meta name="csrf-token" content="TFYdFAdlLRU-DBE7Fw0kHnomHCcqQxsgu3JzHSeCHGfPZltm9oXEhvDA"/>
+    <title data-default="Demo" data-suffix=" · Phoenix Framework">
+      Demo · Phoenix Framework
+    </title>
+    <link phx-track-static="phx-track-static" rel="stylesheet" href="file:///home/andrew/projects/excessibility/demo/_build/test/lib/demo/priv/static/assets/css/app.css"/>
+    <link phx-track-static="phx-track-static" rel="stylesheet" href="file:///home/andrew/projects/excessibility/demo/_build/test/lib/demo/priv/static/assets/default.css"/>
+  </head>
+  <body>
+    <div id="phx-GMlQeU-5mrN2dASE" data-phx-main="" data-phx-session="SFMyNTY.g2gDaAJhBnQAAAAIdwJpZG0AAAAUcGh4LUdNbFFlVS01bXJOMmRBU0V3B3Nlc3Npb250AAAAAHcKcGFyZW50X3BpZHcDbmlsdwR2aWV3dx9FbGl4aXIuRGVtb1dlYi5NZXNzeVdpZGdldHNMaXZldwhyb290X3BpZHcDbmlsdwZyb3V0ZXJ3FUVsaXhpci5EZW1vV2ViLlJvdXRlcncJcm9vdF92aWV3dx9FbGl4aXIuRGVtb1dlYi5NZXNzeVdpZGdldHNMaXZldxFsaXZlX3Nlc3Npb25fbmFtZXcHZGVmYXVsdG4GAOOetdifAWIAAVGA.ZkNNsQZ19eV2AZspOLUkD_aT3ZV2X0FZRipdGsQswZ4" data-phx-static="SFMyNTY.g2gDaAJhBnQAAAADdwJpZG0AAAAUcGh4LUdNbFFlVS01bXJOMmRBU0V3BWZsYXNodAAAAAB3CmFzc2lnbl9uZXdqbgYA45612J8BYgABUYA.FxWrjKk1Q9wdASLrtrbKwEArr3Mf1VGc9Wb5iG7L0Q0">
+      <main class="page">
+        <h1>
+          Dashboard
+        </h1>
+        <!-- phx-click on a non-interactive element (rule: phx_click_on_non_interactive) -->        <div phx-click="open_details" class="card">
+          Show account details
+        </div>
+        <p>
+        </p>
+        <!-- JS toggle with no aria-expanded (rule: toggle_missing_aria_state) -->        <button type="button" phx-click="[[&quot;toggle&quot;,{&quot;to&quot;:&quot;#help&quot;}]]">
+          Help
+        </button>
+        <div id="help" class="hidden">
+          <p>
+            Manage your plan and billing here.
+          </p>
+        </div>
+        <!-- Hidden banner revealed via JS.show with no aria-live (rule:
+       reveal_without_announcement; the trigger also has no aria-expanded) -->        <button type="button" phx-click="[[&quot;show&quot;,{&quot;to&quot;:&quot;#promo&quot;}]]">
+          See today&#39;s offer
+        </button>
+        <div id="promo" class="hidden">
+          <p>
+            50% off Pro — today only.
+          </p>
+        </div>
+        <!-- Menu dismissed on click-away with no Escape key (rule:
+       click_away_without_escape) -->        <button type="button" phx-click="[[&quot;toggle&quot;,{&quot;to&quot;:&quot;#menu&quot;}]]">
+          Options
+        </button>
+        <ul id="menu" class="hidden" phx-click-away="[[&quot;hide&quot;,{&quot;to&quot;:&quot;#menu&quot;}]]">
+          <li>
+            <a href="/perf/memory">
+              Memory example
+            </a>
+          </li>
+          <!-- Link with no discernible text (axe: link-name) -->          <li>
+            <a href="/perf/renders">
+            </a>
+          </li>
+        </ul>
+        <!-- Positive tabindex (axe: tabindex) -->        <button type="button" tabindex="3">
+          Buy credits
+        </button>
+        <!-- Heading level jump h1 -> h4 (axe: heading-order) -->        <h4>
+          Recent activity
+        </h4>
+        <!-- Data table with no header cells (axe) -->        <table>
+          <tbody>
+            <tr>
+              <td>
+                2026-05-01
+              </td>
+              <td>
+                Upgraded to Pro
+              </td>
+            </tr>
+            <tr>
+              <td>
+                2026-04-15
+              </td>
+              <td>
+                Signed up
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </main>
+    </div>
+  </body>
+</html>
