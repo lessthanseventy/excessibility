@@ -1,0 +1,69 @@
+<!--
+Excessibility Snapshot
+Test: DemoWeb.AccessibilityTest test accessible reference page
+Sequence: 1
+Event: initial
+Timestamp: 2026-08-06 20:13:29.164095Z
+Assigns: %{status: "", tasks: ["Write the migration", "Review the PR"], show_help?: false}
+Previous: none
+-->
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <meta name="csrf-token" content="GjtTICcHGwEqASk_ezF0KjpCHjc7FWALXkjtOjQ7M0eJ6P5gu1NcJ_1x"/>
+    <title data-default="Demo" data-suffix=" · Phoenix Framework">
+      Demo · Phoenix Framework
+    </title>
+    <link phx-track-static="phx-track-static" rel="stylesheet" href="file:///home/andrew/projects/excessibility/demo/_build/test/lib/demo/priv/static/assets/css/app.css"/>
+    <link phx-track-static="phx-track-static" rel="stylesheet" href="file:///home/andrew/projects/excessibility/demo/_build/test/lib/demo/priv/static/assets/default.css"/>
+  </head>
+  <body>
+    <div id="phx-GMlQeUwf3b00rABL" data-phx-main="" data-phx-session="SFMyNTY.g2gDaAJhBnQAAAAIdwJpZG0AAAAUcGh4LUdNbFFlVXdmM2IwMHJBQkx3B3Nlc3Npb250AAAAAHcKcGFyZW50X3BpZHcDbmlsdwR2aWV3dx1FbGl4aXIuRGVtb1dlYi5BY2Nlc3NpYmxlTGl2ZXcIcm9vdF9waWR3A25pbHcGcm91dGVydxVFbGl4aXIuRGVtb1dlYi5Sb3V0ZXJ3CXJvb3Rfdmlld3cdRWxpeGlyLkRlbW9XZWIuQWNjZXNzaWJsZUxpdmV3EWxpdmVfc2Vzc2lvbl9uYW1ldwdkZWZhdWx0bgYArZ612J8BYgABUYA.g4FeIinHHRPCRq5JixIbgLtj5MuTE2CyYrTE6eWwdBQ" data-phx-static="SFMyNTY.g2gDaAJhBnQAAAADdwJpZG0AAAAUcGh4LUdNbFFlVXdmM2IwMHJBQkx3BWZsYXNodAAAAAB3CmFzc2lnbl9uZXdqbgYArp612J8BYgABUYA.EhKqk_mlc_REqWUmMtfDKOtCiCUoAcbuoSUjQ0BtnuQ">
+      <main class="page">
+        <h1>
+          Tasks
+        </h1>
+        <img src="file:///home/andrew/projects/excessibility/demo/_build/test/lib/demo/priv/static/images/logo.svg" alt="Demo project logo" width="80" height="80"/>
+        <section aria-labelledby="add-heading">
+          <h2 id="add-heading">
+            Add a task
+          </h2>
+          <form phx-submit="add">
+            <label for="task">
+              Task description
+            </label>
+            <input id="task" name="task" type="text"/>
+            <button type="submit">
+              Add task
+            </button>
+          </form>
+          <p class="visually-hidden" role="status" aria-live="polite">
+          </p>
+        </section>
+        <section aria-labelledby="list-heading">
+          <h2 id="list-heading">
+            Your tasks
+          </h2>
+          <ul>
+            <li>
+              Write the migration
+            </li>
+            <li>
+              Review the PR
+            </li>
+          </ul>
+        </section>
+        <section>
+          <h2>
+            Need help?
+          </h2>
+          <button type="button" phx-click="toggle_help" aria-expanded="false" aria-controls="help">
+            Show help
+          </button>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

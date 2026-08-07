@@ -30,6 +30,7 @@ defmodule Excessibility.TelemetryCapture do
     :telemetry.attach_many(
       "excessibility-capture",
       [
+        [:phoenix, :live_view, :mount, :start],
         [:phoenix, :live_view, :mount, :stop],
         [:phoenix, :live_view, :handle_event, :stop],
         [:phoenix, :live_view, :handle_params, :stop],
@@ -191,6 +192,16 @@ defmodule Excessibility.TelemetryCapture do
   @doc """
   Handles telemetry events and captures snapshots.
   """
+  # Ecto queries accumulate in the emitting process's dictionary and only clear
+  # on flush (at each captured :stop). A test's `setup` seeds run before the
+  # LiveView exists, in the same process as the static mount, so those queries
+  # would otherwise flush onto `mount`. Resetting the accumulator when the mount
+  # begins keeps setup queries out of the first event (issue #151).
+  def handle_event([:phoenix, :live_view, :mount, :start], _measurements, _metadata, _config) do
+    flush_ecto_queries()
+    :ok
+  end
+
   def handle_event([:phoenix, :live_view, :mount, :stop], measurements, metadata, _config) do
     IO.puts("📸 Excessibility: Telemetry mount event fired!")
     capture_snapshot("mount", measurements, metadata)

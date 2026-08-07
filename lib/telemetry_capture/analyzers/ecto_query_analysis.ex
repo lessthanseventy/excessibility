@@ -6,7 +6,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EctoQueryAnalysis do
   ecto_queries enricher instead of just counting NotLoaded associations.
 
   Detects:
-  - Excessive queries per event (>5 queries)
+  - Excessive queries per event (>10 queries)
   - N+1 patterns (multiple SELECTs on same table in one event)
   - Slow individual queries (>100ms)
   - Slow total query time per event (>500ms)
@@ -28,7 +28,12 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EctoQueryAnalysis do
 
   @behaviour Excessibility.TelemetryCapture.Analyzer
 
-  @excessive_query_threshold 5
+  # Conservative floor: real Phoenix mounts with nested preloads routinely run
+  # more than a handful of queries, so an absolute count only signals a problem
+  # well above that (issue #151). The shape-based N+1 detector carries the
+  # precise signal; this is a coarse backstop for genuinely high volume.
+  @excessive_query_threshold 10
+  @excessive_critical_threshold 20
   @n_plus_one_threshold 3
   @slow_query_ms 100
   @slow_total_ms 500
@@ -58,7 +63,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EctoQueryAnalysis do
   end
 
   defp detect_excessive_queries(event, count, total_ms) when count > @excessive_query_threshold do
-    severity = if count > 10, do: :critical, else: :warning
+    severity = if count > @excessive_critical_threshold, do: :critical, else: :warning
 
     [
       %{
@@ -74,7 +79,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EctoQueryAnalysis do
 
   defp detect_n_plus_one(event, queries) when length(queries) >= @n_plus_one_threshold do
     queries
-    |> Enum.filter(&(&1.operation == :select))
+    |> Enum.filter(&select?/1)
     |> Enum.group_by(& &1.source)
     |> Enum.flat_map(fn {source, source_queries} ->
       count = length(source_queries)
@@ -103,6 +108,13 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EctoQueryAnalysis do
   end
 
   defp detect_n_plus_one(_event, _queries), do: []
+
+  # `operation` is an atom (`:select`) when analysis runs in-process during
+  # `mix excessibility.debug`, but a string (`"select"`) when a timeline is
+  # reloaded via `mix excessibility.review --timeline` — Jason.decode(keys:
+  # :atoms) atomises keys but leaves values as strings. Compare tolerantly so
+  # the detector fires on both paths (issue #151).
+  defp select?(query), do: to_string(Map.get(query, :operation)) == "select"
 
   defp detect_slow_queries(event, queries) do
     Enum.flat_map(queries, fn query ->

@@ -20,6 +20,13 @@ defmodule Excessibility.TelemetryCapture.EctoCaptureTest do
     def config, do: [telemetry_prefix: [:my_app, :repo]]
   end
 
+  defmodule FakeView do
+    @moduledoc false
+    # Enough for Phoenix's own mount:start logger handler to short-circuit
+    # (log: false) instead of crashing on our synthetic event.
+    def __live__, do: %{log: false}
+  end
+
   setup do
     on_exit(fn ->
       Application.delete_env(:excessibility, :ecto_repos)
@@ -69,6 +76,33 @@ defmodule Excessibility.TelemetryCapture.EctoCaptureTest do
 
     # A flush clears the buffer so queries attribute to a single event.
     assert TelemetryCapture.flush_ecto_queries() == []
+  end
+
+  test "queries that ran before mount (test setup) are not attributed to it" do
+    # Issue #151: seed INSERTs from a test's setup block run before the LiveView
+    # exists and accumulate in the process dictionary. Starting a mount must
+    # reset the accumulator so those queries don't flush onto mount.
+    Application.put_env(:excessibility, :ecto_repos, [PrefixedRepo])
+    TelemetryCapture.attach()
+    on_exit(&TelemetryCapture.detach/0)
+
+    # Setup seeds run first.
+    emit_query([:my_app, :repo, :query], "categories", "INSERT INTO categories ...")
+    emit_query([:my_app, :repo, :query], "products", "INSERT INTO products ...")
+
+    # The LiveView mount begins.
+    :telemetry.execute(
+      [:phoenix, :live_view, :mount, :start],
+      %{system_time: 0},
+      %{socket: %{view: FakeView}, params: %{}, session: %{}, uri: "/"}
+    )
+
+    # A query the mount itself runs.
+    emit_query([:my_app, :repo, :query], "users", "SELECT * FROM users")
+
+    queries = TelemetryCapture.flush_ecto_queries()
+
+    assert Enum.map(queries, & &1.source) == ["users"]
   end
 
   test "no handler is attached (and nothing captured) when no repos are configured" do

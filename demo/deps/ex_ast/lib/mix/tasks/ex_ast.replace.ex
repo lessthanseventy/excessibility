@@ -1,0 +1,128 @@
+defmodule Mix.Tasks.ExAst.Replace do
+  @shortdoc "Replace Elixir code by AST pattern"
+  @moduledoc """
+  Replaces AST pattern matches in Elixir source files.
+
+  ## Usage
+
+      mix ex_ast.replace 'pattern' 'replacement' [path ...]
+
+  ## Options
+
+    * `--dry-run` — show changes without writing files
+    * `--format-output` — run the Elixir formatter on modified files
+    * `--inside 'pattern'` — only replace inside ancestors matching this pattern
+    * `--not-inside 'pattern'` — skip replacements inside ancestors matching this pattern
+    * `--parent 'pattern'` / `--not-parent 'pattern'` — filter by direct semantic parent
+    * `--ancestor 'pattern'` / `--not-ancestor 'pattern'` — filter by semantic ancestor
+    * `--has-child 'pattern'` / `--not-has-child 'pattern'` — filter by direct semantic child
+    * `--contains 'pattern'` / `--not-contains 'pattern'` — filter by semantic descendant
+    * `--has-descendant 'pattern'` / `--not-has-descendant 'pattern'` — aliases for contains filters
+    * `--has 'pattern'` / `--not-has 'pattern'` — aliases for contains filters
+    * `--follows 'pattern'` / `--not-follows 'pattern'` — filter by earlier sibling
+    * `--precedes 'pattern'` / `--not-precedes 'pattern'` — filter by later sibling
+    * `--immediately-follows 'pattern'` / `--not-immediately-follows 'pattern'` — filter by previous sibling
+    * `--immediately-precedes 'pattern'` / `--not-immediately-precedes 'pattern'` — filter by next sibling
+    * `--first` / `--not-first`, `--last` / `--not-last`, `--nth n` / `--not-nth n` — filter by sibling position
+    * `--comment text` / `--not-comment text` — filter by associated comments
+    * `--comment-before text`, `--comment-after text`, `--comment-inside text`, `--comment-inline text` — filter by comment location
+
+    Comment values are substrings by default. Use `/.../` or `~r/.../` for regexes, including flags like `/todo/i`.
+
+  ## Examples
+
+      mix ex_ast.replace 'IO.inspect(expr, _)' 'expr' lib/
+      mix ex_ast.replace 'dbg(expr)' 'expr'
+      mix ex_ast.replace --dry-run '%Step{id: "subject"}' 'SharedSteps.subject_step(@opts)'
+      mix ex_ast.replace --not-inside 'test _ do _ end' 'IO.inspect(expr)' 'expr'
+      mix ex_ast.replace 'IO.inspect(expr)' 'Logger.debug(inspect(expr))' lib/ --parent 'def _ do ... end'
+      mix ex_ast.replace 'Repo.get!(schema, id)' 'Repo.fetch!(schema, id)' lib/ --contains 'Repo.transaction(_)' --not-contains 'IO.inspect(...)'
+      mix ex_ast.replace 'Logger.debug(record)' 'Logger.info(record)' lib/ --immediately-precedes 'Repo.delete(record)'
+      mix ex_ast.replace 'IO.inspect(expr)' 'dbg(expr)' lib/ --comment-inline temporary
+      mix ex_ast.replace 'IO.inspect(expr)' 'dbg(expr)' lib/ --comment-inline '/temporary|debug/i'
+  """
+
+  use Mix.Task
+
+  alias ExAST.CLI.JSON
+  alias ExAST.CLI.Output
+  alias ExAST.CLI.SelectorOptions
+
+  @impl Mix.Task
+  def run(args) do
+    {opts, positional, _} =
+      OptionParser.parse(args,
+        strict:
+          [dry_run: :boolean, format_output: :boolean, format: :string, json: :boolean] ++
+            SelectorOptions.switches()
+      )
+
+    case positional do
+      [pattern, replacement | paths] ->
+        paths = if paths == [], do: ["lib/"], else: paths
+        do_replace(paths, pattern, replacement, opts)
+
+      _ ->
+        Mix.raise("Usage: mix ex_ast.replace 'pattern' 'replacement' [path ...]")
+    end
+  end
+
+  defp do_replace(paths, pattern, replacement, opts) do
+    validate_syntax!(pattern, "pattern")
+    validate_syntax!(replacement, "replacement")
+
+    replace_pattern =
+      SelectorOptions.pattern(pattern, opts, &validate_filter_pattern!/1, [
+        :dry_run,
+        :format_output,
+        :format,
+        :json
+      ])
+
+    replace_opts = [
+      {:dry_run, opts[:dry_run] || false},
+      {:format, opts[:format_output] || false}
+      | SelectorOptions.where_opts(opts, [:dry_run, :format_output, :format, :json])
+    ]
+
+    results = ExAST.replace(paths, replace_pattern, replacement, replace_opts)
+
+    Output.with_stdout(fn -> print_results(results, opts) end)
+  end
+
+  defp print_results([], opts) do
+    if json?(opts),
+      do: JSON.print(%{files: [], replacements: 0}),
+      else: Output.puts("No matches found.")
+  end
+
+  defp print_results(files, opts) do
+    total = Enum.reduce(files, 0, fn {_file, count}, sum -> sum + count end)
+    verb = if opts[:dry_run], do: "Would update", else: "Updated"
+
+    if json?(opts) do
+      JSON.print(%{
+        dry_run: opts[:dry_run] || false,
+        replacements: total,
+        files: Enum.map(files, fn {file, count} -> %{file: file, replacements: count} end)
+      })
+    else
+      for {file, count} <- files do
+        Output.puts("#{verb} #{file} (#{count} replacement(s))")
+      end
+
+      Output.puts("\n#{total} replacement(s) in #{length(files)} file(s)")
+    end
+  end
+
+  defp json?(opts), do: opts[:json] || opts[:format] == "json"
+
+  defp validate_filter_pattern!(code), do: validate_syntax!(code, "filter pattern")
+
+  defp validate_syntax!(code, label) do
+    Code.string_to_quoted!(code)
+  rescue
+    e in [SyntaxError, TokenMissingError, MismatchedDelimiterError] ->
+      Mix.raise("Invalid #{label}: #{Exception.message(e)}")
+  end
+end
