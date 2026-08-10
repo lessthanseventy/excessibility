@@ -40,7 +40,7 @@ defmodule Mix.Tasks.Excessibility.Debug do
 
   ## Flags
 
-  - `--format=markdown|json|package` - Output format (default: markdown)
+  - `--format=markdown|json|package|digest` - Output format (default: markdown)
   - `--full` - Disable all filtering, show complete assigns
   - `--minimal` - Timeline only, no detailed snapshots
   - `--no-filter-ecto` - Keep Ecto metadata (__meta__, NotLoaded)
@@ -60,6 +60,7 @@ defmodule Mix.Tasks.Excessibility.Debug do
   - `markdown` (default) - Human and AI-readable report with inline HTML
   - `json` - Structured JSON output for programmatic parsing
   - `package` - Creates a directory with MANIFEST, timeline, and all snapshots
+  - `digest` - Prints the value-free `digest.json` runtime-evidence artifact
 
   ## Output
 
@@ -138,6 +139,9 @@ defmodule Mix.Tasks.Excessibility.Debug do
 
       "package" ->
         output_package(report_data)
+
+      "digest" ->
+        output_digest(report_data)
 
       _ ->
         output_markdown(report_data)
@@ -410,6 +414,33 @@ defmodule Mix.Tasks.Excessibility.Debug do
     latest_path = Path.join(output_path, "latest_debug.json")
     File.mkdir_p!(output_path)
     File.write!(latest_path, json)
+  end
+
+  # Public (but @doc false) so the value-free digest output can be unit-tested
+  # without shelling out through the full `run/1` test pipeline. The digest is
+  # written during capture (see Excessibility.TelemetryCapture); this only reads
+  # and prints it — it never rebuilds the digest.
+  @doc false
+  def output_digest(_report_data) do
+    output_path =
+      Application.get_env(
+        :excessibility,
+        :excessibility_output_path,
+        "test/excessibility"
+      )
+
+    digest_path = Path.join(output_path, "digest.json")
+
+    if File.exists?(digest_path) do
+      Mix.shell().info(File.read!(digest_path))
+    else
+      Mix.shell().info("No digest.json was produced at #{digest_path}.")
+
+      Mix.shell().info(
+        "The digest is only written when LiveView telemetry is captured. " <>
+          "Run against a LiveView test, e.g. `mix excessibility.debug test/my_live_view_test.exs`."
+      )
+    end
   end
 
   defp output_package(report_data) do
