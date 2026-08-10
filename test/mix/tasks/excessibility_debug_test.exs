@@ -57,4 +57,67 @@ defmodule Mix.Tasks.Excessibility.DebugTest do
                [{"EXCESSIBILITY_QUERY_PLAN", "explain_analyze"}]
     end
   end
+
+  describe "collect_sample/1 (benchmark sample extraction)" do
+    # A decoded timeline map (keys: :atoms, as read from timeline.json). Each
+    # sample is one benchmark run's per-(view, callback) and per-fingerprint
+    # duration_ms map.
+    defp timeline_fixture do
+      %{
+        test: "PageLiveTest: saves",
+        timeline: [
+          %{
+            sequence: 1,
+            event: "mount",
+            view_module: "MyAppWeb.PageLive",
+            event_duration_ms: 12.0,
+            duration_since_previous_ms: nil,
+            ecto_queries: []
+          },
+          %{
+            sequence: 2,
+            event: "handle_event:save",
+            view_module: "MyAppWeb.PageLive",
+            event_duration_ms: 30.0,
+            duration_since_previous_ms: 40.0,
+            ecto_queries: [
+              %{fingerprint: "sha256:aaa", duration_ms: 3.0},
+              %{fingerprint: "sha256:aaa", duration_ms: 2.0},
+              %{fingerprint: "sha256:bbb", duration_ms: 5.0}
+            ]
+          }
+        ]
+      }
+    end
+
+    test "extracts per-(view, callback) durations keyed by view/callback" do
+      sample = DebugTask.collect_sample(timeline_fixture())
+
+      assert sample["MyAppWeb.PageLive/mount"] == 12.0
+      assert sample["MyAppWeb.PageLive/handle_event:save"] == 30.0
+    end
+
+    test "aggregates per-fingerprint query durations" do
+      sample = DebugTask.collect_sample(timeline_fixture())
+
+      # two aaa queries summed, one bbb query
+      assert sample["query:sha256:aaa"] == 5.0
+      assert sample["query:sha256:bbb"] == 5.0
+    end
+
+    test "falls back to duration_since_previous_ms when event_duration_ms is missing" do
+      timeline = %{
+        timeline: [
+          %{event: "render", view_module: "V", duration_since_previous_ms: 7.0, ecto_queries: []}
+        ]
+      }
+
+      assert DebugTask.collect_sample(timeline)["V/render"] == 7.0
+    end
+
+    test "handles an empty/missing timeline gracefully" do
+      assert DebugTask.collect_sample(%{}) == %{}
+      assert DebugTask.collect_sample(%{timeline: []}) == %{}
+    end
+  end
 end
