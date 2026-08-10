@@ -579,16 +579,26 @@ defmodule Excessibility.TelemetryCapture do
         if Application.get_env(:excessibility, :query_plan_allow_analyze, false) do
           :explain_analyze
         else
-          Logger.warning(
-            "Excessibility: EXPLAIN ANALYZE requested but :query_plan_allow_analyze is not " <>
-              "enabled; downgrading to EXPLAIN (no data-touching plan capture)."
-          )
-
+          warn_analyze_downgrade_once()
           :explain
         end
 
       _ ->
         :disabled
+    end
+  end
+
+  # `plan_capture_mode/0` is evaluated per query; warn about the ANALYZE
+  # downgrade at most once per process so a misconfigured run does not emit one
+  # identical warning per SELECT.
+  defp warn_analyze_downgrade_once do
+    unless Process.get(:excessibility_analyze_downgrade_warned) do
+      Process.put(:excessibility_analyze_downgrade_warned, true)
+
+      Logger.warning(
+        "Excessibility: EXPLAIN ANALYZE requested but :query_plan_allow_analyze is not " <>
+          "enabled; downgrading to EXPLAIN (no data-touching plan capture)."
+      )
     end
   end
 
