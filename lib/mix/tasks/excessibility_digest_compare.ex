@@ -191,17 +191,50 @@ defmodule Mix.Tasks.Excessibility.Digest.Compare do
   defp plans_section(plans) do
     body =
       Enum.map_join(plans, "\n", fn p ->
-        rows =
-          case p[:estimated_rows_delta] do
-            nil -> ""
-            delta -> " (estimated_rows delta #{signed(delta)})"
-          end
+        kind = if p[:structural_change], do: "structural", else: "numeric"
 
-        "- #{p[:view]} #{p[:callback]} #{p[:fingerprint]}: plan #{p[:base_plan]} -> #{p[:head_plan]}#{rows}"
+        header =
+          "- #{p[:view]} #{p[:callback]} #{p[:fingerprint]} (#{kind}): plan #{p[:base_plan]} -> #{p[:head_plan]}#{root_rows(p)}"
+
+        Enum.join([header | node_delta_lines(p[:node_deltas] || [])], "\n")
       end)
 
     "## Plans\n\n" <> body <> "\n"
   end
+
+  defp root_rows(p) do
+    [
+      delta_fragment("estimated_rows", p[:estimated_rows_delta]),
+      delta_fragment("actual_rows", p[:actual_rows_delta])
+    ]
+    |> Enum.reject(&(&1 == ""))
+    |> case do
+      [] -> ""
+      frags -> " (" <> Enum.join(frags, ", ") <> ")"
+    end
+  end
+
+  defp node_delta_lines(node_deltas) do
+    Enum.map(node_deltas, fn n ->
+      target = [n[:node], n[:relation]] |> Enum.reject(&is_nil/1) |> Enum.join(" on ")
+
+      changes =
+        [
+          delta_fragment("estimated_rows", n[:estimated_rows_delta]),
+          delta_fragment("actual_rows", n[:actual_rows_delta]),
+          delta_fragment("rows_touched", n[:rows_touched_delta]),
+          delta_fragment("loops", n[:loops_delta])
+        ]
+        |> Enum.reject(&(&1 == ""))
+        |> Enum.join(", ")
+
+      "    - node[#{n[:index]}] #{target} (depth #{n[:depth]}): #{changes}"
+    end)
+  end
+
+  defp delta_fragment(_label, nil), do: ""
+  defp delta_fragment(_label, 0), do: ""
+  defp delta_fragment(label, delta), do: "#{label} delta #{signed(delta)}"
 
   defp assigns_section([]), do: "## Assigns\n\nnone\n"
 

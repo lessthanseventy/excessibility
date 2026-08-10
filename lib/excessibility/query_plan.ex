@@ -24,6 +24,11 @@ defmodule Excessibility.QueryPlan do
   def summarize(%{"Plan" => plan}) when is_map(plan), do: summarize_plan(plan)
   def summarize(_), do: nil
 
+  # Upper bound on the per-node evidence list. Real EXPLAIN trees are far
+  # smaller; the cap is a safety valve so a pathological plan cannot bloat the
+  # digest. Truncation is deterministic (first N in depth-first order).
+  @max_node_rows 100
+
   defp summarize_plan(plan) do
     tree = walk(plan)
     nodes = Enum.map(tree, &node_label/1)
@@ -40,11 +45,55 @@ defmodule Excessibility.QueryPlan do
       estimated_rows: estimated,
       actual_rows: actual,
       loops: plan["Actual Loops"],
-      estimate_error: estimate_error(estimated, actual)
+      estimate_error: estimate_error(estimated, actual),
+      node_rows: node_rows(plan)
     }
   rescue
     _ -> nil
   end
+
+  # Bounded, deterministic, value-free per-node numeric evidence in depth-first
+  # order. Estimated rows are always kept (plain EXPLAIN); actual rows, loops
+  # and rows_touched are only present when the node carries ANALYZE data. This
+  # is what preserves a large child scan beneath a one-row root — a magnitude
+  # the structural fingerprint alone discards (issue #157).
+  defp node_rows(plan) do
+    plan
+    |> walk_node_rows(0)
+    |> Enum.take(@max_node_rows)
+  end
+
+  defp walk_node_rows(%{"Node Type" => type} = node, depth) do
+    estimated = node["Plan Rows"]
+    actual = node["Actual Rows"]
+    loops = node["Actual Loops"]
+
+    entry = %{
+      node: type,
+      relation: node["Relation Name"],
+      depth: depth,
+      estimated_rows: estimated,
+      actual_rows: actual,
+      loops: loops,
+      rows_touched: rows_touched(actual, loops),
+      estimate_error: estimate_error(estimated, actual)
+    }
+
+    children =
+      node |> Map.get("Plans", []) |> List.wrap() |> Enum.flat_map(&walk_node_rows(&1, depth + 1))
+
+    [entry | children]
+  end
+
+  defp walk_node_rows(_, _), do: []
+
+  # A node executed inside a loop touches `Actual Rows` (Postgres reports the
+  # per-loop average) once per loop, so total work is rows × loops. Without
+  # ANALYZE there are no actuals, so rows_touched is unmeasured (nil).
+  defp rows_touched(actual, loops) when is_number(actual) and is_number(loops), do: round(actual * loops)
+
+  defp rows_touched(actual, nil) when is_number(actual), do: actual
+  defp rows_touched(_, _), do: nil
 
   # Depth-first walk collecting {node_type, relation_name} tuples in traversal order.
   defp walk(%{"Node Type" => type} = plan) do

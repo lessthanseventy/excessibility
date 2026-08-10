@@ -146,6 +146,115 @@ defmodule Excessibility.DigestCompareTest do
     assert p.estimated_rows_delta == 400
   end
 
+  test "stable plan fingerprint with changed actual rows still produces a plan delta (#157)" do
+    base =
+      digest(
+        [
+          event("PageLive", "handle_event:save",
+            shapes: [
+              shape("sha256:aaa", 1, %{
+                plan: %{fingerprint: "sha256:plan", estimated_rows: 1, actual_rows: 1}
+              })
+            ]
+          )
+        ],
+        plan_capture: :explain_analyze
+      )
+
+    head =
+      digest(
+        [
+          event("PageLive", "handle_event:save",
+            shapes: [
+              shape("sha256:aaa", 1, %{
+                plan: %{fingerprint: "sha256:plan", estimated_rows: 1, actual_rows: 10_000}
+              })
+            ]
+          )
+        ],
+        plan_capture: :explain_analyze
+      )
+
+    result = DigestCompare.diff(base, head)
+
+    assert [p] = result.plans
+    assert p.fingerprint == "sha256:aaa"
+    assert p.base_plan == "sha256:plan"
+    assert p.head_plan == "sha256:plan"
+    # Structural shape is unchanged; the change is purely numeric.
+    assert p.structural_change == false
+    assert p.actual_rows_delta == 9_999
+    assert p.estimated_rows_delta == 0
+  end
+
+  test "node-level actual-row change under a stable fingerprint surfaces as a node delta (#157)" do
+    plan = fn child_actual ->
+      %{
+        fingerprint: "sha256:plan",
+        estimated_rows: 1,
+        actual_rows: 1,
+        node_rows: [
+          %{
+            node: "Nested Loop",
+            relation: nil,
+            depth: 0,
+            estimated_rows: 1,
+            actual_rows: 1,
+            loops: 1,
+            rows_touched: 1,
+            estimate_error: 0.0
+          },
+          %{
+            node: "Seq Scan",
+            relation: "children",
+            depth: 1,
+            estimated_rows: 50,
+            actual_rows: child_actual,
+            loops: 1,
+            rows_touched: child_actual,
+            estimate_error: nil
+          }
+        ]
+      }
+    end
+
+    base =
+      digest([event("PageLive", "handle_event:save", shapes: [shape("sha256:aaa", 1, %{plan: plan.(10)})])],
+        plan_capture: :explain_analyze
+      )
+
+    head =
+      digest([event("PageLive", "handle_event:save", shapes: [shape("sha256:aaa", 1, %{plan: plan.(10_000)})])],
+        plan_capture: :explain_analyze
+      )
+
+    result = DigestCompare.diff(base, head)
+
+    assert [p] = result.plans
+    assert p.structural_change == false
+    assert [node] = p.node_deltas
+    assert node.relation == "children"
+    assert node.depth == 1
+    assert node.actual_rows_delta == 9_990
+    assert node.rows_touched_delta == 9_990
+  end
+
+  test "identical plans produce no plan delta" do
+    plan = %{fingerprint: "sha256:plan", estimated_rows: 1, actual_rows: 1, node_rows: []}
+
+    base =
+      digest([event("PageLive", "handle_event:save", shapes: [shape("sha256:aaa", 1, %{plan: plan})])],
+        plan_capture: :explain_analyze
+      )
+
+    head =
+      digest([event("PageLive", "handle_event:save", shapes: [shape("sha256:aaa", 1, %{plan: plan})])],
+        plan_capture: :explain_analyze
+      )
+
+    assert DigestCompare.diff(base, head).plans == []
+  end
+
   test "plan capture mismatch suppresses plans and adds a scope note" do
     base =
       digest(
