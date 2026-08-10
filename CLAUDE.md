@@ -139,6 +139,32 @@ mix excessibility.debug test/my_test.exs --highlight=current_user,cart
 
 This generates `timeline.json` with event flow, memory usage, and pattern analysis - useful for debugging performance but separate from accessibility testing.
 
+### Runtime Evidence Digest (`digest.json`)
+
+Every `mix excessibility.debug` capture writes **two** artifacts (both in `Excessibility.TelemetryCapture.write_snapshots/1`):
+
+- **`timeline.json`** - the full local diagnosis. Contains filtered assigns, raw SQL, memory sizes/diffs. **Local debugging only** - it may contain application data and is **NOT safe to upload** to CI/artifacts/models.
+- **`digest.json`** - a **value-free, safe-by-construction** artifact built by `Excessibility.Digest`. Built by explicit construction from an allowlist (never copy-then-scrub), so it is safe for CI, artifact stores, and model input. Position it as **supplemental** input for debugging and code-aware review - not a universal performance verdict and not a replacement for source-aware review.
+
+**Schema `excessibility.digest/v1`** - top-level keys `capture` (status, `ecto_configured`, `enrichers_run`, `plan_capture`, `timing`, `capture_version`, `warnings`), `coverage` (tests, views, `callbacks_observed`, `event_sequence`, `fixtures`), `events[]` (per event: `queries` with fingerprint `shapes`/`repeated`/`overflow`, and `assigns` with per-assign name/kind/cardinality/`term_bytes`/`delta_bytes`/`growth`), and `trajectories` (per-view `monotonic_growth`/`retained_after_use`).
+
+**Privacy guarantee:** the digest never contains assign values, params, form/bind values, raw SQL, rendered HTML, or arbitrary inspected terms - only names, shapes, coarse sizes, counts, and fingerprints. Missing signals are always labeled *why* via the coverage/status contract (`ecto_configured: false` = "not measured" ≠ measured-and-zero).
+
+Print it with `mix excessibility.debug --format digest test/my_test.exs` (reads the already-written `digest.json`; does not rebuild it).
+
+**Query fingerprints & N+1** - each Ecto query is normalized to a value-free SQL shape (`Excessibility.SQLFingerprint`) and given a `sha256:` fingerprint. N+1 evidence groups by fingerprint (via `Excessibility.QueryEvidence`), so two different SELECTs on the same table stay distinct. Postgres-oriented normalizer.
+
+**Opt-in query-plan (EXPLAIN) evidence** (Postgres-only):
+- `--plan` -> runs `EXPLAIN (FORMAT JSON)` (plans, never executes; SELECT-only). Sets `EXCESSIBILITY_QUERY_PLAN=explain`.
+- `--plan-analyze` -> runs `EXPLAIN ANALYZE` (executes the query for real row counts). Double-gated: also requires `config :excessibility, query_plan_allow_analyze: true`, else downgrades to `EXPLAIN` with a warning. Sandbox/read-only only. Sets `EXCESSIBILITY_QUERY_PLAN=explain_analyze`.
+- Other adapters: plan capture is a documented no-op (`plan_capture` stays `disabled`).
+
+**Compare** - `mix excessibility.digest.compare --base B --head H [--format json]` (`Excessibility.DigestCompare`) reports structural query/plan/assign/coverage deltas only. Measurement-scope-guarded (never fabricates a delta when the two sides measured different signals), **no merge verdict**, **always exits 0**. (Note: the a11y snapshot task moved to `mix excessibility.snapshot.compare`; bare `mix excessibility.compare` was removed - breaking change in the CHANGELOG.)
+
+**Benchmark mode** - `mix excessibility.debug --benchmark=N` runs the test N times and writes `benchmark.json` with robust cold-vs-warm stats (median + MAD) per `(view, callback)` and per fingerprint. Sample 1 = cold, 2..N = warm, reported separately. Timing **never** enters the digest.
+
+**Timing contract** - single-run timing is diagnostic-only and marked `timing: non_comparable` in the digest. Green means "no relative/configured outlier in this run," NOT "this code is fast." Use benchmark mode for comparable timing.
+
 **Available Analyzers (Default Enabled):**
 
 - `memory` - Detects memory bloat and leaks using adaptive thresholds
@@ -328,6 +354,14 @@ All configuration in `test/test_helper.exs` or `config/test.exs`:
 - `:ecto_repos` - Repos to capture query telemetry from for N+1/query analysis (default: `[]`, e.g. `[MyApp.Repo]`)
 - `:custom_enrichers` - List of custom enricher modules (default: `[]`)
 - `:custom_analyzers` - List of custom analyzer modules (default: `[]`)
+- `:sql_dialect` - SQL dialect for query normalization/EXPLAIN (default: `:postgres`; only Postgres ships, behind the `Excessibility.Dialect` seam)
+- `:query_plan_allow_analyze` - Second gate for `--plan-analyze` / `EXPLAIN ANALYZE`, which executes queries (default: `false`; enable only in a read-only DB sandbox)
+- `:fixtures` - Caller-supplied fixture cardinalities surfaced in the digest's `coverage.fixtures` (default: `%{}`; `EXCESSIBILITY_FIXTURES` env JSON takes precedence)
+- `:digest_include_normalized_sql` - Include the normalized value-free SQL string in digest query shapes (default: `true`; `false` = fingerprint-only)
+
+**Runtime digest env vars** (set on `mix excessibility.debug` runs):
+- `EXCESSIBILITY_QUERY_PLAN` - `explain` | `explain_analyze` | unset; enables opt-in query-plan capture (`--plan`/`--plan-analyze` set this). `explain_analyze` still requires `:query_plan_allow_analyze`.
+- `EXCESSIBILITY_FIXTURES` - JSON object of fixture cardinalities for `coverage.fixtures`; precedence over `config :excessibility, :fixtures`; malformed JSON is ignored with a warning.
 
 ## Testing Strategy
 
