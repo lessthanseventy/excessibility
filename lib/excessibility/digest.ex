@@ -34,7 +34,8 @@ defmodule Excessibility.Digest do
       schema: @schema_version,
       capture: capture_block(opts),
       coverage: coverage_block(timeline, events, opts),
-      events: Enum.map(events, &event_block/1)
+      events: build_events(events),
+      trajectories: trajectories(events)
     }
   rescue
     e ->
@@ -49,7 +50,8 @@ defmodule Excessibility.Digest do
           capture_version: capture_version(),
           warnings: [Exception.message(e)]
         },
-        events: []
+        events: [],
+        trajectories: %{}
       }
   end
 
@@ -77,13 +79,28 @@ defmodule Excessibility.Digest do
     }
   end
 
-  defp event_block(entry) do
+  # Map events in original sequence order, threading each view's previous
+  # `assign_sizes` so per-event byte deltas only compare within the same
+  # LiveView (a different view's assigns never create a false delta).
+  defp build_events(events) do
+    {blocks, _prev_by_view} =
+      Enum.map_reduce(events, %{}, fn entry, prev_by_view ->
+        view = Map.get(entry, :view_module)
+        prev_sizes = Map.get(prev_by_view, view, %{})
+        block = event_block(entry, prev_sizes)
+        {block, Map.put(prev_by_view, view, Map.get(entry, :assign_sizes, %{}))}
+      end)
+
+    blocks
+  end
+
+  defp event_block(entry, prev_sizes) do
     %{
       sequence: entry.sequence,
       callback: entry.event,
       view: entry.view_module,
       queries: query_block(entry),
-      assigns: assign_block(entry)
+      assigns: assign_block(entry, prev_sizes)
     }
   end
 
@@ -110,9 +127,101 @@ defmodule Excessibility.Digest do
     Application.get_env(:excessibility, :digest_include_normalized_sql, true)
   end
 
-  # TODO(#154): Task 6 — real assign shapes/trajectories. Stub for now.
-  defp assign_block(entry) do
-    %{total_term_bytes: Map.get(entry, :total_memory, 0), shapes: []}
+  # Per-event, value-free assign evidence: names + coarse sizes only, never
+  # values. `prev_sizes` is the same view's previous-event `assign_sizes` map,
+  # used only to derive byte deltas and growth classification.
+  defp assign_block(entry, prev_sizes) do
+    assign_sizes = Map.get(entry, :assign_sizes, %{})
+    list_sizes = Map.get(entry, :list_sizes, %{})
+
+    shapes =
+      assign_sizes
+      |> Enum.map(fn {name, bytes} ->
+        assign_shape(name, bytes, list_sizes, prev_sizes)
+      end)
+      |> Enum.sort_by(& &1.name)
+
+    %{
+      total_term_bytes: Map.get(entry, :total_memory) || sum_bytes(assign_sizes),
+      shapes: shapes
+    }
+  end
+
+  defp assign_shape(name, bytes, list_sizes, prev_sizes) do
+    cardinality = Map.get(list_sizes, name)
+    prev = Map.get(prev_sizes, name)
+
+    %{
+      name: to_string(name),
+      # Struct detection is not available from sizes alone, so we only
+      # distinguish list (via list_sizes) from everything else, defaulting to
+      # "scalar" when we cannot tell.
+      kind: if(cardinality != nil, do: "list", else: "scalar"),
+      cardinality: cardinality,
+      term_bytes: bytes,
+      # No enricher emits a bounded per-assign nesting depth today (the `state`
+      # enricher's `state_max_depth` is whole-assigns, not per-assign), so 1 is
+      # the safe non-fabricated default.
+      path_depth: 1,
+      delta_bytes: bytes - (prev || 0),
+      growth: growth(prev, bytes)
+    }
+  end
+
+  defp growth(nil, _bytes), do: "new"
+  defp growth(prev, bytes) when bytes > prev, do: "increased"
+  defp growth(prev, bytes) when bytes < prev, do: "decreased"
+  defp growth(_prev, _bytes), do: "stable"
+
+  defp sum_bytes(assign_sizes) do
+    assign_sizes |> Map.values() |> Enum.sum()
+  end
+
+  # Per-view cross-event assign patterns. Advisory heuristics:
+  # - `monotonic_growth`: assign whose term_bytes never shrinks across the
+  #   view's events AND strictly increases at least once.
+  # - `retained_after_use`: assign that grew at some point and whose final size
+  #   is >= its max earlier size (grew then stayed large through the last event).
+  defp trajectories(events) do
+    events
+    |> Enum.group_by(&Map.get(&1, :view_module))
+    |> Map.new(fn {view, view_events} ->
+      {view, view_trajectory(view_events)}
+    end)
+  end
+
+  defp view_trajectory(view_events) do
+    series = byte_series(view_events)
+
+    %{
+      monotonic_growth: for({name, bytes} <- series, monotonic_growth?(bytes), do: name),
+      retained_after_use: for({name, bytes} <- series, retained_after_use?(bytes), do: name)
+    }
+  end
+
+  # %{assign_name => [bytes_in_event_order]} across this view's events.
+  defp byte_series(view_events) do
+    view_events
+    |> Enum.flat_map(fn entry ->
+      entry |> Map.get(:assign_sizes, %{}) |> Enum.map(fn {name, bytes} -> {to_string(name), bytes} end)
+    end)
+    |> Enum.group_by(fn {name, _bytes} -> name end, fn {_name, bytes} -> bytes end)
+  end
+
+  defp monotonic_growth?(bytes) do
+    non_decreasing?(bytes) and strictly_increases_once?(bytes)
+  end
+
+  defp non_decreasing?(bytes) do
+    bytes |> Enum.chunk_every(2, 1, :discard) |> Enum.all?(fn [a, b] -> b >= a end)
+  end
+
+  defp strictly_increases_once?(bytes) do
+    bytes |> Enum.chunk_every(2, 1, :discard) |> Enum.any?(fn [a, b] -> b > a end)
+  end
+
+  defp retained_after_use?(bytes) do
+    strictly_increases_once?(bytes) and List.last(bytes) >= Enum.max(bytes)
   end
 
   defp capture_version do
