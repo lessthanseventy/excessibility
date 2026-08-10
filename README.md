@@ -244,6 +244,8 @@ Automatically captures LiveView state throughout test execution and generates sc
 mix excessibility.debug test/my_test.exs
 ```
 
+This writes the full local `timeline.json`. Alongside it, capture also writes a **value-free `digest.json`** that is safe to upload to CI or hand to a reviewer/model — see [Runtime Evidence Digest](#runtime-evidence-digest) below.
+
 See the project's `CLAUDE.md` file for detailed usage.
 
 ### Telemetry Implementation
@@ -279,6 +281,119 @@ test "manual capture", %{conn: conn} do
   html_snapshot(view)  # Another snapshot
 end
 ```
+
+## Runtime Evidence Digest
+
+`mix excessibility.debug` writes **two** artifacts side by side, with very different privacy properties:
+
+- **`timeline.json`** — the full local diagnosis. It carries real (filtered) assigns, raw SQL, bind-value-free query text, memory sizes and diffs. It is meant for **local debugging only**. It can contain application data and is **not safe to upload** to CI logs, artifact stores, or a model.
+- **`digest.json`** — a **value-free, safe-by-construction** runtime-evidence artifact derived from the same in-memory timeline. It is built by explicit construction from an allowlist — it never copies an assigns map, a raw query, params, or bind values. This is the artifact you can attach to a PR, store as a CI artifact, or hand to a reviewer or model.
+
+Both are written during capture in `Excessibility.TelemetryCapture.write_snapshots/1`. The digest builder is `Excessibility.Digest`.
+
+Position this as **supplemental** input for debugging and code-aware review. It is a compact, trustworthy record of what a LiveView actually did — query shapes, plan shapes, assign growth, callback sequence and coverage — that a reviewer or tool can interpret **alongside the source code**. It is *not* a universal performance verdict and it does *not* replace source-aware review or profiling.
+
+### The `excessibility.digest/v1` schema
+
+```jsonc
+{
+  "schema": "excessibility.digest/v1",
+  "capture": {
+    "status": "ok",                 // ok | partial | failed
+    "ecto_configured": true,        // false ⇒ "not measured" (≠ configured + zero queries)
+    "enrichers_run": ["assign_sizes", "collection_size", "ecto_queries", "state"],
+    "plan_capture": "disabled",     // disabled | explain | explain_analyze
+    "timing": "non_comparable",     // single run is never treated as a base/head
+    "capture_version": "0.18.1",
+    "warnings": []
+  },
+  "coverage": {
+    "tests": ["MyAppWeb.PageLiveTest: saves product"],
+    "views": ["MyAppWeb.PageLive"],
+    "callbacks_observed": ["mount", "handle_params", "handle_event:save", "render"],
+    "event_sequence": ["mount", "handle_params", "handle_event:save", "render"],
+    "fixtures": {}                  // caller-supplied cardinality only
+  },
+  "events": [{
+    "sequence": 3,
+    "callback": "handle_event:save",
+    "view": "MyAppWeb.PageLive",
+    "queries": {
+      "count": 12,
+      "shapes": [{ "fingerprint": "sha256:9f3a…", "operation": "select",
+                   "source": "categories", "normalized": "select … where id = $?",
+                   "count": 10, "sequences": [4,5,6,7,8,9,10,11,12,13] }],
+      "repeated": [{ "fingerprint": "sha256:9f3a…", "source": "categories",
+                     "repetitions": 10, "share": 0.83, "cardinality": null,
+                     "severity": "advisory" }],
+      "overflow": null              // explicit metadata if ever bounded — never silent truncation
+    },
+    "assigns": {
+      "total_term_bytes": 24000,
+      "shapes": [{ "name": "products", "kind": "list", "cardinality": 50,
+                   "term_bytes": 18000, "path_depth": 1,
+                   "delta_bytes": 18000, "growth": "increased" }]
+    }
+  }],
+  "trajectories": {
+    "MyAppWeb.PageLive": { "monotonic_growth": ["products"], "retained_after_use": [] }
+  }
+}
+```
+
+**Privacy guarantee.** The digest **never** contains assign values, params/form values, user/session records, SQL bind values, rendered HTML, or arbitrary inspected terms. Every field is a name, a shape, a coarse size, a count, or a fingerprint. Redaction is by omission — if a field cannot be derived safely, it is left out, not guessed.
+
+The **coverage/status contract** makes silence interpretable: an unexercised callback is simply absent from `callbacks_observed`; `ecto_configured: false` means "queries were not measured" (distinct from measured-and-zero); a disabled enricher or failed capture shows up in `enrichers_run` / `status` + `warnings`. A missing signal is always labeled *why*.
+
+Print the digest for the last run with:
+
+```bash
+mix excessibility.debug --format digest test/my_live_view_test.exs
+```
+
+`--format digest` only reads and prints the `digest.json` that capture already wrote; it never rebuilds it.
+
+### Query fingerprints and N+1
+
+Every captured Ecto query is normalized into a stable, value-free SQL shape (`Excessibility.SQLFingerprint`): keywords downcased, `$1,$2 → $?`, `IN (...)` arity folded, inline numeric/quoted literals scrubbed to `?`, whitespace collapsed. A `sha256:` fingerprint is derived from that normalized string. N+1 evidence groups by **fingerprint** (via the shared `Excessibility.QueryEvidence`), so two *different* SELECTs on the same table are counted as two shapes rather than lumped together by table name. The normalizer is Postgres-oriented (the Ecto reference adapter emits parameterized SQL); other adapters still fingerprint via the generic regex.
+
+### Opt-in query-plan (EXPLAIN) evidence — Postgres-only
+
+Off by default. When enabled, each recorded SELECT is run through `EXPLAIN` and a **value-free** plan summary (node types, relation names, row estimates only — never row data) is attached to its query shape, with a stable plan fingerprint over the node-type + relation tree.
+
+| Flag | Mode | Behavior |
+|------|------|----------|
+| `--plan` | `EXPLAIN (FORMAT JSON)` | Plans the SELECT but **never executes** it — touches no data. SELECT-only. |
+| `--plan-analyze` | `EXPLAIN ANALYZE` | *Executes* the query to gather real row counts. **Double-gated:** additionally requires `config :excessibility, query_plan_allow_analyze: true` (without it, downgrades to plain `EXPLAIN` with a warning). Run only inside a DB sandbox / read-only environment. |
+
+```bash
+mix excessibility.debug --plan test/my_live_view_test.exs
+mix excessibility.debug --plan-analyze test/my_live_view_test.exs   # + query_plan_allow_analyze: true
+```
+
+Guards: only SELECTs are ever re-run; EXPLAIN's own Ecto telemetry is suppressed (re-entrancy guard); a failed EXPLAIN yields `plan: null` plus a `capture.warnings` entry rather than crashing the run. Plan capture is **Postgres-only** — on other adapters it is a documented no-op (`plan_capture` stays `disabled`). `capture.plan_capture` reports `disabled | explain | explain_analyze` so absence is interpretable.
+
+### Comparing digests
+
+```bash
+mix excessibility.digest.compare --base base/digest.json --head head/digest.json [--format json]
+```
+
+`Excessibility.DigestCompare` reports **structural deltas only** — query fingerprints added/removed/count-changed, plan changes under stable SQL, assign `term_bytes`/cardinality deltas, and coverage differences. It is **measurement-scope-guarded**: a delta is asserted only when both sides measured the same signal, so if the base had Ecto unconfigured and the head configured, you get a coverage note ("base did not measure queries"), not a fabricated "+12 queries." It emits **no merge verdict**, no severity beyond advisory, and **always exits 0** — it is a supplemental diff, never a CI gate.
+
+> **Rename note:** the a11y snapshot baseline task formerly at `mix excessibility.compare` is now `mix excessibility.snapshot.compare` (breaking change, no alias — see the CHANGELOG). `mix excessibility.digest.compare` is the new, unambiguous runtime-evidence comparison.
+
+### Benchmark mode
+
+```bash
+mix excessibility.debug --benchmark=20 test/my_live_view_test.exs
+```
+
+Runs the test N times and writes a value-free `benchmark.json` with robust **cold vs warm** timing stats (median + MAD) per `(view, callback)` and per query-fingerprint. Sample 1 is treated as cold (compilation, connection warmup, cold caches); samples 2..N are warm, reported separately so a cold first run cannot poison the median. An extreme warm sample (beyond `median + k·MAD`) is surfaced as an **advisory** outlier with the raw sample attached — never a pass/fail gate.
+
+### Timing contract — "green ≠ fast"
+
+Single-run timing is **diagnostic only** and is marked `timing: non_comparable` in the digest — a single run is never treated as a base or head. A green result means "no relative or configured outlier **in this run**," not "this code is fast." Timing **never** enters the digest; use benchmark mode when you need comparable timing evidence.
 
 ## MCP Server & Claude Code Skills
 
@@ -631,6 +746,19 @@ All configuration goes in `test/test_helper.exs` or `config/test.exs`:
 | `:slow_event_ms` | No | `1000` | Absolute "very slow event" ceiling for the performance analyzer. Performance findings are otherwise **relative** (outliers, bottleneck-share) and computed from test timings, so uniformly-slow code isn't flagged — lower this only if your test timings are representative of production |
 | `:custom_enrichers` | No | `[]` | List of custom enricher modules (see Timeline Analysis section above) |
 | `:custom_analyzers` | No | `[]` | List of custom analyzer modules (see Timeline Analysis section above) |
+| `:sql_dialect` | No | `:postgres` | SQL dialect for query normalization/EXPLAIN. Only `:postgres` ships today; the `Excessibility.Dialect` seam lets a new dialect drop in |
+| `:query_plan_allow_analyze` | No | `false` | Second gate for `--plan-analyze` (EXPLAIN ANALYZE, which executes queries). Enable only in a read-only DB sandbox |
+| `:digest_include_normalized_sql` | No | `true` | Include the normalized (value-free) SQL string in each digest query shape; set `false` to emit fingerprint-only |
+| `:fixtures` | No | `%{}` | Caller-supplied fixture cardinality surfaced in the digest's `coverage.fixtures` (also settable per-run via `EXCESSIBILITY_FIXTURES` JSON, which takes precedence) |
+
+### Runtime digest environment variables
+
+Set on `mix excessibility.debug` runs (the `--plan`/`--plan-analyze` flags set the first for you):
+
+| Env var | Purpose |
+|---------|---------|
+| `EXCESSIBILITY_QUERY_PLAN` | `explain` \| `explain_analyze` \| unset. Enables opt-in query-plan capture. `explain_analyze` still requires `:query_plan_allow_analyze`. |
+| `EXCESSIBILITY_FIXTURES` | JSON object of fixture cardinalities for `coverage.fixtures`. Takes precedence over `config :excessibility, :fixtures`; malformed JSON is ignored with a warning. |
 
 Example:
 
@@ -691,6 +819,11 @@ Screenshots are saved alongside HTML files with `.png` extension. Playwright is 
 | `mix excessibility.debug [test args]` | Run tests with telemetry, generate debug report (passthrough to mix test) |
 | `mix excessibility.debug [test args] --format=json` | Output debug report as JSON |
 | `mix excessibility.debug [test args] --format=package` | Create debug package directory |
+| `mix excessibility.debug [test args] --format=digest` | Print the value-free `digest.json` runtime-evidence artifact |
+| `mix excessibility.debug [test args] --plan` | Capture value-free EXPLAIN plan evidence (Postgres-only, SELECT-only, no execution) |
+| `mix excessibility.debug [test args] --plan-analyze` | Capture EXPLAIN ANALYZE evidence (executes queries; requires `:query_plan_allow_analyze`) |
+| `mix excessibility.debug [test args] --benchmark=N` | Run the test N times, write `benchmark.json` with cold/warm robust timing stats |
+| `mix excessibility.digest.compare --base B --head H [--format json]` | Structurally compare two `digest.json` artifacts (no verdict, always exits 0) |
 | `mix excessibility.latest` | Display most recent debug report |
 | `mix excessibility.package [test]` | Create debug package (alias for --format=package) |
 
