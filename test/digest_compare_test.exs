@@ -310,4 +310,99 @@ defmodule Excessibility.DigestCompareTest do
     assert q.fingerprints_added == ["sha256:bbb"]
     assert q.count_changed == [%{fingerprint: "sha256:aaa", base_count: 3, head_count: 10}]
   end
+
+  # --- C1: failed/partial capture must not masquerade as a regression -------
+
+  test "failed head capture adds a prominent status note (C1)" do
+    base = digest([event("PageLive", "handle_event:save", shapes: [shape("sha256:aaa", 1)])])
+
+    head = %{
+      schema: "excessibility.digest/v1",
+      capture: %{
+        status: :failed,
+        ecto_configured: true,
+        enrichers_run: [:ecto_queries, :assign_sizes],
+        plan_capture: :disabled
+      },
+      coverage: %{views: [], callbacks_observed: []},
+      events: []
+    }
+
+    result = DigestCompare.diff(base, head)
+
+    # The note must be present and clearly flag the deltas as unreliable.
+    assert Enum.any?(
+             result.coverage.notes,
+             &String.contains?(&1, "head capture did not complete")
+           )
+
+    # Structural deltas are still emitted (not suppressed) — but now annotated.
+    assert {"PageLive", "handle_event:save"} in result.coverage.callbacks_removed
+  end
+
+  test "failed base capture adds a prominent status note (C1)" do
+    base = %{
+      schema: "excessibility.digest/v1",
+      capture: %{status: "failed", ecto_configured: true, plan_capture: "disabled"},
+      events: []
+    }
+
+    head = digest([event("PageLive", "handle_event:save", shapes: [shape("sha256:aaa", 1)])])
+
+    result = DigestCompare.diff(base, head)
+
+    assert Enum.any?(
+             result.coverage.notes,
+             &String.contains?(&1, "base capture did not complete")
+           )
+  end
+
+  # --- I2: plan aggregation must be order-independent -----------------------
+
+  test "plan merge is order-independent for same fp with different plans (I2)" do
+    base =
+      digest(
+        [
+          event("PageLive", "handle_event:save",
+            shapes: [
+              shape("sha256:aaa", 1, %{plan: %{fingerprint: "sha256:plan0", estimated_rows: 1}})
+            ]
+          )
+        ],
+        plan_capture: :explain
+      )
+
+    e_plan1 =
+      event("PageLive", "handle_event:save",
+        shapes: [
+          shape("sha256:aaa", 1, %{plan: %{fingerprint: "sha256:plan1", estimated_rows: 100}})
+        ]
+      )
+
+    e_plan2 =
+      event("PageLive", "handle_event:save",
+        shapes: [
+          shape("sha256:aaa", 1, %{plan: %{fingerprint: "sha256:plan2", estimated_rows: 500}})
+        ]
+      )
+
+    head_forward = digest([e_plan1, e_plan2], plan_capture: :explain)
+    head_reversed = digest([e_plan2, e_plan1], plan_capture: :explain)
+
+    assert DigestCompare.diff(base, head_forward) == DigestCompare.diff(base, head_reversed)
+  end
+
+  # --- M4: non-digest input note --------------------------------------------
+
+  test "input without events key gets a not-a-digest coverage note (M4)" do
+    base = %{schema: "excessibility.digest/v1", capture: %{status: :ok}}
+    head = %{schema: "excessibility.digest/v1", capture: %{status: :ok}}
+
+    result = DigestCompare.diff(base, head)
+
+    assert Enum.any?(
+             result.coverage.notes,
+             &String.contains?(&1, "does not look like an excessibility digest")
+           )
+  end
 end
