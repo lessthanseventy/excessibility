@@ -234,10 +234,14 @@ Plan evidence per query shape (value-free):
 `plan_capture` in coverage reports `disabled | explain | explain_analyze` so absence is
 interpretable.
 
-## `mix excessibility.compare`
+## `mix excessibility.digest.compare`
+
+> The existing a11y snapshot task `mix excessibility.compare` is renamed to
+> `mix excessibility.snapshot.compare` (bare name removed, no alias — BREAKING) so the
+> evidence comparison gets an unambiguous, explicit name.
 
 ```bash
-mix excessibility.compare --base base.json --head head.json [--format json]
+mix excessibility.digest.compare --base base.json --head head.json [--format json]
 ```
 
 Input is two **digests** (value-free, timing-omitted, comparable). Events align by

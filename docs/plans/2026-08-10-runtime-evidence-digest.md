@@ -563,7 +563,14 @@ digest =
 File.write!(Path.join(output_path, "digest.json"), Formatter.format_json(digest))
 ```
 
-Add private helpers: `enricher_names/1` (map modules→`name/0`, or `[]` when `:all`/list), `plan_capture_mode/0` (reads env set in Task 12; default `:disabled`), `fixtures_from_env/0` (default `%{}`). `Digest.build` is already crash-isolated, but keep the outer `write_snapshots/1` rescue as the backstop.
+Add private helpers:
+- `enricher_names/1` — map modules→`name/0`, or `[]` when `:all`/list.
+- `plan_capture_mode/0` — reads env set in Task 11 (`EXCESSIBILITY_QUERY_PLAN`); default `:disabled`.
+- `fixtures/0` — **both channels**: `EXCESSIBILITY_FIXTURES` env JSON (`Jason.decode/1`, keys kept as strings) takes precedence; falls back to `Application.get_env(:excessibility, :fixtures, %{})`; default `%{}`. On malformed env JSON, log a warning and fall back (never crash the run).
+
+In `Excessibility.Digest`, `capture_version` comes from `Application.spec(:excessibility, :vsn) |> to_string()` (resolved in the test process where the dep is loaded).
+
+`Digest.build` is already crash-isolated, but keep the outer `write_snapshots/1` rescue as the backstop.
 
 **Step 4: Run** → PASS. Run a real `mix excessibility.debug` against an existing telemetry test and eyeball `digest.json`.
 
@@ -625,7 +632,28 @@ Add private helpers: `enricher_names/1` (map modules→`name/0`, or `[]` when `:
 
 ---
 
-## Batch 5 — `mix excessibility.compare`
+## Batch 5 — evidence compare (+ rename existing compare)
+
+> **Naming (resolved):** existing a11y snapshot task is renamed to
+> `mix excessibility.snapshot.compare`; bare `mix excessibility.compare` is **removed
+> entirely** (no deprecated alias — clean break, documented as BREAKING). The new task is
+> `mix excessibility.digest.compare`.
+
+### Task 11b: Rename existing compare → `excessibility.snapshot.compare`
+
+**Files:**
+- Rename: `lib/mix/tasks/excessibility_compare.ex` → `lib/mix/tasks/excessibility_snapshot_compare.ex`; module `Mix.Tasks.Excessibility.Compare` → `Mix.Tasks.Excessibility.Snapshot.Compare`. Update `@shortdoc`/`@moduledoc` usage examples to `mix excessibility.snapshot.compare`.
+- Rename: `test/mix/tasks/excessibility_compare_test.exs` → `..._snapshot_compare_test.exs`; update module + alias.
+- Modify refs: `lib/mix/tasks/excessibility_baseline.ex:18`, `lib/snapshot.ex:20`, `README.md` (lines ~24, 460, 506, 519-520, 684-686, 735).
+- Modify: `CHANGELOG.md` — add a **BREAKING** entry: `mix excessibility.compare` renamed to `mix excessibility.snapshot.compare`.
+
+**Step 1: Failing test** — the renamed test module compiles and passes under the new name; add an assertion that the old module name no longer exists is unnecessary — instead just `grep -rn "excessibility.compare\b"` returns only CHANGELOG history.
+
+**Step 3: Implement** the rename + ref updates. No behavior change to the task itself.
+
+**Step 4: Verify** — `mix test test/mix/tasks/excessibility_snapshot_compare_test.exs` PASS; `mix test` full suite PASS; `grep -rn "mix excessibility.compare\b" README.md lib` → no live references.
+
+**Step 5: Commit** — `git commit -m "refactor!: rename excessibility.compare to snapshot.compare (#154)"`
 
 ### Task 12: Structural digest diff
 
@@ -647,8 +675,8 @@ Add private helpers: `enricher_names/1` (map modules→`name/0`, or `[]` when `:
 ### Task 13: `mix excessibility.compare` task
 
 **Files:**
-- Create: `lib/mix/tasks/excessibility_compare.ex` — WAIT: `lib/mix/tasks/excessibility_compare.ex` already exists (accessibility snapshot compare). Use a distinct task name to avoid collision: `lib/mix/tasks/excessibility.evidence_compare.ex` (`mix excessibility.evidence_compare`) OR add a subcommand. **Decision needed at execution time — see open question below.**
-- Test: task smoke test.
+- Create: `lib/mix/tasks/excessibility_digest_compare.ex`, module `Mix.Tasks.Excessibility.Digest.Compare` (`mix excessibility.digest.compare`). The old `excessibility_compare.ex` was renamed to `snapshot.compare` in Task 11b, so `digest.compare` is free of collision.
+- Test: `test/mix/tasks/excessibility_digest_compare_test.exs` smoke test.
 
 **Step 3: Implement** — parse `--base`/`--head`/`--format`; `Jason.decode!` both (keys: :atoms); call `DigestCompare.diff/2`; render markdown (default) or JSON; always exit 0.
 
@@ -712,8 +740,10 @@ Then `superpowers:finishing-a-development-branch` to open the PR referencing #15
 
 ---
 
-## Open questions for execution time
+## Resolved decisions (settled up front)
 
-1. **Compare task name.** `mix excessibility.compare` already exists for a11y snapshot compare (`lib/mix/tasks/excessibility_compare.ex`). Plan assumes a new name `mix excessibility.evidence_compare`. Confirm with maintainer (issue's names are explicitly "illustrative").
-2. **`capture_version` source.** Use `Application.spec(:excessibility, :vsn)` at runtime; confirm it's available in the test process.
-3. **Fixtures input channel.** `fixtures_from_env/0` — decide the mechanism (env var JSON vs config) for caller-supplied cardinality; default `%{}` ships regardless.
+1. **Compare task names.** Existing a11y task renamed to `mix excessibility.snapshot.compare` (bare `excessibility.compare` removed, no alias — BREAKING). New task: `mix excessibility.digest.compare`.
+2. **`capture_version` source.** `Application.spec(:excessibility, :vsn) |> to_string()` at runtime (test process has the dep loaded).
+3. **Fixtures input channel.** Both: `EXCESSIBILITY_FIXTURES` env JSON (precedence) → `config :excessibility, fixtures:` → `%{}`.
+4. **Dialect.** Postgres-only impl behind the `Excessibility.Dialect` seam (Task 0); MySQL/SQLite are future drop-ins, not built now.
+5. **`normalized` SQL in digest.** Included by default; `config :excessibility, digest_include_normalized_sql: false` drops to fingerprint-only.
