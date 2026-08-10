@@ -10,7 +10,7 @@ defmodule Excessibility.QueryEvidence do
   def shapes(queries) do
     queries
     |> Enum.with_index(1)
-    |> Enum.group_by(fn {q, _i} -> q.fingerprint end)
+    |> Enum.group_by(fn {q, _i} -> fingerprint_of(q) end)
     |> Enum.map(fn {fp, pairs} ->
       {first, _} = hd(pairs)
 
@@ -32,7 +32,7 @@ defmodule Excessibility.QueryEvidence do
 
     queries
     |> Enum.filter(&select?/1)
-    |> Enum.group_by(& &1.fingerprint)
+    |> Enum.group_by(&fingerprint_of/1)
     |> Enum.filter(fn {_fp, group} -> length(group) >= min end)
     |> Enum.map(fn {fp, group} ->
       first = hd(group)
@@ -52,4 +52,12 @@ defmodule Excessibility.QueryEvidence do
 
   def select?(%{operation: op}), do: to_string(op) == "select"
   def select?(_), do: false
+
+  # Reloaded pre-feature `timeline.json` records lack a `:fingerprint` key but
+  # still carry the raw `:query` (or `:source`), so recompute a stable
+  # fingerprint on the fly to keep distinct old queries distinct (issue #154).
+  defp fingerprint_of(q) do
+    Map.get(q, :fingerprint) ||
+      Excessibility.SQLFingerprint.fingerprint(Map.get(q, :query, Map.get(q, :source, "")))
+  end
 end

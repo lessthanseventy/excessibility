@@ -35,4 +35,30 @@ defmodule Excessibility.QueryEvidenceTest do
     assert QueryEvidence.select?(%{operation: "select"})
     assert QueryEvidence.select?(%{operation: :select})
   end
+
+  test "tolerates query maps missing :fingerprint (reloaded pre-feature timeline)" do
+    # old-shape records: raw :query, string operation, NO :fingerprint key
+    old = fn q -> %{operation: "select", source: "categories", query: q} end
+
+    queries = [
+      old.("SELECT * FROM categories WHERE id = $1"),
+      old.("SELECT * FROM categories WHERE id = $1"),
+      old.("SELECT * FROM categories WHERE id = $1")
+    ]
+
+    [rep] = QueryEvidence.repeated(queries, min_repetitions: 3)
+    assert rep.repetitions == 3
+    assert rep.fingerprint =~ ~r/^sha256:/
+    # distinct old queries do NOT collapse together:
+    mixed = [
+      old.("SELECT * FROM a WHERE id = $1"),
+      old.("SELECT * FROM b WHERE id = $1"),
+      old.("SELECT * FROM a WHERE id = $1")
+    ]
+
+    # only 'a' repeats twice
+    assert mixed |> QueryEvidence.repeated(min_repetitions: 2) |> length() == 1
+    # two distinct shapes
+    assert length(QueryEvidence.shapes(mixed)) == 2
+  end
 end

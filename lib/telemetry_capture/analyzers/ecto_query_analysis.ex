@@ -92,8 +92,9 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EctoQueryAnalysis do
         |> Enum.map(&Map.get(&1, :duration_ms, 0))
         |> Enum.sum()
 
+      # QueryEvidence.repeated/2 labels the pattern :advisory for the raw digest; the analyzer applies its own (higher) severity for the review surface.
       %{
-        severity: :warning,
+        severity: :critical,
         message:
           "#{rep.source} #{rep.operation} query repeated #{rep.repetitions}x (same query shape) in #{event.event} (N+1 pattern) — consider preloading or batching",
         events: [event.sequence],
