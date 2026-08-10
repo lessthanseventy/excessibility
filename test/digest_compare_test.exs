@@ -2,6 +2,8 @@ defmodule Excessibility.DigestCompareTest do
   use ExUnit.Case, async: true
 
   alias Excessibility.DigestCompare
+  alias Excessibility.QueryEvidence
+  alias Excessibility.QueryPlan
 
   # --- fixtures -------------------------------------------------------------
 
@@ -237,6 +239,66 @@ defmodule Excessibility.DigestCompareTest do
     assert node.depth == 1
     assert node.actual_rows_delta == 9_990
     assert node.rows_touched_delta == 9_990
+  end
+
+  test "later same-fingerprint occurrence that grows produces a plan delta end-to-end (#167)" do
+    # An EXPLAIN ANALYZE plan whose child Seq Scan touches `child_actual` rows.
+    explain = fn child_actual ->
+      [
+        %{
+          "Plan" => %{
+            "Node Type" => "Nested Loop",
+            "Plan Rows" => 1,
+            "Actual Rows" => 1,
+            "Actual Loops" => 1,
+            "Plans" => [
+              %{
+                "Node Type" => "Index Scan",
+                "Relation Name" => "parents",
+                "Plan Rows" => 1,
+                "Actual Rows" => 1,
+                "Actual Loops" => 1
+              },
+              %{
+                "Node Type" => "Seq Scan",
+                "Relation Name" => "children",
+                "Plan Rows" => 1,
+                "Actual Rows" => child_actual,
+                "Actual Loops" => 1
+              }
+            ]
+          }
+        }
+      ]
+    end
+
+    # Emit exactly as Digest does: two occurrences of one query fingerprint in a
+    # single event — the FIRST cheap (touches 1) and a LATER one heavier. The
+    # first occurrence is identical between base and head; only the later one
+    # grows. Aggregation must surface that growth as a node-level delta.
+    emit = fn later_touched ->
+      record = fn plan ->
+        %{operation: :select, source: "children", fingerprint: "sha256:aaa", normalized: "n", plan: plan}
+      end
+
+      QueryEvidence.shapes([
+        record.(QueryPlan.summarize(explain.(1))),
+        record.(QueryPlan.summarize(explain.(later_touched)))
+      ])
+    end
+
+    base =
+      digest([event("PageLive", "handle_event:save", shapes: emit.(10_000))], plan_capture: :explain_analyze)
+
+    head =
+      digest([event("PageLive", "handle_event:save", shapes: emit.(20_000))], plan_capture: :explain_analyze)
+
+    result = DigestCompare.diff(base, head)
+
+    assert [p] = result.plans
+    assert p.structural_change == false
+    assert node = Enum.find(p.node_deltas, &(&1.relation == "children"))
+    assert node.rows_touched_delta == 10_000
   end
 
   test "identical plans produce no plan delta" do

@@ -14,7 +14,7 @@ defmodule Excessibility.QueryEvidence do
     |> Enum.map(fn {fp, pairs} ->
       {first, _} = hd(pairs)
 
-      maybe_put_plan(
+      put_aggregated_plan(
         %{
           fingerprint: fp,
           operation: to_string(first.operation),
@@ -23,7 +23,7 @@ defmodule Excessibility.QueryEvidence do
           count: length(pairs),
           sequences: Enum.map(pairs, fn {_q, i} -> i end)
         },
-        first
+        pairs
       )
     end)
     |> Enum.sort_by(& &1.fingerprint)
@@ -56,12 +56,16 @@ defmodule Excessibility.QueryEvidence do
   def select?(%{operation: op}), do: to_string(op) == "select"
   def select?(_), do: false
 
-  # Plans are per-fingerprint-stable, so the group's representative plan applies
-  # to the whole shape. Only attach `:plan` when the representative actually
-  # carries a non-nil plan — the common no-plan case keeps a clean shape with no
-  # `:plan` key at all.
-  defp maybe_put_plan(shape, representative) do
-    case Map.get(representative, :plan) do
+  # A query fingerprint can fire many times, and a *later* occurrence can do far
+  # more row work than the first, so aggregate the plan across **every**
+  # occurrence rather than trusting the first (issue #167). Aggregation keeps the
+  # max comparable row work per structural node path and is order-independent.
+  # Only attach `:plan` when at least one occurrence carried a non-nil plan — the
+  # common no-plan case keeps a clean shape with no `:plan` key at all.
+  defp put_aggregated_plan(shape, pairs) do
+    plans = pairs |> Enum.map(fn {q, _i} -> Map.get(q, :plan) end) |> Enum.reject(&is_nil/1)
+
+    case Excessibility.QueryPlan.aggregate(plans) do
       nil -> shape
       plan -> Map.put(shape, :plan, plan)
     end

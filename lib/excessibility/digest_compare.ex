@@ -86,9 +86,11 @@ defmodule Excessibility.DigestCompare do
   end
 
   # Fold events into %{{view, callback} => %{queries, plans, assigns}} where
-  # per-fingerprint counts sum, per-fingerprint plans are recorded once (plans
-  # are per-fingerprint stable), and per-assign term_bytes/cardinality take the
-  # max — all order-independent so the aggregate is deterministic.
+  # per-fingerprint counts sum, per-fingerprint plans are aggregated by max row
+  # work per structural node path (so a later, heavier occurrence of the same
+  # query across events is not discarded — issue #167), and per-assign
+  # term_bytes/cardinality take the max — all order-independent so the aggregate
+  # is deterministic.
   defp aggregate(digest) do
     digest
     |> get(:events, [])
@@ -111,7 +113,7 @@ defmodule Excessibility.DigestCompare do
         pacc =
           case get(s, :plan) do
             nil -> pacc
-            plan -> Map.update(pacc, fp, plan, &min_plan(&1, plan))
+            plan -> Map.update(pacc, fp, plan, &merge_plan(&1, plan))
           end
 
         {qacc, pacc}
@@ -447,15 +449,67 @@ defmodule Excessibility.DigestCompare do
   defp fmt_list([]), do: "none"
   defp fmt_list(list), do: Enum.join(list, ", ")
 
-  # When one fingerprint carries different plans across events of the same
-  # {view, callback}, keep a deterministic representative independent of event
-  # order: the plan whose `fingerprint` is lexicographically smallest (existing
-  # wins on ties). This preserves byte-for-byte reproducibility.
+  # When one query fingerprint carries plans across multiple events of the same
+  # {view, callback}, aggregate them independent of event order. If the plans
+  # share a structural fingerprint, keep the max comparable row work per node
+  # position (a later, heavier occurrence is not discarded — issue #167). If the
+  # structures differ, positions no longer correspond, so keep a deterministic
+  # representative: the plan whose `fingerprint` is lexicographically smallest
+  # (existing wins on ties), preserving byte-for-byte reproducibility.
+  defp merge_plan(existing, candidate) do
+    if to_string(get(existing, :fingerprint)) == to_string(get(candidate, :fingerprint)) do
+      %{
+        fingerprint: get(existing, :fingerprint),
+        estimated_rows: max_num(get(existing, :estimated_rows), get(candidate, :estimated_rows)),
+        actual_rows: max_num(get(existing, :actual_rows), get(candidate, :actual_rows)),
+        loops: max_num(get(existing, :loops), get(candidate, :loops)),
+        node_rows: merge_node_rows(get(existing, :node_rows) || [], get(candidate, :node_rows) || [])
+      }
+    else
+      min_plan(existing, candidate)
+    end
+  end
+
   defp min_plan(existing, candidate) do
     if to_string(get(candidate, :fingerprint)) < to_string(get(existing, :fingerprint)) do
       candidate
     else
       existing
+    end
+  end
+
+  # Zip by position (stable node identity under a shared structural fingerprint)
+  # and keep the max comparable row work per node. Tolerant of length drift.
+  defp merge_node_rows(existing, candidate) do
+    count = max(length(existing), length(candidate))
+
+    Enum.map(0..(count - 1)//1, fn i ->
+      merge_node(Enum.at(existing, i), Enum.at(candidate, i))
+    end)
+  end
+
+  defp merge_node(nil, node), do: node
+  defp merge_node(node, nil), do: node
+
+  defp merge_node(a, b) do
+    %{
+      node: get(a, :node) || get(b, :node),
+      relation: get(a, :relation) || get(b, :relation),
+      depth: get(a, :depth),
+      estimated_rows: max_num(get(a, :estimated_rows), get(b, :estimated_rows)),
+      actual_rows: max_num(get(a, :actual_rows), get(b, :actual_rows)),
+      loops: max_num(get(a, :loops), get(b, :loops)),
+      rows_touched: max_num(get(a, :rows_touched), get(b, :rows_touched)),
+      estimate_error: max_num(get(a, :estimate_error), get(b, :estimate_error))
+    }
+  end
+
+  defp max_num(a, b) do
+    cond do
+      is_number(a) and is_number(b) -> max(a, b)
+      is_number(a) -> a
+      is_number(b) -> b
+      true -> nil
     end
   end
 
