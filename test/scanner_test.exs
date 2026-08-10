@@ -1,5 +1,14 @@
 defmodule Excessibility.ScannerTest do
-  use ExUnit.Case, async: true
+  # NOT async: several tests override global `Application` env keys
+  # (`:playwright_path`, `:node_modules_path`) that `Excessibility.Scanner`
+  # reads at scan time. Two tests set contradictory values — one a valid path
+  # expecting `{:ok, ...}`, another `/nonexistent/...` expecting a
+  # `{:playwright_error, ...}` — so running them concurrently let one test's env
+  # (or its `on_exit` cleanup) leak into another's scan, an intermittent
+  # left/right mismatch. Serial execution keeps each override isolated to its
+  # own test. The scans are external Playwright subprocesses, so losing
+  # ExUnit-level parallelism costs almost nothing here.
+  use ExUnit.Case, async: false
 
   alias Excessibility.Scanner
 
