@@ -49,5 +49,39 @@ defmodule Excessibility.SQLFingerprintTest do
     test "no multi-digit literal survives" do
       refute SQLFingerprint.normalize("SELECT * FROM u WHERE age = 42 AND ssn = 123456789") =~ ~r/\d{2,}/
     end
+
+    test "E-strings with backslash escapes do not leak" do
+      n = SQLFingerprint.normalize(~S(SELECT * FROM u WHERE name = E'O\'Brien'))
+      refute n =~ "brien"
+      refute n =~ ~r/[a-z]{2,}'/
+    end
+
+    test "dollar-quoted strings do not leak (empty and tagged)" do
+      refute SQLFingerprint.normalize("SELECT * FROM u WHERE b = $$my secret$$") =~ "secret"
+      refute SQLFingerprint.normalize("SELECT * FROM u WHERE b = $tag$leaky secret$tag$") =~ "leaky"
+    end
+
+    test "scientific and decimal numerics do not leak" do
+      refute SQLFingerprint.normalize("SELECT * FROM u WHERE x = 1e5") =~ ~r/\d/
+      refute SQLFingerprint.normalize("SELECT * FROM u WHERE bal = 1.5e10") =~ ~r/\d/
+    end
+
+    test "params are not mistaken for dollar-quoted strings" do
+      assert SQLFingerprint.normalize("SELECT * FROM u WHERE a = $1 AND b = $2") ==
+               "select * from u where a = $? and b = $?"
+    end
+
+    test "numeric IN-lists collapse arity like param lists" do
+      a = SQLFingerprint.fingerprint("SELECT * FROM u WHERE id IN (1, 2, 3)")
+      b = SQLFingerprint.fingerprint("SELECT * FROM u WHERE id IN (1, 2)")
+      assert a == b
+    end
+
+    test "identifiers containing digits survive" do
+      n = SQLFingerprint.normalize("SELECT line1, t2.id FROM users_2024 t2")
+      assert n =~ "line1"
+      assert n =~ "users_2024"
+      assert n =~ "t2"
+    end
   end
 end

@@ -18,10 +18,12 @@ defmodule Excessibility.SQLFingerprint do
   def normalize(sql) when is_binary(sql) do
     sql
     |> String.downcase()
+    |> fold_dollar_quoted()
+    |> fold_escape_strings()
     |> fold_quoted_literals()
-    |> fold_param_lists()
-    |> fold_params()
     |> fold_numeric_literals()
+    |> fold_params()
+    |> fold_in_lists()
     |> collapse_whitespace()
     |> String.trim()
     |> Excessibility.Dialect.resolve().normalize_extras()
@@ -41,17 +43,27 @@ defmodule Excessibility.SQLFingerprint do
     "sha256:" <> hash
   end
 
-  # 'text' and 'escaped '' quotes' -> ?   (do this first, before digit folding)
+  # $$body$$ / $tag$body$tag$ -> ?   (run first: body is arbitrary, may contain quotes/newlines).
+  # The backreference (\1) pairs the open/close tag, so Ecto params ($1, $2) — which have no
+  # matching $tag$ close — are left untouched for fold_params/1.
+  defp fold_dollar_quoted(sql), do: Regex.replace(~r/\$([a-z0-9_]*)\$.*?\$\1\$/s, sql, "?")
+
+  # E'escape strings' use backslash escaping (e.g. E'O\'Brien') -> ?   (after downcase, E' is e')
+  defp fold_escape_strings(sql), do: Regex.replace(~r/\be'(?:[^'\\]|\\.|'')*'/, sql, "?")
+
+  # 'text' and 'escaped '' quotes' -> ?
+  # Note: double-quoted "identifiers" are deliberately preserved — they are identifiers, not values.
   defp fold_quoted_literals(sql), do: Regex.replace(~r/'(?:[^']|'')*'/, sql, "?")
 
-  # IN ($1, $2, $3) / IN (?, ?) -> IN ($?)
-  defp fold_param_lists(sql), do: Regex.replace(~r/\bin\s*\(\s*(?:\$\d+|\?)(?:\s*,\s*(?:\$\d+|\?))*\s*\)/, sql, "in ($?)")
+  # bare numbers incl. decimals and scientific notation (e.g. LIMIT 50, 1.5e10) -> ?
+  # Word boundaries protect digit-bearing identifiers (users_2024, line1, t2).
+  defp fold_numeric_literals(sql), do: Regex.replace(~r/\b\d+(?:\.\d+)?(?:e[+-]?\d+)?\b/, sql, "?")
 
   # remaining $1, $2 -> $?
   defp fold_params(sql), do: Regex.replace(~r/\$\d+/, sql, "$?")
 
-  # bare numbers (e.g. LIMIT 50) -> ?
-  defp fold_numeric_literals(sql), do: Regex.replace(~r/\b\d+\b/, sql, "?")
+  # IN ($?, $?, ...) / IN (?, ?) -> IN ($?)   (folds numeric, param, and placeholder lists uniformly)
+  defp fold_in_lists(sql), do: Regex.replace(~r/\bin\s*\(\s*(?:\$\?|\?)(?:\s*,\s*(?:\$\?|\?))*\s*\)/, sql, "in ($?)")
 
   defp collapse_whitespace(sql), do: Regex.replace(~r/\s+/, sql, " ")
 end
