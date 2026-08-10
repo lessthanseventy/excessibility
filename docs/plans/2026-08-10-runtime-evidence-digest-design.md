@@ -68,6 +68,25 @@ Pure module, zero deps. Postgres-aware regex normalizer:
 Rationale for regex over a SQL parser: Ecto emits deterministic, parameterized SQL, so a
 native parser NIF's formatting-immunity buys little and adds build fragility.
 
+**Dialect:** Postgres-only *implementation*, but shaped behind a seam so a MySQL/SQLite
+dialect is a drop-in later — not a refactor. A thin `Excessibility.Dialect` behaviour
+isolates the genuinely dialect-specific bits; everything generic stays shared. Only
+`Excessibility.Dialect.Postgres` ships now; `Excessibility.Dialect.resolve/0` reads
+`config :excessibility, sql_dialect: :postgres` (default) and returns the module. Adding a
+dialect = new module implementing the behaviour + one config line, no core changes.
+
+Behaviour callbacks (the only places dialect actually differs):
+
+- `normalize_extras/1` — dialect-specific normalization on top of the shared generic
+  regex (params, whitespace, IN-arity, quoted/numeric literals are generic and stay in
+  `SQLFingerprint`). Postgres impl is a no-op today.
+- `explain_sql/1` — wraps SQL for a JSON plan (`"EXPLAIN (FORMAT JSON) " <> sql` for
+  Postgres; a MySQL impl would emit `"EXPLAIN FORMAT=JSON " <> sql`).
+- `parse_plan/1` — turns the adapter's EXPLAIN-JSON result into the value-free plan map.
+
+Non-Postgres adapters today: fingerprints still work (generic regex); plan capture is a
+documented no-op unless a dialect module is provided.
+
 ### 2. Query record changes
 
 `build_query_record/2` gains `:fingerprint` and `:normalized`. Raw `:query` stays (raw
