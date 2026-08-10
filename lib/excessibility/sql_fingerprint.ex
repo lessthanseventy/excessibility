@@ -14,14 +14,18 @@ defmodule Excessibility.SQLFingerprint do
   Normalize SQL to a stable, value-free string. The generic folds here are
   dialect-agnostic; any dialect-specific normalization is applied last via
   `Excessibility.Dialect.normalize_extras/1` (no-op for Postgres today).
+
+  The literal-aware `scan/3` runs first, on the **original-case** SQL: Postgres
+  dollar-quote tags (`$TAG$`) and E-string escapes are case-sensitive, so
+  lowercasing before scanning could turn look-alike text inside a literal into a
+  false closing delimiter and leak literal contents (see #166). The scan folds
+  every string / dollar-quoted / E-string literal to `?` and strips comments, so
+  only value-free tokens remain; downcasing the scanned result is then safe.
   """
   def normalize(sql) when is_binary(sql) do
     sql
+    |> scan(:normal, "")
     |> String.downcase()
-    |> strip_comments()
-    |> fold_dollar_quoted()
-    |> fold_escape_strings()
-    |> fold_quoted_literals()
     |> fold_numeric_literals()
     |> fold_params()
     |> fold_in_lists()
@@ -44,17 +48,21 @@ defmodule Excessibility.SQLFingerprint do
     "sha256:" <> hash
   end
 
-  # Remove SQL line (`-- …`) and block (`/* … */`) comments *before* any value
-  # folding, so comment contents (tracing annotations, tenant tags, etc.) never
+  # Literal-aware, case-sensitive scan run *before* any downcasing. It strips SQL
+  # comments and folds every string / dollar-quoted / E-string literal to `?`, so
+  # comment contents (tracing annotations, tenant tags) and literal values never
   # reach the digest. A single left-to-right scanner tracks literal/identifier
-  # context so a comment marker *inside* a string, dollar-quoted body, or quoted
-  # identifier is copied verbatim rather than mistaken for a comment start.
-  # Comments are replaced with a space to preserve token separation; the later
-  # whitespace collapse tidies up. Comment-free SQL is returned unchanged, so
-  # fingerprints stay stable and comments never affect grouping.
-  defp strip_comments(sql), do: scan(sql, :normal, "")
+  # context so a comment or delimiter marker *inside* a literal is not mistaken
+  # for a real one. Postgres dollar tags and E-string escapes are case-sensitive,
+  # so this MUST see the original case (#166): a lowercase `$tag$` inside an
+  # uppercase-tagged `$TAG$…$TAG$` literal is body content, not a close.
+  #
+  # Comments and folded literals become `?`/space; the remaining value-free
+  # tokens (keywords, identifiers, numbers, params) are downcased by the caller.
+  # Double-quoted identifiers are preserved verbatim (they are identifiers, not
+  # values) and downcased later like any other identifier.
 
-  # End of input in any state.
+  # End of input in any state (unterminated literals/comments simply end).
   defp scan(<<>>, _state, acc), do: acc
 
   # --- line comment: drop everything up to (and re-emit) the newline ---
@@ -67,10 +75,18 @@ defmodule Excessibility.SQLFingerprint do
   defp scan(<<"*/", rest::binary>>, {:block, depth}, acc), do: scan(rest, {:block, depth - 1}, acc)
   defp scan(<<_c, rest::binary>>, {:block, _} = state, acc), do: scan(rest, state, acc)
 
-  # --- single-quoted string literal: copy verbatim, honour '' escape ---
-  defp scan(<<"''", rest::binary>>, :squote, acc), do: scan(rest, :squote, <<acc::binary, "''">>)
-  defp scan(<<"'", rest::binary>>, :squote, acc), do: scan(rest, :normal, <<acc::binary, "'">>)
-  defp scan(<<c, rest::binary>>, :squote, acc), do: scan(rest, :squote, <<acc::binary, c>>)
+  # --- single-quoted string literal: skip body (already folded to `?` on open),
+  #     honour the '' escape so a doubled quote does not close the literal ---
+  defp scan(<<"''", rest::binary>>, :squote, acc), do: scan(rest, :squote, acc)
+  defp scan(<<"'", rest::binary>>, :squote, acc), do: scan(rest, :normal, acc)
+  defp scan(<<_c, rest::binary>>, :squote, acc), do: scan(rest, :squote, acc)
+
+  # --- E'…' escape string: skip body, honour both the \\<char> backslash escape
+  #     and the '' escape so neither closes the literal early (#166) ---
+  defp scan(<<"\\", _c, rest::binary>>, :estring, acc), do: scan(rest, :estring, acc)
+  defp scan(<<"''", rest::binary>>, :estring, acc), do: scan(rest, :estring, acc)
+  defp scan(<<"'", rest::binary>>, :estring, acc), do: scan(rest, :normal, acc)
+  defp scan(<<_c, rest::binary>>, :estring, acc), do: scan(rest, :estring, acc)
 
   # --- double-quoted identifier: copy verbatim, honour "" escape ---
   defp scan(<<"\"\"", rest::binary>>, :dquote, acc), do: scan(rest, :dquote, <<acc::binary, "\"\"">>)
@@ -80,27 +96,50 @@ defmodule Excessibility.SQLFingerprint do
   # --- normal SQL: recognise comment/literal/identifier starts ---
   defp scan(<<"--", rest::binary>>, :normal, acc), do: scan(rest, :line, <<acc::binary, " ">>)
   defp scan(<<"/*", rest::binary>>, :normal, acc), do: scan(rest, {:block, 1}, <<acc::binary, " ">>)
-  defp scan(<<"'", rest::binary>>, :normal, acc), do: scan(rest, :squote, <<acc::binary, "'">>)
+
+  # E-string: `E'` / `e'` only when the E starts a token (word boundary), so an
+  # identifier ending in e (e.g. `date'…'`) is not misread as an E-string.
+  defp scan(<<c, "'", rest::binary>>, :normal, acc) when c in [?e, ?E] do
+    if word_boundary?(acc),
+      do: scan(rest, :estring, <<acc::binary, "?">>),
+      else: scan(<<"'", rest::binary>>, :normal, <<acc::binary, c>>)
+  end
+
+  defp scan(<<"'", rest::binary>>, :normal, acc), do: scan(rest, :squote, <<acc::binary, "?">>)
   defp scan(<<"\"", rest::binary>>, :normal, acc), do: scan(rest, :dquote, <<acc::binary, "\"">>)
 
   defp scan(<<"$", rest::binary>> = bin, :normal, acc) do
-    # Copy a dollar-quoted body verbatim so `--`/`/*` inside it are not stripped.
-    # Ecto params ($1, $2 …) have no matching close tag, so take_dollar_quoted/1
-    # returns :error and the lone `$` is copied like any other byte.
+    # Fold a complete dollar-quoted literal to `?`. An open `$tag$` with no
+    # matching close is an unterminated literal (invalid SQL, so Ecto never emits
+    # it) — fold the remainder to `?` too, mirroring the squote/estring EOF paths
+    # so the value-free invariant holds for every literal kind. A lone `$` with no
+    # `$tag$`-shaped open (Ecto params $1, $2 …) is copied like any other byte and
+    # fold_params/1 rewrites it to `$?` later.
     case take_dollar_quoted(bin) do
-      {:ok, quoted, tail} -> scan(tail, :normal, <<acc::binary, quoted::binary>>)
-      :error -> scan(rest, :normal, <<acc::binary, "$">>)
+      {:ok, tail} -> scan(tail, :normal, <<acc::binary, "?">>)
+      :unterminated -> <<acc::binary, "?">>
+      :no_tag -> scan(rest, :normal, <<acc::binary, "$">>)
     end
   end
 
   defp scan(<<c, rest::binary>>, :normal, acc), do: scan(rest, :normal, <<acc::binary, c>>)
 
-  # Match a full `$tag$ … $tag$` span at the head of `bin` and return it verbatim
-  # with the remainder. Tag is `[a-z0-9_]*` (already downcased). Returns :error
-  # when the head is not a complete dollar-quoted literal (e.g. a `$1` param or an
-  # unterminated body).
+  # True when acc does not end in an identifier character, i.e. the next byte
+  # would start a fresh token. Empty acc counts as a boundary.
+  defp word_boundary?(<<>>), do: true
+
+  defp word_boundary?(acc) do
+    <<_::binary-size(byte_size(acc) - 1), last>> = acc
+    last not in ?a..?z and last not in ?A..?Z and last not in ?0..?9 and last != ?_
+  end
+
+  # Classify the head of `bin`. Tags are matched **case-sensitively**
+  # (`[A-Za-z0-9_]*`), so `$TAG$` only closes on another `$TAG$`. Returns:
+  #   {:ok, tail}    — a complete `$tag$ … $tag$` span; `tail` is what follows it
+  #   :unterminated  — a `$tag$`-shaped open with no matching close (invalid SQL)
+  #   :no_tag        — no `$tag$`-shaped open at all (e.g. a `$1` param)
   defp take_dollar_quoted(bin) do
-    case Regex.run(~r/^\$[a-z0-9_]*\$/, bin) do
+    case Regex.run(~r/^\$[A-Za-z0-9_]*\$/, bin) do
       [open] ->
         open_len = byte_size(open)
         after_open = binary_part(bin, open_len, byte_size(bin) - open_len)
@@ -108,30 +147,17 @@ defmodule Excessibility.SQLFingerprint do
         case :binary.match(after_open, open) do
           {pos, _len} ->
             span_len = open_len + pos + byte_size(open)
-            quoted = binary_part(bin, 0, span_len)
             rest = binary_part(bin, span_len, byte_size(bin) - span_len)
-            {:ok, quoted, rest}
+            {:ok, rest}
 
           :nomatch ->
-            :error
+            :unterminated
         end
 
       nil ->
-        :error
+        :no_tag
     end
   end
-
-  # $$body$$ / $tag$body$tag$ -> ?   (run first: body is arbitrary, may contain quotes/newlines).
-  # The backreference (\1) pairs the open/close tag, so Ecto params ($1, $2) — which have no
-  # matching $tag$ close — are left untouched for fold_params/1.
-  defp fold_dollar_quoted(sql), do: Regex.replace(~r/\$([a-z0-9_]*)\$.*?\$\1\$/s, sql, "?")
-
-  # E'escape strings' use backslash escaping (e.g. E'O\'Brien') -> ?   (after downcase, E' is e')
-  defp fold_escape_strings(sql), do: Regex.replace(~r/\be'(?:[^'\\]|\\.|'')*'/, sql, "?")
-
-  # 'text' and 'escaped '' quotes' -> ?
-  # Note: double-quoted "identifiers" are deliberately preserved — they are identifiers, not values.
-  defp fold_quoted_literals(sql), do: Regex.replace(~r/'(?:[^']|'')*'/, sql, "?")
 
   # bare numbers incl. decimals and scientific notation (e.g. LIMIT 50, 1.5e10) -> ?
   # Word boundaries protect digit-bearing identifiers (users_2024, line1, t2).

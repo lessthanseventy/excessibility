@@ -134,5 +134,46 @@ defmodule Excessibility.SQLFingerprintTest do
       assert SQLFingerprint.fingerprint("SELECT * FROM users WHERE id = $1") ==
                SQLFingerprint.fingerprint("SELECT /* hint */ * FROM users WHERE id = $1")
     end
+
+    # --- #166: dollar tags are case-sensitive in Postgres ---
+
+    test "mixed-case dollar tag: inner lowercase tag does not close an uppercase-tagged literal" do
+      # The literal is delimited by $TAG$ … $TAG$ (case-sensitive). A lowercase
+      # $tag$ inside the body is literal content, not a closing delimiter, so the
+      # whole span folds to ? and nothing after it (an email) may leak.
+      sql =
+        "SELECT $TAG$prefix $tag$ request_email=alice@example.com $TAG$ AS note, " <>
+          "1 AS trailing_shape"
+
+      n = SQLFingerprint.normalize(sql)
+
+      refute n =~ "alice"
+      refute n =~ "request_email"
+      refute n =~ "$tag$"
+      # The trailing query shape after the literal is preserved.
+      assert n == "select ? as note, ? as trailing_shape"
+    end
+
+    test "unterminated literals never emit their body (defense-in-depth)" do
+      # None of these are valid SQL (Ecto never emits them), but the value-free
+      # invariant must hold by construction for every literal kind, not just some.
+      refute SQLFingerprint.normalize("SELECT $t$secret@example.com") =~ "secret"
+      refute SQLFingerprint.normalize("SELECT $t$secret@example.com") =~ "$t$"
+      refute SQLFingerprint.normalize("SELECT 'secret@example.com") =~ "secret"
+      refute SQLFingerprint.normalize("SELECT E'secret@example.com") =~ "secret"
+      # A close tag differing only in case is not a close in Postgres.
+      refute SQLFingerprint.normalize("SELECT $tag$secret@example.com$TAG$ AS n") =~ "secret"
+    end
+
+    test "mixed-case empty-tag / uppercase E-string still fold and preserve trailing shape" do
+      # Uppercase E'…' with a backslash escape and a -- sequence inside the body:
+      # the literal must fold to ? without the -- starting a comment that drops
+      # the trailing shape.
+      n = SQLFingerprint.normalize(~S(SELECT E'a\'-- b@example.com' AS note, 1 AS trailing_shape))
+
+      refute n =~ "example.com"
+      refute n =~ "--"
+      assert n == "select ? as note, ? as trailing_shape"
+    end
   end
 end
