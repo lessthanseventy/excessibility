@@ -27,7 +27,7 @@
 **Files:**
 - Create: `lib/excessibility/dialect.ex` (behaviour + `resolve/0`)
 - Create: `lib/excessibility/dialect/postgres.ex`
-- Test: `test/excessibility/dialect_test.exs`
+- Test: `test/dialect_test.exs`
 
 **Step 1: Failing test**
 
@@ -106,12 +106,12 @@ end
 
 **Files:**
 - Create: `lib/excessibility/sql_fingerprint.ex`
-- Test: `test/excessibility/sql_fingerprint_test.exs`
+- Test: `test/sql_fingerprint_test.exs`
 
 **Step 1: Write the failing test**
 
 ```elixir
-# test/excessibility/sql_fingerprint_test.exs
+# test/sql_fingerprint_test.exs
 defmodule Excessibility.SQLFingerprintTest do
   use ExUnit.Case, async: true
   alias Excessibility.SQLFingerprint
@@ -166,7 +166,7 @@ defmodule Excessibility.SQLFingerprintTest do
 end
 ```
 
-**Step 2: Run to verify it fails** — `mix test test/excessibility/sql_fingerprint_test.exs` → FAIL (module undefined).
+**Step 2: Run to verify it fails** — `mix test test/sql_fingerprint_test.exs` → FAIL (module undefined).
 
 **Step 3: Implement**
 
@@ -232,12 +232,12 @@ defmodule Excessibility.SQLFingerprint do
 end
 ```
 
-**Step 4: Run** — `mix test test/excessibility/sql_fingerprint_test.exs` → PASS. Then `mix format`.
+**Step 4: Run** — `mix test test/sql_fingerprint_test.exs` → PASS. Then `mix format`.
 
 **Step 5: Commit**
 
 ```bash
-git add lib/excessibility/sql_fingerprint.ex test/excessibility/sql_fingerprint_test.exs
+git add lib/excessibility/sql_fingerprint.ex test/sql_fingerprint_test.exs
 git commit -m "feat: add SQLFingerprint normalizer (#154)"
 ```
 
@@ -295,7 +295,7 @@ raw = Map.get(metadata, :query, "")
 
 **Files:**
 - Create: `lib/excessibility/query_evidence.ex`
-- Test: `test/excessibility/query_evidence_test.exs`
+- Test: `test/query_evidence_test.exs`
 
 **Step 1: Failing test**
 
@@ -432,7 +432,7 @@ end
 
 **Files:**
 - Create: `lib/excessibility/digest.ex`
-- Test: `test/excessibility/digest_test.exs`
+- Test: `test/digest_test.exs`
 
 **Step 1: Failing test** (build against an in-memory timeline map, the same shape `Timeline.build_timeline/3` returns):
 
@@ -504,7 +504,7 @@ end
 
 **Files:**
 - Modify: `lib/excessibility/digest.ex` (`assign_block/2`, add `trajectories/1`)
-- Test: `test/excessibility/digest_test.exs` (add)
+- Test: `test/digest_test.exs` (add)
 
 **Step 1: Failing test**
 
@@ -594,7 +594,7 @@ In `Excessibility.Digest`, `capture_version` comes from `Application.spec(:exces
 
 **Files:**
 - Create: `lib/excessibility/query_plan.ex`
-- Test: `test/excessibility/query_plan_test.exs`
+- Test: `test/query_plan_test.exs`
 
 **Step 1: Failing test** — feed a captured `EXPLAIN (FORMAT JSON)` structure (a decoded map/list) into `QueryPlan.summarize/1`; assert it returns `%{fingerprint: "sha256:…", nodes: [...], relations: [...], estimated_rows: n, actual_rows: nil, loops: nil, estimate_error: nil}` and that the fingerprint is stable across two plans that differ only in cost/row estimates.
 
@@ -659,7 +659,7 @@ In `Excessibility.Digest`, `capture_version` comes from `Application.spec(:exces
 
 **Files:**
 - Create: `lib/excessibility/digest_compare.ex` (pure diff logic)
-- Test: `test/excessibility/digest_compare_test.exs`
+- Test: `test/digest_compare_test.exs`
 
 **Step 1: Failing test** — cover:
 - new fingerprint in head → `queries.added`;
@@ -691,7 +691,7 @@ In `Excessibility.Digest`, `capture_version` comes from `Application.spec(:exces
 **Files:**
 - Create: `lib/excessibility/benchmark.ex` (stats: median, MAD)
 - Modify: `lib/mix/tasks/excessibility_debug.ex` (add `benchmark: :string`; when set, loop `run_test/1` N times, collect per-`(view, callback)` and per-fingerprint `duration_ms`, write `benchmark.json`)
-- Test: `test/excessibility/benchmark_test.exs` (unit-test `median/1`, `mad/1`, cold/warm split, and the aggregate shape)
+- Test: `test/benchmark_test.exs` (unit-test `median/1`, `mad/1`, cold/warm split, and the aggregate shape)
 
 **Step 1: Failing test** — `Benchmark.summarize(samples)` where sample 1 is cold, 2..N warm; assert output separates `cold`/`warm`, reports `median`+`mad` per key, and marks an extreme outlier advisory with the raw sample attached.
 
