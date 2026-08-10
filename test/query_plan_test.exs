@@ -109,6 +109,85 @@ defmodule Excessibility.QueryPlanTest do
     end
   end
 
+  # A root that returns one row but scans thousands beneath it — the primary
+  # reason to capture plans rather than trust the query count (issue #157).
+  defp small_root_big_child(child_extra \\ %{}) do
+    [
+      %{
+        "Plan" => %{
+          "Node Type" => "Nested Loop",
+          "Plan Rows" => 1,
+          "Plans" => [
+            %{"Node Type" => "Index Scan", "Relation Name" => "parents", "Plan Rows" => 1},
+            Map.merge(
+              %{"Node Type" => "Seq Scan", "Relation Name" => "children", "Plan Rows" => 50},
+              child_extra
+            )
+          ]
+        }
+      }
+    ]
+  end
+
+  describe "node_rows (child-node evidence)" do
+    test "preserves child estimated rows for plain EXPLAIN" do
+      s = QueryPlan.summarize(small_root_big_child())
+
+      child = Enum.find(s.node_rows, &(&1.relation == "children"))
+      assert child.node == "Seq Scan"
+      assert child.depth == 1
+      assert child.estimated_rows == 50
+      # No ANALYZE data present, so actual/loops/rows_touched stay nil.
+      assert child.actual_rows == nil
+      assert child.loops == nil
+      assert child.rows_touched == nil
+      assert child.estimate_error == nil
+    end
+
+    test "preserves child actual rows, loops and rows_touched only under ANALYZE" do
+      s =
+        QueryPlan.summarize(small_root_big_child(%{"Actual Rows" => 10_000, "Actual Loops" => 1}))
+
+      child = Enum.find(s.node_rows, &(&1.relation == "children"))
+      assert child.estimated_rows == 50
+      assert child.actual_rows == 10_000
+      assert child.loops == 1
+      assert child.rows_touched == 10_000
+      # |10000 - 50| / max(50, 1) = 199.0
+      assert_in_delta child.estimate_error, 199.0, 0.0001
+    end
+
+    test "rows_touched multiplies actual rows by loop count" do
+      s =
+        QueryPlan.summarize(small_root_big_child(%{"Actual Rows" => 3, "Actual Loops" => 100}))
+
+      child = Enum.find(s.node_rows, &(&1.relation == "children"))
+      assert child.rows_touched == 300
+    end
+
+    test "node_rows is a bounded, deterministic, value-free DFS list" do
+      s = QueryPlan.summarize(small_root_big_child())
+
+      assert Enum.map(s.node_rows, & &1.node) == ["Nested Loop", "Index Scan", "Seq Scan"]
+      assert Enum.map(s.node_rows, & &1.depth) == [0, 1, 1]
+
+      # Only allowlisted, value-free keys per node.
+      for node <- s.node_rows do
+        assert node |> Map.keys() |> Enum.sort() ==
+                 [
+                   :actual_rows,
+                   :depth,
+                   :estimate_error,
+                   :estimated_rows,
+                   :loops,
+                   :node,
+                   :relation,
+                   :rows_touched
+                 ]
+      end
+    end
+  end
+
   describe "value-free" do
     test "summary exposes only the allowlisted keys" do
       s = QueryPlan.summarize(nested_plan())
@@ -121,6 +200,7 @@ defmodule Excessibility.QueryPlanTest do
                  :fingerprint,
                  :loops,
                  :mode,
+                 :node_rows,
                  :nodes,
                  :relations
                ]

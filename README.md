@@ -361,6 +361,8 @@ Every captured Ecto query is normalized into a stable, value-free SQL shape (`Ex
 
 Off by default. When enabled, each recorded SELECT is run through `EXPLAIN` and a **value-free** plan summary (node types, relation names, row estimates only — never row data) is attached to its query shape, with a stable plan fingerprint over the node-type + relation tree.
 
+The summary also carries a bounded, value-free **`node_rows`** list — one entry per plan node in depth-first order with `node`, `relation`, `depth`, `estimated_rows`, and (only under `--plan-analyze`) `actual_rows`, `loops`, `rows_touched` (= `actual_rows × loops`) and `estimate_error`. This preserves the magnitude of an expensive child scan beneath a one-row root — a query can return a single row while looping over thousands underneath, which the structural fingerprint alone discards. `mix excessibility.digest.compare` compares these node numbers **even when the plan fingerprint is unchanged**, and reports structural plan changes (a different node tree) separately from numeric ones (the same tree doing more row work).
+
 | Flag | Mode | Behavior |
 |------|------|----------|
 | `--plan` | `EXPLAIN (FORMAT JSON)` | Plans the SELECT but **never executes** it — touches no data. SELECT-only. |

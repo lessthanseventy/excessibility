@@ -201,13 +201,23 @@ defmodule Excessibility.DigestCompare do
     |> Enum.sort_by(fn %{view: v, callback: c, fingerprint: fp} -> {v, c, fp} end)
   end
 
+  # A plan can change two independent ways under stable SQL:
+  #   * structurally — the node tree (fingerprint) differs; or
+  #   * numerically — the same tree does more work (rows/loops changed).
+  # The old logic returned early whenever fingerprints matched, so a query that
+  # still returns one row while scanning thousands beneath the root produced no
+  # delta at all (issue #157). We now report both, kept separate: `structural_change`
+  # flags the shape change, while root and per-node row deltas carry the magnitude.
   defp plan_delta(view, callback, fingerprint, base_plan, head_plan) do
     base_pfp = to_string(get(base_plan, :fingerprint))
     head_pfp = to_string(get(head_plan, :fingerprint))
+    structural? = base_pfp != head_pfp
 
-    if base_pfp == head_pfp do
-      []
-    else
+    estimated_delta = numeric_delta(base_plan, head_plan, :estimated_rows)
+    actual_delta = numeric_delta(base_plan, head_plan, :actual_rows)
+    node_deltas = node_deltas(base_plan, head_plan, structural?)
+
+    if structural? or nonzero?(estimated_delta) or nonzero?(actual_delta) or node_deltas != [] do
       [
         %{
           view: view,
@@ -215,20 +225,72 @@ defmodule Excessibility.DigestCompare do
           fingerprint: fingerprint,
           base_plan: base_pfp,
           head_plan: head_pfp,
-          estimated_rows_delta: rows_delta(base_plan, head_plan)
+          structural_change: structural?,
+          estimated_rows_delta: estimated_delta,
+          actual_rows_delta: actual_delta,
+          node_deltas: node_deltas
         }
       ]
+    else
+      []
     end
   end
 
-  defp rows_delta(base_plan, head_plan) do
-    base_rows = get(base_plan, :estimated_rows)
-    head_rows = get(head_plan, :estimated_rows)
+  # Per-node numeric deltas are only meaningful when the two plans share a
+  # structure: an unchanged fingerprint means identical node trees in identical
+  # depth-first order, so zipping by position is a stable node identity. When the
+  # structure itself changed, positions no longer correspond, so we report only
+  # the structural change and root row deltas.
+  defp node_deltas(_base_plan, _head_plan, true), do: []
 
-    if is_number(base_rows) and is_number(head_rows) do
-      head_rows - base_rows
+  defp node_deltas(base_plan, head_plan, false) do
+    base_nodes = get(base_plan, :node_rows) || []
+    head_nodes = get(head_plan, :node_rows) || []
+
+    base_nodes
+    |> Enum.zip(head_nodes)
+    |> Enum.with_index()
+    |> Enum.flat_map(fn {{base_node, head_node}, index} ->
+      node_delta(index, base_node, head_node)
+    end)
+  end
+
+  defp node_delta(index, base_node, head_node) do
+    estimated = numeric_delta(base_node, head_node, :estimated_rows)
+    actual = numeric_delta(base_node, head_node, :actual_rows)
+    touched = numeric_delta(base_node, head_node, :rows_touched)
+    loops = numeric_delta(base_node, head_node, :loops)
+
+    if Enum.any?([estimated, actual, touched, loops], &nonzero?/1) do
+      [
+        %{
+          index: index,
+          node: get(base_node, :node) || get(head_node, :node),
+          relation: get(base_node, :relation) || get(head_node, :relation),
+          depth: get(base_node, :depth),
+          estimated_rows_delta: estimated,
+          actual_rows_delta: actual,
+          rows_touched_delta: touched,
+          loops_delta: loops
+        }
+      ]
+    else
+      []
     end
   end
+
+  defp numeric_delta(base, head, key) do
+    base_value = get(base, key)
+    head_value = get(head, key)
+
+    if is_number(base_value) and is_number(head_value) do
+      head_value - base_value
+    end
+  end
+
+  defp nonzero?(nil), do: false
+  defp nonzero?(0), do: false
+  defp nonzero?(value), do: value != 0
 
   defp assign_diffs(base_agg, head_agg, shared) do
     shared
