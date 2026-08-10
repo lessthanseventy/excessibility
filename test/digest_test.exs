@@ -132,4 +132,78 @@ defmodule Excessibility.DigestTest do
     d = Digest.build(growing_timeline(), ecto_configured?: true)
     assert "products" in d.trajectories["PageLive"].monotonic_growth
   end
+
+  # A timeline whose event carries a malformed `assign_sizes` (a list, not a
+  # map) so `assign_block`'s `Enum.map(_, fn {name, bytes} -> ...)` raises,
+  # genuinely tripping the crash-isolation rescue.
+  defp malformed_timeline do
+    %{
+      test: "PageLiveTest: malformed",
+      timeline: [
+        %{
+          sequence: 1,
+          event: "mount",
+          view_module: "PageLive",
+          ecto_queries: [],
+          assign_sizes: [1, 2, 3]
+        }
+      ]
+    }
+  end
+
+  test "failed digest still carries every top-level key including coverage" do
+    d = Digest.build(malformed_timeline(), ecto_configured?: true)
+
+    assert d.capture.status == :failed
+    assert d.capture.warnings != []
+
+    # All top-level keys present regardless of status.
+    assert Map.has_key?(d, :schema)
+    assert Map.has_key?(d, :capture)
+    assert Map.has_key?(d, :coverage)
+    assert Map.has_key?(d, :events)
+    assert Map.has_key?(d, :trajectories)
+
+    assert d.schema == "excessibility.digest/v1"
+    assert d.events == []
+    assert d.trajectories == %{}
+
+    # Coverage has the empty-list shape the schema/compare consumer expects.
+    assert d.coverage == %{
+             tests: [],
+             views: [],
+             callbacks_observed: [],
+             event_sequence: [],
+             fixtures: %{}
+           }
+  end
+
+  # A module-atom view (as live capture produces) must be rendered without the
+  # `Elixir.` prefix everywhere it becomes an output field.
+  defp atom_view_timeline do
+    %{
+      test: "PageLiveTest: atom view",
+      timeline: [
+        %{
+          sequence: 1,
+          event: "mount",
+          view_module: SomeApp.PageLive,
+          ecto_queries: [],
+          assign_sizes: %{"count" => 8},
+          total_memory: 8
+        }
+      ]
+    }
+  end
+
+  test "module-atom view names are stripped of the Elixir. prefix" do
+    d = Digest.build(atom_view_timeline(), ecto_configured?: false)
+
+    ev = Enum.find(d.events, &(&1.callback == "mount"))
+    assert ev.view == "SomeApp.PageLive"
+    assert "SomeApp.PageLive" in d.coverage.views
+    assert Map.has_key?(d.trajectories, "SomeApp.PageLive")
+
+    refute Jason.encode!(d) =~ "Elixir."
+  end
 end

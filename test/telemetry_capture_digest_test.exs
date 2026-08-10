@@ -10,7 +10,7 @@ defmodule Excessibility.TelemetryCaptureDigestTest do
   # A raw query carrying secret literal *values* that must never survive into the
   # value-free digest. Normalization scrubs quoted literals to `?`, so these
   # canaries appear only in the raw `query` field the digest deliberately drops.
-  @secret_sql "SELECT id FROM accounts WHERE api_token = 'LEAK_CANARY_9f3b2c' AND ssn = '078-05-1120'"
+  @secret_sql "SELECT id FROM accounts WHERE api_token = 'LEAK_CANARY_9f3b2c' AND ssn = '078-05-1120' AND id = 424242"
 
   setup do
     :ets.whereis(:excessibility_snapshots) != :undefined &&
@@ -69,5 +69,28 @@ defmodule Excessibility.TelemetryCaptureDigestTest do
     refute raw =~ "LEAK_CANARY_9f3b2c"
     refute raw =~ "078-05-1120"
     refute raw =~ "api_token = '"
+    # Bare (unquoted) numeric literals are scrubbed too, not just quoted values.
+    refute raw =~ "424242"
+  end
+
+  test "non-object EXCESSIBILITY_FIXTURES JSON is rejected in favor of the object fallback" do
+    System.put_env("EXCESSIBILITY_FIXTURES", "[1, 2, 3]")
+
+    on_exit(fn -> System.delete_env("EXCESSIBILITY_FIXTURES") end)
+
+    TelemetryCapture.attach()
+
+    TelemetryCapture.handle_event(
+      [:phoenix, :live_view, :handle_event, :stop],
+      %{duration: 50},
+      %{socket: %{assigns: %{user_id: 123}, view: MyApp.Live}, params: %{"event" => "save"}},
+      nil
+    )
+
+    TelemetryCapture.write_snapshots("fixtures_guard_test")
+
+    digest = @digest_path |> File.read!() |> Jason.decode!()
+    # The list must not flow into coverage.fixtures; it stays an object.
+    assert digest["coverage"]["fixtures"] == %{}
   end
 end

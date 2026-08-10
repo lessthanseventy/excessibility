@@ -50,6 +50,7 @@ defmodule Excessibility.Digest do
           capture_version: capture_version(),
           warnings: [Exception.message(e)]
         },
+        coverage: %{tests: [], views: [], callbacks_observed: [], event_sequence: [], fixtures: %{}},
         events: [],
         trajectories: %{}
       }
@@ -72,7 +73,7 @@ defmodule Excessibility.Digest do
 
     %{
       tests: [Map.get(timeline, :test)],
-      views: events |> Enum.map(& &1.view_module) |> Enum.uniq(),
+      views: events |> Enum.map(&view_name(&1.view_module)) |> Enum.uniq(),
       callbacks_observed: Enum.uniq(callbacks),
       event_sequence: callbacks,
       fixtures: Keyword.get(opts, :fixtures, %{})
@@ -98,7 +99,7 @@ defmodule Excessibility.Digest do
     %{
       sequence: entry.sequence,
       callback: entry.event,
-      view: entry.view_module,
+      view: view_name(entry.view_module),
       queries: query_block(entry),
       assigns: assign_block(entry, prev_sizes)
     }
@@ -186,9 +187,17 @@ defmodule Excessibility.Digest do
     events
     |> Enum.group_by(&Map.get(&1, :view_module))
     |> Map.new(fn {view, view_events} ->
-      {view, view_trajectory(view_events)}
+      {view_name(view), view_trajectory(view_events)}
     end)
   end
+
+  # Normalize a view module into a clean name for output: live capture emits a
+  # module atom, which Jason would render as `"Elixir.MyApp.PageLive"`; the
+  # compare consumer joins on the clean form.
+  defp view_name(nil), do: nil
+  defp view_name(v) when is_binary(v), do: String.replace_prefix(v, "Elixir.", "")
+  defp view_name(v) when is_atom(v), do: v |> Atom.to_string() |> String.replace_prefix("Elixir.", "")
+  defp view_name(v), do: to_string(v)
 
   defp view_trajectory(view_events) do
     series = byte_series(view_events)
@@ -199,7 +208,9 @@ defmodule Excessibility.Digest do
     }
   end
 
-  # %{assign_name => [bytes_in_event_order]} across this view's events.
+  # %{assign_name => [bytes_in_event_order]} across this view's events. The
+  # series holds only events where the assign was present, so non-contiguous
+  # appearances are treated as adjacent (monotonicity ignores gaps).
   defp byte_series(view_events) do
     view_events
     |> Enum.flat_map(fn entry ->
