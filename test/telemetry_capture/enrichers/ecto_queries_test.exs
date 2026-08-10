@@ -38,6 +38,21 @@ defmodule Excessibility.TelemetryCapture.Enrichers.EctoQueriesTest do
     end
   end
 
+  describe "build_query_record/2" do
+    test "build_query_record/2 adds fingerprint and value-free normalized sql" do
+      measurements = %{total_time: System.convert_time_unit(2, :millisecond, :native)}
+      metadata = %{source: "products", query: "SELECT * FROM products WHERE id = $1", repo: MyRepo}
+
+      record = EctoQueries.build_query_record(measurements, metadata)
+
+      assert record.operation == :select
+      assert record.fingerprint =~ ~r/^sha256:[0-9a-f]{16}$/
+      assert record.normalized == "select * from products where id = $?"
+      # raw retained for local timeline
+      assert record.query == "SELECT * FROM products WHERE id = $1"
+    end
+  end
+
   describe "attach/0 and detach/0" do
     test "attaches and detaches telemetry handler" do
       assert :ok = EctoQueries.attach()
