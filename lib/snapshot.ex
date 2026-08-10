@@ -17,7 +17,7 @@ defmodule Excessibility.Snapshot do
 
   1. Run tests to generate snapshots
   2. Run `mix excessibility.baseline` to lock in a known-good state
-  3. Run `mix excessibility.compare` to diff against baseline after changes
+  3. Run `mix excessibility.snapshot.compare` to diff against baseline after changes
 
   This module is typically used via the `Excessibility.html_snapshot/2` macro
   rather than called directly.

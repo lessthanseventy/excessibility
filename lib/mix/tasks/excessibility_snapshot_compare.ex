@@ -1,4 +1,4 @@
-defmodule Mix.Tasks.Excessibility.Compare do
+defmodule Mix.Tasks.Excessibility.Snapshot.Compare do
   @shortdoc "Compares snapshots against baseline and resolves diffs"
   @moduledoc """
   Compares current snapshots against the baseline and prompts for resolution.
@@ -13,13 +13,13 @@ defmodule Mix.Tasks.Excessibility.Compare do
   ## Usage
 
       # Interactive mode - prompts for each diff
-      $ mix excessibility.compare
+      $ mix excessibility.snapshot.compare
 
       # Keep all baseline (good) versions
-      $ mix excessibility.compare --keep good
+      $ mix excessibility.snapshot.compare --keep good
 
       # Accept all new (bad) versions as baseline
-      $ mix excessibility.compare --keep bad
+      $ mix excessibility.snapshot.compare --keep bad
 
   ## Options
 

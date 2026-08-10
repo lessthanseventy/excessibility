@@ -1,9 +1,9 @@
-defmodule Mix.Tasks.Excessibility.CompareTest do
+defmodule Mix.Tasks.Excessibility.Snapshot.CompareTest do
   use ExUnit.Case
 
   import ExUnit.CaptureIO
 
-  alias Mix.Tasks.Excessibility.Compare, as: CompareTask
+  alias Mix.Tasks.Excessibility.Snapshot.Compare, as: CompareTask
 
   @output_dir Path.join(["test", "excessibility"])
   @snapshot_dir Path.join(@output_dir, "html_snapshots")

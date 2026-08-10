@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### BREAKING
+- **`mix excessibility.compare` renamed to `mix excessibility.snapshot.compare`** ([#154](https://github.com/lessthanseventy/excessibility/issues/154)). The snapshot baseline-diff task moves under the `snapshot` namespace to make room for the new runtime-evidence digest tasks. There is no deprecated alias — update any scripts, CI steps, or editor tasks that call `mix excessibility.compare` (including `--keep good`/`--keep bad`) to `mix excessibility.snapshot.compare`. The task's behavior is unchanged.
+
+
 ## [0.18.1] - 2026-08-07
 
 ### Fixed
