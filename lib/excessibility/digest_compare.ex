@@ -77,9 +77,11 @@ defmodule Excessibility.DigestCompare do
 
     %{
       schema: to_string(get(digest, :schema, "")),
+      status: to_string(get(cap, :status, "ok")),
       ecto_configured: get(cap, :ecto_configured, false) == true,
       plan_capture: to_string(get(cap, :plan_capture, "disabled")),
-      enrichers: cap |> get(:enrichers_run, []) |> MapSet.new(&to_string/1)
+      enrichers: cap |> get(:enrichers_run, []) |> MapSet.new(&to_string/1),
+      has_events?: Map.has_key?(digest, :events) or Map.has_key?(digest, "events")
     }
   end
 
@@ -109,7 +111,7 @@ defmodule Excessibility.DigestCompare do
         pacc =
           case get(s, :plan) do
             nil -> pacc
-            plan -> Map.put_new(pacc, fp, plan)
+            plan -> Map.update(pacc, fp, plan, &min_plan(&1, plan))
           end
 
         {qacc, pacc}
@@ -288,12 +290,43 @@ defmodule Excessibility.DigestCompare do
   # determinism.
   defp notes(base, head) do
     []
+    |> status_note(base, head)
+    |> non_digest_note(base, head)
     |> schema_note(base, head)
     |> ecto_note(base, head)
     |> plan_note(base, head)
     |> enricher_note(base, head)
     |> Enum.uniq()
     |> Enum.sort()
+  end
+
+  # A failed/partial capture yields empty events, so every delta below is a
+  # measurement artifact rather than a real change. Surface that prominently
+  # for either side.
+  defp status_note(notes, base, head) do
+    notes
+    |> maybe_status_note(head.status, "head")
+    |> maybe_status_note(base.status, "base")
+  end
+
+  defp maybe_status_note(notes, "ok", _side), do: notes
+
+  defp maybe_status_note(notes, status, side) do
+    [
+      "#{side} capture did not complete (status: #{status}) — coverage/query deltas below are unreliable"
+      | notes
+    ]
+  end
+
+  # Valid JSON that is not a digest (no events on either side) produces no
+  # meaningful structural deltas; flag it so the empty result is not read as
+  # "no changes".
+  defp non_digest_note(notes, base, head) do
+    if not base.has_events? and not head.has_events? do
+      ["input does not look like an excessibility digest (no events)" | notes]
+    else
+      notes
+    end
   end
 
   defp schema_note(notes, base, head) do
@@ -341,6 +374,18 @@ defmodule Excessibility.DigestCompare do
 
   defp fmt_list([]), do: "none"
   defp fmt_list(list), do: Enum.join(list, ", ")
+
+  # When one fingerprint carries different plans across events of the same
+  # {view, callback}, keep a deterministic representative independent of event
+  # order: the plan whose `fingerprint` is lexicographically smallest (existing
+  # wins on ties). This preserves byte-for-byte reproducibility.
+  defp min_plan(existing, candidate) do
+    if to_string(get(candidate, :fingerprint)) < to_string(get(existing, :fingerprint)) do
+      candidate
+    else
+      existing
+    end
+  end
 
   defp max_cardinality(nil, other), do: other
   defp max_cardinality(other, nil), do: other

@@ -51,6 +51,9 @@ defmodule Mix.Tasks.Excessibility.Digest.Compare do
       is_nil(base_path) or is_nil(head_path) ->
         usage_error("Both --base and --head are required.")
 
+      format not in ["markdown", "json"] ->
+        usage_error("--format must be \"markdown\" or \"json\" (got: #{format}).")
+
       not File.exists?(base_path) ->
         usage_error("--base file not found: #{base_path}")
 
@@ -58,8 +61,8 @@ defmodule Mix.Tasks.Excessibility.Digest.Compare do
         usage_error("--head file not found: #{head_path}")
 
       true ->
-        base = load(base_path)
-        head = load(head_path)
+        base = load(base_path, "--base")
+        head = load(head_path, "--head")
         diff = DigestCompare.diff(base, head)
 
         diff
@@ -70,7 +73,21 @@ defmodule Mix.Tasks.Excessibility.Digest.Compare do
     end
   end
 
-  defp load(path), do: path |> File.read!() |> Jason.decode!(keys: :atoms)
+  # Read + decode a digest, routing any read/parse failure through the clean
+  # usage_error path (which exits 1) instead of raising. Covers missing files,
+  # directories (`:eisdir`), and truncated/invalid JSON.
+  defp load(path, flag) do
+    case File.read(path) do
+      {:ok, contents} ->
+        case Jason.decode(contents, keys: :atoms) do
+          {:ok, decoded} -> decoded
+          {:error, _} -> usage_error("#{flag} is not valid JSON: #{path}")
+        end
+
+      {:error, reason} ->
+        usage_error("#{flag} could not be read (#{:file.format_error(reason)}): #{path}")
+    end
+  end
 
   defp usage_error(message) do
     Mix.shell().error("""

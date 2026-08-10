@@ -132,4 +132,60 @@ defmodule Mix.Tasks.Excessibility.Digest.CompareTest do
     assert_received {:outcome, {:exited, {:shutdown, 1}}}
     assert result =~ "--base"
   end
+
+  test "malformed JSON head prints a clean error and exits non-zero (I3)", ctx do
+    bad_path = Path.join(ctx.dir, "bad.json")
+    File.write!(bad_path, "{not json")
+
+    result =
+      capture_io(:stderr, fn ->
+        outcome =
+          try do
+            CompareTask.run(["--base", ctx.base_path, "--head", bad_path])
+            :no_exit
+          catch
+            :exit, reason -> {:exited, reason}
+          end
+
+        send(self(), {:outcome, outcome})
+      end)
+
+    assert_received {:outcome, {:exited, {:shutdown, 1}}}
+    assert result =~ "not valid JSON"
+    refute result =~ "Jason.DecodeError"
+  end
+
+  test "directory as --head prints a clean error and exits non-zero (I3)", ctx do
+    capture_io(:stderr, fn ->
+      outcome =
+        try do
+          CompareTask.run(["--base", ctx.base_path, "--head", ctx.dir])
+          :no_exit
+        catch
+          :exit, reason -> {:exited, reason}
+        end
+
+      send(self(), {:outcome, outcome})
+    end)
+
+    assert_received {:outcome, {:exited, {:shutdown, 1}}}
+  end
+
+  test "unknown --format prints a usage error and exits non-zero (M6)", ctx do
+    result =
+      capture_io(:stderr, fn ->
+        outcome =
+          try do
+            CompareTask.run(["--base", ctx.base_path, "--head", ctx.head_path, "--format", "xml"])
+            :no_exit
+          catch
+            :exit, reason -> {:exited, reason}
+          end
+
+        send(self(), {:outcome, outcome})
+      end)
+
+    assert_received {:outcome, {:exited, {:shutdown, 1}}}
+    assert result =~ "format"
+  end
 end
