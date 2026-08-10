@@ -68,7 +68,7 @@ defmodule Excessibility.QueryPlanTest do
   describe "fingerprint" do
     test "is stable across differing row estimates and costs" do
       a = QueryPlan.summarize(nested_plan(%{"Plan Rows" => 100, "Total Cost" => 5.0}))
-      b = QueryPlan.summarize(nested_plan(%{"Plan Rows" => 999_999, "Total Cost" => 9999.9}))
+      b = QueryPlan.summarize(nested_plan(%{"Plan Rows" => 999_999, "Total Cost" => 9_999.9}))
 
       assert a.fingerprint =~ ~r/^sha256:[0-9a-f]{16}$/
       assert a.fingerprint == b.fingerprint

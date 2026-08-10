@@ -52,7 +52,7 @@ defmodule Mix.Tasks.Excessibility.Digest.Compare do
         usage_error("Both --base and --head are required.")
 
       format not in ["markdown", "json"] ->
-        usage_error("--format must be \"markdown\" or \"json\" (got: #{format}).")
+        usage_error(~s{--format must be "markdown" or "json" (got: #{format}).})
 
       not File.exists?(base_path) ->
         usage_error("--base file not found: #{base_path}")

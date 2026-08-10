@@ -92,7 +92,8 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EctoQueryAnalysis do
         |> Enum.map(&Map.get(&1, :duration_ms, 0))
         |> Enum.sum()
 
-      # QueryEvidence.repeated/2 labels the pattern :advisory for the raw digest; the analyzer applies its own (higher) severity for the review surface.
+      # QueryEvidence.repeated/2 labels the pattern :advisory for the raw digest;
+      # the analyzer applies its own (higher) severity for the review surface.
       %{
         severity: :critical,
         message:
