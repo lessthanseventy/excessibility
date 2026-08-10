@@ -76,8 +76,11 @@ defmodule Excessibility.Review do
       |> matched_pairs()
       |> review_pairs(pair_opts)
 
-    behavioral = if timeline, do: Behavioral.findings(timeline, opts), else: []
-    Map.put(report, :behavioral, behavioral)
+    behavioral = if timeline, do: Behavioral.analyze(timeline, opts), else: %{findings: [], warnings: []}
+
+    report
+    |> Map.put(:behavioral, behavioral.findings)
+    |> Map.update(:warnings, behavioral.warnings, &Enum.uniq(&1 ++ behavioral.warnings))
   end
 
   @doc """
@@ -139,10 +142,10 @@ defmodule Excessibility.Review do
       content_change_findings(baseline_html, current_html, opts) ++
         new_rule_findings(baseline_html, current_html, axe_pair, opts)
 
-    behavioral =
+    {behavioral, behavioral_warnings} =
       case Keyword.get(opts, :timeline) do
-        nil -> []
-        timeline -> Behavioral.findings(timeline, opts)
+        nil -> {[], []}
+        timeline -> timeline |> Behavioral.analyze(opts) |> then(&{&1.findings, &1.warnings})
       end
 
     %{
@@ -151,7 +154,7 @@ defmodule Excessibility.Review do
       region_count: length(regions),
       findings: findings,
       behavioral: behavioral,
-      warnings: warnings,
+      warnings: Enum.uniq(warnings ++ behavioral_warnings),
       tier: tier(findings ++ behavioral)
     }
   end

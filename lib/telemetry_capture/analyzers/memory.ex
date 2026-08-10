@@ -71,8 +71,15 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Memory do
     }
   end
 
+  # Tolerate events without the `:total_memory` field: a timeline captured with
+  # a filtered enricher set (e.g. `--analyze=ecto_query_analysis`) may omit it.
+  # Review already skips this analyzer when the :assign_sizes enricher is absent
+  # (see Excessibility.Review.Behavioral); this keeps the analyzer itself from
+  # raising on any residual gap.
   defp extract_memory_sizes(timeline) do
-    Enum.map(timeline, & &1.total_memory)
+    timeline
+    |> Enum.map(&Map.get(&1, :total_memory))
+    |> Enum.reject(&is_nil/1)
   end
 
   defp calculate_stats([]), do: %{}
