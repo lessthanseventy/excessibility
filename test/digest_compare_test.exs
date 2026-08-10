@@ -300,6 +300,40 @@ defmodule Excessibility.DigestCompareTest do
     assert a.head_cardinality == 90
   end
 
+  test "tiny byte-only assign deltas are suppressed by default (#159)" do
+    # Two unchanged runs whose per-assign term_bytes jitter by a byte or two
+    # with identical cardinality must not produce assign deltas.
+    base =
+      digest([
+        event("PageLive", "handle_event:save", assigns: [assign("a", 1_000, 5), assign("b", 2_000, nil)])
+      ])
+
+    head =
+      digest([
+        event("PageLive", "handle_event:save", assigns: [assign("a", 1_001, 5), assign("b", 1_998, nil)])
+      ])
+
+    assert DigestCompare.diff(base, head).assigns == []
+  end
+
+  test "a cardinality change is never suppressed even with a tiny byte delta (#159)" do
+    base = digest([event("PageLive", "handle_event:save", assigns: [assign("items", 1_000, 5)])])
+    head = digest([event("PageLive", "handle_event:save", assigns: [assign("items", 1_001, 6)])])
+
+    assert [a] = DigestCompare.diff(base, head).assigns
+    assert a.name == "items"
+    assert a.base_cardinality == 5
+    assert a.head_cardinality == 6
+  end
+
+  test "a large byte-only delta is still reported (#159)" do
+    base = digest([event("PageLive", "handle_event:save", assigns: [assign("blob", 1_000, nil)])])
+    head = digest([event("PageLive", "handle_event:save", assigns: [assign("blob", 20_000, nil)])])
+
+    assert [a] = DigestCompare.diff(base, head).assigns
+    assert a.delta_bytes == 19_000
+  end
+
   # --- measurement-scope guard ---------------------------------------------
 
   test "ecto scope mismatch emits coverage note and NO fabricated queries" do

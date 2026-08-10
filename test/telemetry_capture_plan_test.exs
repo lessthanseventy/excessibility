@@ -207,4 +207,37 @@ defmodule Excessibility.TelemetryCapturePlanTest do
     assert record.operation == :select
     assert Map.get(record, :plan) == nil
   end
+
+  test "ANALYZE downgrade warns once per run, not once per query (#159)" do
+    System.put_env("EXCESSIBILITY_QUERY_PLAN", "explain_analyze")
+    prev = Application.get_env(:excessibility, :query_plan_allow_analyze)
+    Application.put_env(:excessibility, :query_plan_allow_analyze, false)
+    # The warn-once flag is global to the run; reset it so the assertion is
+    # deterministic regardless of test order.
+    TelemetryCapture.reset_analyze_downgrade_warning()
+
+    on_exit(fn ->
+      if prev == nil,
+        do: Application.delete_env(:excessibility, :query_plan_allow_analyze),
+        else: Application.put_env(:excessibility, :query_plan_allow_analyze, prev)
+
+      TelemetryCapture.reset_analyze_downgrade_warning()
+    end)
+
+    log =
+      ExUnit.CaptureLog.capture_log(fn ->
+        # Three SELECTs across the run — each resolves the plan mode and hits the
+        # downgrade path, but the warning must appear exactly once.
+        fire("SELECT * FROM products WHERE id = $1", StubRepo, "products")
+        fire("SELECT * FROM products WHERE id = $2", StubRepo, "products")
+        fire("SELECT * FROM products WHERE id = $3", StubRepo, "products")
+      end)
+
+    downgrade_lines =
+      log
+      |> String.split("\n")
+      |> Enum.count(&(&1 =~ "downgrading to EXPLAIN"))
+
+    assert downgrade_lines == 1
+  end
 end

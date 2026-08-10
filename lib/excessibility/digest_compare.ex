@@ -307,10 +307,20 @@ defmodule Excessibility.DigestCompare do
     |> Enum.sort_by(fn %{view: v, callback: c, name: n} -> {v, c, n} end)
   end
 
+  # Exact term_bytes jitter by a byte or two across two otherwise-identical runs
+  # is measurement noise, not a collection-growth signal. Suppress a byte-only
+  # change (same cardinality) whose magnitude is below the notable threshold;
+  # a cardinality change is *never* suppressed, and the exact `delta_bytes`
+  # stays on any entry that is reported. Set the threshold to 0 via
+  # `config :excessibility, :digest_min_assign_delta_bytes` to restore the old
+  # exact-byte behavior.
+  @default_min_assign_delta_bytes 64
+
   defp assign_delta(view, callback, name, base, head) do
     delta = (head.term_bytes || 0) - (base.term_bytes || 0)
+    cardinality_unchanged? = base.cardinality == head.cardinality
 
-    if delta == 0 and base.cardinality == head.cardinality do
+    if cardinality_unchanged? and abs(delta) < min_assign_delta_bytes() do
       []
     else
       [
@@ -447,6 +457,10 @@ defmodule Excessibility.DigestCompare do
     else
       existing
     end
+  end
+
+  defp min_assign_delta_bytes do
+    Application.get_env(:excessibility, :digest_min_assign_delta_bytes, @default_min_assign_delta_bytes)
   end
 
   defp max_cardinality(nil, other), do: other
