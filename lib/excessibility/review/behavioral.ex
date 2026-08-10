@@ -33,30 +33,78 @@ defmodule Excessibility.Review.Behavioral do
   """
   @spec findings(map(), keyword()) :: [finding()]
   def findings(timeline, opts \\ []) do
-    analyzers = Keyword.get(opts, :analyzers) || Registry.get_default_analyzers()
-
-    analyzers
-    |> Analyzer.sort_by_dependencies()
-    |> run(timeline, opts)
-    |> Enum.map(&normalize/1)
+    analyze(timeline, opts).findings
   end
 
-  # Run analyzers in dependency order, threading prior results, collecting
-  # each finding tagged with the analyzer that produced it.
-  defp run(analyzers, timeline, opts) do
-    {collected, _prior} =
-      Enum.reduce(analyzers, {[], %{}}, fn analyzer, {acc, prior} ->
-        result = analyzer.analyze(timeline, Keyword.put(opts, :prior_results, prior))
+  @doc """
+  Run the analyzers and return both normalized `findings` and coverage
+  `warnings`. A timeline produced by a filtered `mix excessibility.debug` run
+  (e.g. `--analyze=ecto_query_analysis`) carries only some enricher fields, so
+  an analyzer whose required enricher data is absent is skipped with an explicit
+  warning rather than being run against missing fields. A per-analyzer rescue
+  backstops any remaining field gap, so review always emits a result.
+  """
+  @spec analyze(map(), keyword()) :: %{findings: [finding()], warnings: [String.t()]}
+  def analyze(timeline, opts \\ []) do
+    analyzers = Keyword.get(opts, :analyzers) || Registry.get_default_analyzers()
+    events = Map.get(timeline, :timeline) || Map.get(timeline, "timeline") || []
 
-        tagged =
-          result
-          |> Map.get(:findings, [])
-          |> Enum.map(&Map.put(&1, :analyzer, analyzer.name()))
+    {runnable, skip_warnings} = partition_by_enrichers(analyzers, events)
 
-        {acc ++ tagged, Map.put(prior, analyzer.name(), result)}
+    {findings, run_warnings} =
+      runnable
+      |> Analyzer.sort_by_dependencies()
+      |> run(timeline, opts)
+
+    %{findings: Enum.map(findings, &normalize/1), warnings: skip_warnings ++ run_warnings}
+  end
+
+  # Only gate on enricher presence when there is timeline data to inspect: an
+  # empty timeline has no enricher fields but also nothing to analyze, so we let
+  # analyzers no-op rather than emit a wall of skip notes.
+  defp partition_by_enrichers(analyzers, []), do: {analyzers, []}
+
+  defp partition_by_enrichers(analyzers, events) do
+    available = Analyzer.available_enrichers(events)
+
+    {runnable, skipped} =
+      Enum.split_with(analyzers, fn analyzer ->
+        Analyzer.missing_enrichers(analyzer, available) == []
       end)
 
-    collected
+    warnings =
+      Enum.map(skipped, fn analyzer ->
+        missing = analyzer |> Analyzer.missing_enrichers(available) |> Enum.map_join(", ", &to_string/1)
+        "#{analyzer.name()} analysis skipped: required enricher data (#{missing}) was not captured in this timeline"
+      end)
+
+    {runnable, warnings}
+  end
+
+  # Run analyzers in dependency order, threading prior results, collecting each
+  # finding tagged with the analyzer that produced it. A crash in one analyzer
+  # (an unforeseen missing field) degrades to a skip warning instead of failing
+  # the whole review.
+  defp run(analyzers, timeline, opts) do
+    {collected, warnings, _prior} =
+      Enum.reduce(analyzers, {[], [], %{}}, fn analyzer, {acc, warns, prior} ->
+        try do
+          result = analyzer.analyze(timeline, Keyword.put(opts, :prior_results, prior))
+
+          tagged =
+            result
+            |> Map.get(:findings, [])
+            |> Enum.map(&Map.put(&1, :analyzer, analyzer.name()))
+
+          {acc ++ tagged, warns, Map.put(prior, analyzer.name(), result)}
+        rescue
+          e ->
+            note = "#{analyzer.name()} analysis skipped: #{Exception.message(e)}"
+            {acc, warns ++ [note], Map.put(prior, analyzer.name(), %{findings: [], stats: %{}})}
+        end
+      end)
+
+    {collected, warnings}
   end
 
   defp normalize(finding) do

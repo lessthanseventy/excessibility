@@ -95,6 +95,56 @@ defmodule Excessibility.TelemetryCapture.Analyzer do
     end
   end
 
+  # Representative event field emitted by each enricher an analyzer can depend
+  # on. Presence of the field on any timeline event means that enricher ran;
+  # total absence means it was filtered out of the capture (e.g. a
+  # `mix excessibility.debug --analyze=ecto_query_analysis` run emits only the
+  # :ecto_queries enricher). Enrichers absent from this map are never used to
+  # gate analyzer selection, so an unknown dependency errs toward running.
+  @enricher_field %{
+    assign_sizes: :total_memory,
+    duration: :event_duration_ms,
+    ecto_queries: :ecto_queries,
+    collection_size: :list_sizes,
+    state: :state_keys,
+    component_tree: :component_count,
+    push_events: :push_events
+  }
+
+  @doc """
+  The set of enricher names whose data is present in `events` — an enricher's
+  representative field appears on at least one event. Used to skip analyzers
+  whose required enricher was filtered out of a capture rather than crash on
+  the missing field.
+  """
+  def available_enrichers(events) when is_list(events) do
+    for {enricher, field} <- @enricher_field,
+        Enum.any?(events, &field_present?(&1, field)),
+        into: MapSet.new(),
+        do: enricher
+  end
+
+  def available_enrichers(_), do: MapSet.new()
+
+  @doc """
+  Required enrichers of `analyzer_module` that are both detectable and absent
+  from `available`. An empty list means the analyzer is safe to run; a non-empty
+  list names the enricher data that was not captured.
+  """
+  def missing_enrichers(analyzer_module, %MapSet{} = available) do
+    analyzer_module
+    |> get_required_enrichers()
+    |> Enum.filter(fn enricher ->
+      Map.has_key?(@enricher_field, enricher) and not MapSet.member?(available, enricher)
+    end)
+  end
+
+  defp field_present?(event, field) when is_map(event) do
+    Map.has_key?(event, field) or Map.has_key?(event, Atom.to_string(field))
+  end
+
+  defp field_present?(_event, _field), do: false
+
   @doc """
   Gets analyzer dependencies for an analyzer module.
   Returns empty list if not defined.
