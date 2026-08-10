@@ -21,7 +21,7 @@ Excessibility helps you test your Phoenix apps for accessibility (WCAG complianc
 1. **During tests**, call `html_snapshot(conn)` to capture HTML from your Phoenix responses, LiveViews, or Wallaby sessions
 2. **After tests**, run `mix excessibility` to check all snapshots with axe-core for WCAG violations
 3. **Lock baselines** with `mix excessibility.baseline` when snapshots represent a known-good state
-4. **Compare changes** with `mix excessibility.compare` to review what changed and approve/reject
+4. **Compare changes** with `mix excessibility.snapshot.compare` to review what changed and approve/reject
 5. **Review the blast radius** with `mix excessibility.review` to see which accessibility issues a change newly introduced (JSON output for CI via `--format json`)
 6. **In CI**, axe-core reports accessibility violations alongside your test failures
 
@@ -457,7 +457,7 @@ The installer will:
 
     # After making UI changes, run tests again, then compare
     mix test
-    mix excessibility.compare   # Review diffs, choose good (baseline) or bad (new)
+    mix excessibility.snapshot.compare   # Review diffs, choose good (baseline) or bad (new)
     ```
 
 ## Usage
@@ -503,7 +503,7 @@ This copies all current snapshots to the baseline directory. Run this when your 
 **Comparing against baseline:**
 
 ```bash
-mix excessibility.compare
+mix excessibility.snapshot.compare
 ```
 
 For each snapshot that differs from its baseline:
@@ -516,8 +516,8 @@ For each snapshot that differs from its baseline:
 **Batch options:**
 
 ```bash
-mix excessibility.compare --keep good   # Keep all baselines (reject all changes)
-mix excessibility.compare --keep bad    # Accept all new versions as baseline
+mix excessibility.snapshot.compare --keep good   # Keep all baselines (reject all changes)
+mix excessibility.snapshot.compare --keep bad    # Accept all new versions as baseline
 ```
 
 ## Blast-Radius Review
@@ -681,9 +681,9 @@ Screenshots are saved alongside HTML files with `.png` extension. Playwright is 
 | `mix excessibility.check [url]` | Run axe-core on a live URL via Playwright |
 | `mix excessibility.snapshots` | List and manage HTML snapshots |
 | `mix excessibility.baseline` | Lock current snapshots as baseline |
-| `mix excessibility.compare` | Compare snapshots against baseline, resolve diffs interactively |
-| `mix excessibility.compare --keep good` | Keep all baseline versions (reject changes) |
-| `mix excessibility.compare --keep bad` | Accept all new versions as baseline |
+| `mix excessibility.snapshot.compare` | Compare snapshots against baseline, resolve diffs interactively |
+| `mix excessibility.snapshot.compare --keep good` | Keep all baseline versions (reject changes) |
+| `mix excessibility.snapshot.compare --keep bad` | Accept all new versions as baseline |
 | `mix excessibility.review` | Report the accessibility blast radius of changes vs the baseline |
 | `mix excessibility.review --format json` | Emit the review as a single JSON object for CI (`--json` alias) |
 | `mix excessibility.review --fail-on block\|review\|never` | Choose which tier fails the build (default: `block`) |
@@ -732,7 +732,7 @@ test/
         └── MyApp_PageTest_42.html
 ```
 
-During `mix excessibility.compare`, temporary `.good.html` and `.bad.html` files are created for diffing, then cleaned up after resolution.
+During `mix excessibility.snapshot.compare`, temporary `.good.html` and `.bad.html` files are created for diffing, then cleaned up after resolution.
 
 ## License
 
