@@ -7,7 +7,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EctoQueryAnalysis do
 
   Detects:
   - Excessive queries per event (>10 queries)
-  - N+1 patterns (multiple SELECTs on same table in one event)
+  - N+1 patterns (multiple SELECTs of the same query shape/fingerprint in one event)
   - Slow individual queries (>100ms)
   - Slow total query time per event (>500ms)
 
@@ -77,44 +77,38 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EctoQueryAnalysis do
 
   defp detect_excessive_queries(_event, _count, _total_ms), do: []
 
+  # Group repeated SELECTs by query *fingerprint* rather than by source table.
+  # Two different SELECTs on the same table are distinct N+1 candidates, and
+  # identical SELECTs group together even across bind-arity differences. The
+  # shared `QueryEvidence.repeated/2` also tolerates string `operation` values
+  # from a reloaded `timeline.json` (issue #151).
   defp detect_n_plus_one(event, queries) when length(queries) >= @n_plus_one_threshold do
     queries
-    |> Enum.filter(&select?/1)
-    |> Enum.group_by(& &1.source)
-    |> Enum.flat_map(fn {source, source_queries} ->
-      count = length(source_queries)
+    |> Excessibility.QueryEvidence.repeated(min_repetitions: @n_plus_one_threshold)
+    |> Enum.map(fn rep ->
+      total_ms =
+        queries
+        |> Enum.filter(&(Map.get(&1, :fingerprint) == rep.fingerprint))
+        |> Enum.map(&Map.get(&1, :duration_ms, 0))
+        |> Enum.sum()
 
-      if count >= @n_plus_one_threshold do
-        total_ms = source_queries |> Enum.map(& &1.duration_ms) |> Enum.sum()
-
-        [
-          %{
-            severity: :critical,
-            message:
-              "#{count} of #{length(queries)} queries are SELECT on \"#{source}\" in #{event.event} (N+1 pattern) — consider preloading or batching",
-            events: [event.sequence],
-            metadata: %{
-              source: source,
-              count: count,
-              total_ms: Float.round(total_ms * 1.0, 2),
-              pattern: :n_plus_one
-            }
-          }
-        ]
-      else
-        []
-      end
+      %{
+        severity: :warning,
+        message:
+          "#{rep.source} #{rep.operation} query repeated #{rep.repetitions}x (same query shape) in #{event.event} (N+1 pattern) — consider preloading or batching",
+        events: [event.sequence],
+        metadata: %{
+          source: rep.source,
+          fingerprint: rep.fingerprint,
+          count: rep.repetitions,
+          total_ms: Float.round(total_ms * 1.0, 2),
+          pattern: :n_plus_one
+        }
+      }
     end)
   end
 
   defp detect_n_plus_one(_event, _queries), do: []
-
-  # `operation` is an atom (`:select`) when analysis runs in-process during
-  # `mix excessibility.debug`, but a string (`"select"`) when a timeline is
-  # reloaded via `mix excessibility.review --timeline` — Jason.decode(keys:
-  # :atoms) atomises keys but leaves values as strings. Compare tolerantly so
-  # the detector fires on both paths (issue #151).
-  defp select?(query), do: to_string(Map.get(query, :operation)) == "select"
 
   defp detect_slow_queries(event, queries) do
     Enum.flat_map(queries, fn query ->

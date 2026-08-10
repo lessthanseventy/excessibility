@@ -54,7 +54,13 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EctoQueryAnalysisTest do
       # count detector in isolation. Threshold is conservative (issue #151).
       queries =
         for i <- 1..12,
-            do: %{source: "table_#{i}", operation: :select, duration_ms: 1.0, query: "SELECT"}
+            do: %{
+              source: "table_#{i}",
+              operation: :select,
+              duration_ms: 1.0,
+              query: "SELECT",
+              fingerprint: "sha256:t#{i}"
+            }
 
       timeline = %{
         timeline: [
@@ -80,7 +86,13 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EctoQueryAnalysisTest do
       # (issue #151: the old threshold of 5 fired on every real mount).
       queries =
         for i <- 1..8,
-            do: %{source: "table_#{i}", operation: :select, duration_ms: 1.0, query: "SELECT"}
+            do: %{
+              source: "table_#{i}",
+              operation: :select,
+              duration_ms: 1.0,
+              query: "SELECT",
+              fingerprint: "sha256:t#{i}"
+            }
 
       timeline = %{
         timeline: [
@@ -96,7 +108,13 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EctoQueryAnalysisTest do
     test "detects N+1 pattern — multiple SELECTs on same table" do
       queries =
         for _ <- 1..15,
-            do: %{source: "products", operation: :select, duration_ms: 1.0, query: "SELECT * FROM products WHERE id = $1"}
+            do: %{
+              source: "products",
+              operation: :select,
+              duration_ms: 1.0,
+              query: "SELECT * FROM products WHERE id = $1",
+              fingerprint: "sha256:products"
+            }
 
       timeline = %{
         timeline: [
@@ -117,6 +135,52 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EctoQueryAnalysisTest do
       assert n_plus_one_finding
       assert n_plus_one_finding.message =~ "products"
       assert n_plus_one_finding.message =~ "N+1"
+    end
+
+    test "N+1 distinguishes two different SELECTs on the same table by fingerprint" do
+      # Two distinct query shapes on the SAME source "categories": 3x shape A
+      # (id lookup) and 3x shape B (slug lookup). Grouping by source alone
+      # collapses these into ONE finding; grouping by fingerprint yields TWO —
+      # one per genuine query shape.
+      shape_a =
+        for _ <- 1..3,
+            do: %{
+              source: "categories",
+              operation: :select,
+              duration_ms: 1.0,
+              query: "SELECT * FROM categories WHERE id = $1",
+              fingerprint: "sha256:aaa"
+            }
+
+      shape_b =
+        for _ <- 1..3,
+            do: %{
+              source: "categories",
+              operation: :select,
+              duration_ms: 1.0,
+              query: "SELECT * FROM categories WHERE slug = $1",
+              fingerprint: "sha256:bbb"
+            }
+
+      timeline = %{
+        timeline: [
+          %{
+            sequence: 1,
+            event: "handle_event:load",
+            ecto_queries: shape_a ++ shape_b,
+            ecto_query_count: 6,
+            ecto_total_query_ms: 6.0
+          }
+        ]
+      }
+
+      result = EctoQueryAnalysis.analyze(timeline, [])
+
+      n_plus_one = Enum.filter(result.findings, &(&1.metadata[:pattern] == :n_plus_one))
+      assert length(n_plus_one) == 2
+
+      fingerprints = n_plus_one |> Enum.map(& &1.metadata[:fingerprint]) |> Enum.sort()
+      assert fingerprints == ["sha256:aaa", "sha256:bbb"]
     end
 
     test "detects slow queries" do
@@ -144,7 +208,13 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EctoQueryAnalysisTest do
     test "detects slow total query time per event" do
       queries =
         for i <- 1..6,
-            do: %{source: "table_#{i}", operation: :select, duration_ms: 100.0, query: "SELECT"}
+            do: %{
+              source: "table_#{i}",
+              operation: :select,
+              duration_ms: 100.0,
+              query: "SELECT",
+              fingerprint: "sha256:t#{i}"
+            }
 
       timeline = %{
         timeline: [
@@ -163,7 +233,13 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EctoQueryAnalysisTest do
       # still fire — issue #151.
       queries =
         for _ <- 1..15,
-            do: %{source: "categories", operation: "select", duration_ms: 1.0, query: "SELECT"}
+            do: %{
+              source: "categories",
+              operation: "select",
+              duration_ms: 1.0,
+              query: "SELECT",
+              fingerprint: "sha256:categories"
+            }
 
       timeline = %{
         timeline: [
@@ -188,7 +264,13 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EctoQueryAnalysisTest do
     test "detects N+1 through a real JSON round-trip" do
       queries =
         for _ <- 1..25,
-            do: %{source: "categories", operation: :select, duration_ms: 1.0, query: "SELECT"}
+            do: %{
+              source: "categories",
+              operation: :select,
+              duration_ms: 1.0,
+              query: "SELECT",
+              fingerprint: "sha256:categories"
+            }
 
       timeline = %{
         timeline: [
