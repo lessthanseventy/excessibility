@@ -279,7 +279,16 @@ defmodule Excessibility.TelemetryCapture do
   defp record_handle_info(message, socket) do
     clean_assigns = extract_clean_assigns(socket)
     view_module = extract_view_module(socket, %{})
-    store_snapshot("handle_info:#{message_name(message)}", clean_assigns, view_module, %{}, %{}, flush_ecto_queries())
+
+    store_snapshot(
+      "handle_info:#{message_name(message)}",
+      clean_assigns,
+      view_module,
+      %{},
+      %{},
+      flush_ecto_queries(),
+      drain_plan_warnings()
+    )
   rescue
     error -> Logger.warning("Excessibility: failed to record handle_info: #{inspect(error)}")
   end
@@ -341,8 +350,17 @@ defmodule Excessibility.TelemetryCapture do
       clean_assigns = extract_clean_assigns(socket)
       view_module = extract_view_module(socket, metadata)
       ecto_queries = flush_ecto_queries()
+      plan_warnings = drain_plan_warnings()
 
-      store_snapshot(event_type, clean_assigns, view_module, metadata, measurements, ecto_queries)
+      store_snapshot(
+        event_type,
+        clean_assigns,
+        view_module,
+        metadata,
+        measurements,
+        ecto_queries,
+        plan_warnings
+      )
     else
       Logger.debug("Excessibility: No socket in metadata for #{event_type}")
     end
@@ -373,7 +391,7 @@ defmodule Excessibility.TelemetryCapture do
     end
   end
 
-  defp store_snapshot(event_type, clean_assigns, view_module, metadata, measurements, ecto_queries) do
+  defp store_snapshot(event_type, clean_assigns, view_module, metadata, measurements, ecto_queries, plan_warnings) do
     key = {DateTime.utc_now(), :erlang.unique_integer([:monotonic])}
 
     snapshot = %{
@@ -383,7 +401,8 @@ defmodule Excessibility.TelemetryCapture do
       view_module: view_module,
       metadata_keys: Map.keys(metadata),
       measurements: measurements,
-      ecto_queries: ecto_queries
+      ecto_queries: ecto_queries,
+      plan_warnings: plan_warnings
     }
 
     :ets.insert(:excessibility_snapshots, {key, snapshot})
@@ -460,18 +479,17 @@ defmodule Excessibility.TelemetryCapture do
       # Build and write the value-free digest.json from the same in-memory
       # timeline. Digest.build is crash-isolated; the outer rescue is a backstop.
       #
-      # DEFERRED(#154, Task 11 — surface plan warnings): Plan-capture warnings
-      # are accumulated (drain_plan_warnings/0) in the LiveView process that ran
-      # the EXPLAIN, which is NOT this on_exit process, so draining here would
-      # yield nothing. Threading them through requires collecting per-process
-      # warnings alongside the ETS snapshots — deferred to Task 11 so they are
-      # surfaced in `capture.warnings` rather than lost.
+      # Plan-capture warnings are accumulated (drain_plan_warnings/0) in the
+      # LiveView process that ran the EXPLAIN, then stashed on each ETS snapshot
+      # at capture time (store_snapshot/7). Here we aggregate them across all
+      # snapshots and thread them into the digest's `capture.warnings`.
       digest =
         Excessibility.Digest.build(timeline,
           ecto_configured?: configured_repos() != [],
           enrichers_run: enricher_names(enrichers),
           plan_capture: plan_capture_mode(),
-          fixtures: fixtures()
+          fixtures: fixtures(),
+          warnings: aggregate_plan_warnings(snapshots)
         )
 
       File.write!(Path.join(output_path, "digest.json"), Formatter.format_json(digest))
@@ -484,6 +502,13 @@ defmodule Excessibility.TelemetryCapture do
       )
 
       :ok
+  end
+
+  # Flatten every snapshot's stashed plan-capture warnings (in event order) into
+  # a single list for the digest. Snapshots predating this field simply carry no
+  # `:plan_warnings` key and contribute nothing.
+  defp aggregate_plan_warnings(snapshots) do
+    Enum.flat_map(snapshots, &Map.get(&1, :plan_warnings, []))
   end
 
   # Resolve which enrichers to run based on EXCESSIBILITY_ANALYZERS env var
