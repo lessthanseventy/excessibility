@@ -341,7 +341,7 @@ Position this as **supplemental** input for debugging and code-aware review. It 
 }
 ```
 
-**Privacy guarantee.** The digest **never** contains assign values, params/form values, user/session records, SQL bind values, rendered HTML, or arbitrary inspected terms. Every field is a name, a shape, a coarse size, a count, or a fingerprint. Redaction is by omission — if a field cannot be derived safely, it is left out, not guessed.
+**Privacy guarantee.** The digest **never** contains assign values, params/form values, user/session records, SQL bind values, SQL comment contents, rendered HTML, or arbitrary inspected terms. Every field is a name, a shape, a coarse size, a count, or a fingerprint. Redaction is by omission — if a field cannot be derived safely, it is left out, not guessed. Line and block comments are stripped from normalized SQL by a literal-aware scanner (comment markers inside string/dollar-quoted literals or quoted identifiers are preserved, not mistaken for comments), and `coverage.fixtures` is validated down to string-key → non-negative-integer cardinalities only — non-numeric or nested fixture values are dropped and their key names surfaced as a value-free `capture.warnings` entry.
 
 The **coverage/status contract** makes silence interpretable: an unexercised callback is simply absent from `callbacks_observed`; `ecto_configured: false` means "queries were not measured" (distinct from measured-and-zero); a disabled enricher or failed capture shows up in `enrichers_run` / `status` + `warnings`. A missing signal is always labeled *why*.
 
@@ -355,7 +355,7 @@ mix excessibility.debug --format digest test/my_live_view_test.exs
 
 ### Query fingerprints and N+1
 
-Every captured Ecto query is normalized into a stable, value-free SQL shape (`Excessibility.SQLFingerprint`): keywords downcased, `$1,$2 → $?`, `IN (...)` arity folded, inline numeric/quoted literals scrubbed to `?`, whitespace collapsed. A `sha256:` fingerprint is derived from that normalized string. N+1 evidence groups by **fingerprint** (via the shared `Excessibility.QueryEvidence`), so two *different* SELECTs on the same table are counted as two shapes rather than lumped together by table name. The normalizer is Postgres-oriented (the Ecto reference adapter emits parameterized SQL); other adapters still fingerprint via the generic regex.
+Every captured Ecto query is normalized into a stable, value-free SQL shape (`Excessibility.SQLFingerprint`): keywords downcased, line/block **comments stripped** (literal-aware, so a `--` or `/* */` inside a string or quoted identifier is left intact), `$1,$2 → $?`, `IN (...)` arity folded, inline numeric/quoted literals scrubbed to `?`, whitespace collapsed. A `sha256:` fingerprint is derived from that normalized string. N+1 evidence groups by **fingerprint** (via the shared `Excessibility.QueryEvidence`), so two *different* SELECTs on the same table are counted as two shapes rather than lumped together by table name. The normalizer is Postgres-oriented (the Ecto reference adapter emits parameterized SQL); other adapters still fingerprint via the generic regex.
 
 ### Opt-in query-plan (EXPLAIN) evidence — Postgres-only
 
@@ -749,7 +749,7 @@ All configuration goes in `test/test_helper.exs` or `config/test.exs`:
 | `:sql_dialect` | No | `:postgres` | SQL dialect for query normalization/EXPLAIN. Only `:postgres` ships today; the `Excessibility.Dialect` seam lets a new dialect drop in |
 | `:query_plan_allow_analyze` | No | `false` | Second gate for `--plan-analyze` (EXPLAIN ANALYZE, which executes queries). Enable only in a read-only DB sandbox |
 | `:digest_include_normalized_sql` | No | `true` | Include the normalized (value-free) SQL string in each digest query shape; set `false` to emit fingerprint-only |
-| `:fixtures` | No | `%{}` | Caller-supplied fixture cardinality surfaced in the digest's `coverage.fixtures` (also settable per-run via `EXCESSIBILITY_FIXTURES` JSON, which takes precedence) |
+| `:fixtures` | No | `%{}` | Caller-supplied fixture cardinality surfaced in the digest's `coverage.fixtures` (also settable per-run via `EXCESSIBILITY_FIXTURES` JSON, which takes precedence). Validated to string-key → non-negative-integer entries only; strings, floats, and nested maps/lists are dropped (rejected key names appear in `capture.warnings`) |
 
 ### Runtime digest environment variables
 
@@ -758,7 +758,7 @@ Set on `mix excessibility.debug` runs (the `--plan`/`--plan-analyze` flags set t
 | Env var | Purpose |
 |---------|---------|
 | `EXCESSIBILITY_QUERY_PLAN` | `explain` \| `explain_analyze` \| unset. Enables opt-in query-plan capture. `explain_analyze` still requires `:query_plan_allow_analyze`. |
-| `EXCESSIBILITY_FIXTURES` | JSON object of fixture cardinalities for `coverage.fixtures`. Takes precedence over `config :excessibility, :fixtures`; malformed JSON is ignored with a warning. |
+| `EXCESSIBILITY_FIXTURES` | JSON object of fixture cardinalities for `coverage.fixtures`. Takes precedence over `config :excessibility, :fixtures`; malformed JSON is ignored with a warning. Entries are validated to non-negative-integer cardinalities — string/nested values are dropped, never copied into the digest. |
 
 Example:
 

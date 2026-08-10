@@ -83,5 +83,56 @@ defmodule Excessibility.SQLFingerprintTest do
       assert n =~ "users_2024"
       assert n =~ "t2"
     end
+
+    test "line comment content is removed" do
+      n = SQLFingerprint.normalize("SELECT * FROM users -- request_email=alice@example.com")
+      refute n =~ "request_email"
+      refute n =~ "alice"
+      refute n =~ "--"
+      assert n == "select * from users"
+    end
+
+    test "block comment content is removed" do
+      n = SQLFingerprint.normalize("SELECT * FROM users /* tenant=example secret=abc */ WHERE id = $1")
+      refute n =~ "tenant"
+      refute n =~ "secret"
+      refute n =~ "/*"
+      assert n == "select * from users where id = $?"
+    end
+
+    test "nested block comments are removed" do
+      n = SQLFingerprint.normalize("SELECT /* a /* b secret */ c */ 1")
+      refute n =~ "secret"
+      refute n =~ "*/"
+      assert n == "select ?"
+    end
+
+    test "comment markers inside single-quoted literals are not treated as comments" do
+      # The whole literal must fold to ? and nothing after it may be dropped.
+      assert SQLFingerprint.normalize("SELECT '-- not a comment' AS a, id FROM t") ==
+               "select ? as a, id from t"
+
+      assert SQLFingerprint.normalize("SELECT '/* not a comment */' AS a, id FROM t") ==
+               "select ? as a, id from t"
+    end
+
+    test "comment markers inside dollar-quoted literals are not treated as comments" do
+      assert SQLFingerprint.normalize("SELECT $$-- not a comment$$ AS a, id FROM t") ==
+               "select ? as a, id from t"
+    end
+
+    test "comment markers inside double-quoted identifiers are preserved as identifiers" do
+      n = SQLFingerprint.normalize(~S(SELECT "weird--col", id FROM t))
+      assert n =~ ~S("weird--col")
+      assert n =~ "id"
+    end
+
+    test "comments do not affect the fingerprint (stable grouping)" do
+      assert SQLFingerprint.fingerprint("SELECT * FROM users WHERE id = $1") ==
+               SQLFingerprint.fingerprint("SELECT * FROM users WHERE id = $1 -- trace=abc")
+
+      assert SQLFingerprint.fingerprint("SELECT * FROM users WHERE id = $1") ==
+               SQLFingerprint.fingerprint("SELECT /* hint */ * FROM users WHERE id = $1")
+    end
   end
 end

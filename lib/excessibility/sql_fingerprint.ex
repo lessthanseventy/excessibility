@@ -18,6 +18,7 @@ defmodule Excessibility.SQLFingerprint do
   def normalize(sql) when is_binary(sql) do
     sql
     |> String.downcase()
+    |> strip_comments()
     |> fold_dollar_quoted()
     |> fold_escape_strings()
     |> fold_quoted_literals()
@@ -41,6 +42,83 @@ defmodule Excessibility.SQLFingerprint do
       |> binary_part(0, 16)
 
     "sha256:" <> hash
+  end
+
+  # Remove SQL line (`-- …`) and block (`/* … */`) comments *before* any value
+  # folding, so comment contents (tracing annotations, tenant tags, etc.) never
+  # reach the digest. A single left-to-right scanner tracks literal/identifier
+  # context so a comment marker *inside* a string, dollar-quoted body, or quoted
+  # identifier is copied verbatim rather than mistaken for a comment start.
+  # Comments are replaced with a space to preserve token separation; the later
+  # whitespace collapse tidies up. Comment-free SQL is returned unchanged, so
+  # fingerprints stay stable and comments never affect grouping.
+  defp strip_comments(sql), do: scan(sql, :normal, "")
+
+  # End of input in any state.
+  defp scan(<<>>, _state, acc), do: acc
+
+  # --- line comment: drop everything up to (and re-emit) the newline ---
+  defp scan(<<"\n", rest::binary>>, :line, acc), do: scan(rest, :normal, <<acc::binary, "\n">>)
+  defp scan(<<_c, rest::binary>>, :line, acc), do: scan(rest, :line, acc)
+
+  # --- block comment: Postgres allows nesting, so track depth ---
+  defp scan(<<"/*", rest::binary>>, {:block, depth}, acc), do: scan(rest, {:block, depth + 1}, acc)
+  defp scan(<<"*/", rest::binary>>, {:block, 1}, acc), do: scan(rest, :normal, <<acc::binary, " ">>)
+  defp scan(<<"*/", rest::binary>>, {:block, depth}, acc), do: scan(rest, {:block, depth - 1}, acc)
+  defp scan(<<_c, rest::binary>>, {:block, _} = state, acc), do: scan(rest, state, acc)
+
+  # --- single-quoted string literal: copy verbatim, honour '' escape ---
+  defp scan(<<"''", rest::binary>>, :squote, acc), do: scan(rest, :squote, <<acc::binary, "''">>)
+  defp scan(<<"'", rest::binary>>, :squote, acc), do: scan(rest, :normal, <<acc::binary, "'">>)
+  defp scan(<<c, rest::binary>>, :squote, acc), do: scan(rest, :squote, <<acc::binary, c>>)
+
+  # --- double-quoted identifier: copy verbatim, honour "" escape ---
+  defp scan(<<"\"\"", rest::binary>>, :dquote, acc), do: scan(rest, :dquote, <<acc::binary, "\"\"">>)
+  defp scan(<<"\"", rest::binary>>, :dquote, acc), do: scan(rest, :normal, <<acc::binary, "\"">>)
+  defp scan(<<c, rest::binary>>, :dquote, acc), do: scan(rest, :dquote, <<acc::binary, c>>)
+
+  # --- normal SQL: recognise comment/literal/identifier starts ---
+  defp scan(<<"--", rest::binary>>, :normal, acc), do: scan(rest, :line, <<acc::binary, " ">>)
+  defp scan(<<"/*", rest::binary>>, :normal, acc), do: scan(rest, {:block, 1}, <<acc::binary, " ">>)
+  defp scan(<<"'", rest::binary>>, :normal, acc), do: scan(rest, :squote, <<acc::binary, "'">>)
+  defp scan(<<"\"", rest::binary>>, :normal, acc), do: scan(rest, :dquote, <<acc::binary, "\"">>)
+
+  defp scan(<<"$", rest::binary>> = bin, :normal, acc) do
+    # Copy a dollar-quoted body verbatim so `--`/`/*` inside it are not stripped.
+    # Ecto params ($1, $2 …) have no matching close tag, so take_dollar_quoted/1
+    # returns :error and the lone `$` is copied like any other byte.
+    case take_dollar_quoted(bin) do
+      {:ok, quoted, tail} -> scan(tail, :normal, <<acc::binary, quoted::binary>>)
+      :error -> scan(rest, :normal, <<acc::binary, "$">>)
+    end
+  end
+
+  defp scan(<<c, rest::binary>>, :normal, acc), do: scan(rest, :normal, <<acc::binary, c>>)
+
+  # Match a full `$tag$ … $tag$` span at the head of `bin` and return it verbatim
+  # with the remainder. Tag is `[a-z0-9_]*` (already downcased). Returns :error
+  # when the head is not a complete dollar-quoted literal (e.g. a `$1` param or an
+  # unterminated body).
+  defp take_dollar_quoted(bin) do
+    case Regex.run(~r/^\$[a-z0-9_]*\$/, bin) do
+      [open] ->
+        open_len = byte_size(open)
+        after_open = binary_part(bin, open_len, byte_size(bin) - open_len)
+
+        case :binary.match(after_open, open) do
+          {pos, _len} ->
+            span_len = open_len + pos + byte_size(open)
+            quoted = binary_part(bin, 0, span_len)
+            rest = binary_part(bin, span_len, byte_size(bin) - span_len)
+            {:ok, quoted, rest}
+
+          :nomatch ->
+            :error
+        end
+
+      nil ->
+        :error
+    end
   end
 
   # $$body$$ / $tag$body$tag$ -> ?   (run first: body is arbitrary, may contain quotes/newlines).
