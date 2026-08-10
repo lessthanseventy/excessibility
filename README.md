@@ -391,7 +391,7 @@ mix excessibility.digest.compare --base base/digest.json --head head/digest.json
 mix excessibility.debug --benchmark=20 test/my_live_view_test.exs
 ```
 
-Runs the test N times and writes a value-free `benchmark.json` with robust **cold vs warm** timing stats (median + MAD) per `(view, callback)` and per query-fingerprint. Sample 1 is treated as cold (compilation, connection warmup, cold caches); samples 2..N are warm, reported separately so a cold first run cannot poison the median. An extreme warm sample (beyond `median + k·MAD`) is surfaced as an **advisory** outlier with the raw sample attached — never a pass/fail gate.
+Runs the test N times and writes a value-free `benchmark.json` with robust **cold vs warm** timing stats (median + MAD) per `(view, callback)` and per query-fingerprint. Sample 1 is treated as cold (compilation, connection warmup, cold caches); samples 2..N are warm, reported separately so a cold first run cannot poison the median. A warm sample is surfaced as an **advisory** outlier only when it clears **all three** gates — the statistical threshold `median + k·MAD`, a minimum absolute delta (`:benchmark_min_abs_ms`, default 1.0 ms), and a minimum relative delta (`:benchmark_min_rel_factor`, default 1.5×) — so sub-millisecond scheduler/timer jitter is never reported as actionable. Outliers from too few warm samples carry `weak_evidence: true` and the artifact adds a run-level note. Never a pass/fail gate.
 
 ### Timing contract — "green ≠ fast"
 
@@ -752,6 +752,9 @@ All configuration goes in `test/test_helper.exs` or `config/test.exs`:
 | `:query_plan_allow_analyze` | No | `false` | Second gate for `--plan-analyze` (EXPLAIN ANALYZE, which executes queries). Enable only in a read-only DB sandbox |
 | `:digest_include_normalized_sql` | No | `true` | Include the normalized (value-free) SQL string in each digest query shape; set `false` to emit fingerprint-only |
 | `:fixtures` | No | `%{}` | Caller-supplied fixture cardinality surfaced in the digest's `coverage.fixtures` (also settable per-run via `EXCESSIBILITY_FIXTURES` JSON, which takes precedence). Validated to string-key → non-negative-integer entries only; strings, floats, and nested maps/lists are dropped (rejected key names appear in `capture.warnings`) |
+| `:digest_min_assign_delta_bytes` | No | `64` | `mix excessibility.digest.compare` suppresses byte-only assign deltas below this many bytes when the cardinality is unchanged (tiny per-assign jitter is noise); a cardinality change is never suppressed. Set `0` for exact-byte behavior |
+| `:benchmark_min_abs_ms` | No | `1.0` | Benchmark outliers must exceed the median by at least this many ms (kills sub-millisecond scheduler/timer jitter). Set `0.0` with `:benchmark_min_rel_factor` `1.0` to restore pure-statistical flagging |
+| `:benchmark_min_rel_factor` | No | `1.5` | Benchmark outliers must also be at least this multiple of the median (a meaningful relative effect on top of the absolute floor) |
 
 ### Runtime digest environment variables
 

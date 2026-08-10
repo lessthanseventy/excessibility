@@ -130,6 +130,46 @@ defmodule Excessibility.BenchmarkTest do
     end
   end
 
+  describe "summarize/2 effect-size gating (#159)" do
+    # Sub-millisecond scheduler/timer jitter clears the MAD threshold but is not
+    # an actionable effect. warm = [0.60,0.62,0.62,0.64,0.90]: median 0.62,
+    # mad 0.02, threshold 0.74; 0.90 > 0.74 statistically but only +0.28 ms.
+    test "a sub-millisecond spike is not flagged despite clearing median + k*mad" do
+      warm = [0.60, 0.62, 0.62, 0.64, 0.90]
+      samples = [%{"q" => 0.62} | Enum.map(warm, &%{"q" => &1})]
+
+      assert Benchmark.summarize(samples, k: 6).outliers == []
+    end
+
+    test "a large absolute-and-relative regression is still flagged" do
+      warm = [50.0, 50.0, 50.0, 50.0, 200.0]
+      samples = [%{"q" => 50.0} | Enum.map(warm, &%{"q" => &1})]
+
+      assert [outlier] = Benchmark.summarize(samples, k: 6).outliers
+      assert outlier.value == 200.0
+    end
+
+    test "the effect-size floors are configurable (0 restores pure-statistical flagging)" do
+      warm = [0.60, 0.62, 0.62, 0.64, 0.90]
+      samples = [%{"q" => 0.62} | Enum.map(warm, &%{"q" => &1})]
+
+      assert [_outlier] =
+               Benchmark.summarize(samples, k: 6, min_abs_ms: 0.0, min_rel_factor: 1.0).outliers
+    end
+
+    test "small warm-sample counts are labeled weak evidence" do
+      # 1 cold + 4 warm = 4 warm samples; MAD-based inference is weak.
+      warm = [50.0, 50.0, 50.0, 200.0]
+      samples = [%{"q" => 50.0} | Enum.map(warm, &%{"q" => &1})]
+
+      result = Benchmark.summarize(samples, k: 6)
+
+      assert Enum.any?(result.notes, &(&1 =~ "weak"))
+      assert [outlier] = result.outliers
+      assert outlier.weak_evidence == true
+    end
+  end
+
   describe "summarize/2 determinism" do
     test "output is stable across identical inputs" do
       samples = [

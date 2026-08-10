@@ -45,14 +45,38 @@ defmodule Excessibility.Benchmark do
         notes: [String.t()]
       }
 
-  `outliers` is **advisory only** — a warm sample where
-  `value > median + k * mad` (k defaults to 6, configurable via `:k`). It never
-  encodes a pass/fail verdict; the raw `value`, `median`, `mad`, `threshold`,
-  and 1-based `run` index are attached so a reader can judge for themselves.
+  `outliers` is **advisory only** — a warm sample must clear **three** gates to
+  be flagged, so scheduler/timer jitter in the sub-millisecond band is not
+  reported as actionable evidence:
+
+    1. the robust statistical threshold `value > median + k * mad`
+       (`k` defaults to 6, `:k`);
+    2. a minimum **absolute** effect `value - median >= min_abs_ms`
+       (defaults to 1.0 ms, `:min_abs_ms`); and
+    3. a minimum **relative** effect `value >= median * min_rel_factor`
+       (defaults to 1.5, `:min_rel_factor`).
+
+  Set `min_abs_ms: 0.0, min_rel_factor: 1.0` to restore pure-statistical
+  flagging. Each outlier carries `weak_evidence: true` when its key has fewer
+  than #{5} warm samples, and a run-level `notes` entry labels the whole
+  artifact as weak evidence when there are too few warm runs for stable MAD
+  inference. It never encodes a pass/fail verdict; the raw `value`, `median`,
+  `mad`, `threshold`, and 1-based `run` index are attached so a reader can judge
+  for themselves.
   """
 
   @schema "excessibility.benchmark/v1"
   @default_k 6
+
+  # Effect-size floors: a warm sample must exceed the robust threshold *and*
+  # clear a meaningful absolute (ms) and relative (×median) delta. Defaults are
+  # deliberately conservative so sub-millisecond jitter is never actionable.
+  @default_min_abs_ms 1.0
+  @default_min_rel_factor 1.5
+
+  # Below this many warm samples, MAD-based inference is weak: outliers are
+  # tagged `weak_evidence` and a run-level note is added.
+  @min_reliable_warm 5
 
   @doc """
   Median of a list of numbers.
@@ -97,6 +121,9 @@ defmodule Excessibility.Benchmark do
   """
   def summarize(samples, opts \\ []) when is_list(samples) do
     k = Keyword.get(opts, :k, @default_k)
+    min_abs_ms = Keyword.get(opts, :min_abs_ms) || config(:benchmark_min_abs_ms, @default_min_abs_ms)
+    min_rel_factor = Keyword.get(opts, :min_rel_factor) || config(:benchmark_min_rel_factor, @default_min_rel_factor)
+
     runs = length(samples)
     indexed = Enum.with_index(samples, 1)
 
@@ -114,10 +141,12 @@ defmodule Excessibility.Benchmark do
       runs: runs,
       cold: build_cold(cold_sample),
       warm: warm,
-      outliers: detect_outliers(warm_indexed, warm, k),
-      notes: notes_for(runs)
+      outliers: detect_outliers(warm_indexed, warm, k, min_abs_ms, min_rel_factor),
+      notes: notes_for(runs, warm)
     }
   end
+
+  defp config(key, default), do: Application.get_env(:excessibility, key, default)
 
   defp build_cold(sample) do
     Map.new(sample, fn {key, value} ->
@@ -142,30 +171,50 @@ defmodule Excessibility.Benchmark do
     end)
   end
 
-  defp detect_outliers(warm_indexed, warm, k) do
+  defp detect_outliers(warm_indexed, warm, k, min_abs_ms, min_rel_factor) do
     for_result =
       for {run_map, run} <- warm_indexed,
           {key, value} <- run_map,
           stats = Map.get(warm, key),
           stats != nil,
           threshold = stats.median + k * stats.mad,
-          value > threshold do
+          outlier?(value, stats.median, threshold, min_abs_ms, min_rel_factor) do
         %{
           key: key,
           run: run,
           value: value,
           median: stats.median,
           mad: stats.mad,
-          threshold: threshold
+          threshold: threshold,
+          weak_evidence: stats.samples < @min_reliable_warm
         }
       end
 
     Enum.sort_by(for_result, &{&1.key, &1.run})
   end
 
-  defp notes_for(runs) when runs < 2 do
+  # All three gates must hold: the robust statistical threshold, a minimum
+  # absolute delta (kills sub-millisecond jitter), and a minimum relative delta.
+  defp outlier?(value, median, threshold, min_abs_ms, min_rel_factor) do
+    value > threshold and
+      value - median >= min_abs_ms and
+      value >= median * min_rel_factor
+  end
+
+  defp notes_for(runs, _warm) when runs < 2 do
     ["only #{runs} run(s); warm stats require >= 2 runs (run 1 is cold)"]
   end
 
-  defp notes_for(_runs), do: []
+  defp notes_for(_runs, warm) do
+    warm_samples = warm |> Map.values() |> Enum.map(& &1.samples) |> Enum.max(fn -> 0 end)
+
+    if warm_samples < @min_reliable_warm do
+      [
+        "weak evidence: #{warm_samples} warm sample(s) per key (< #{@min_reliable_warm}); " <>
+          "MAD-based outliers from this few samples are unreliable — increase --benchmark=N"
+      ]
+    else
+      []
+    end
+  end
 end

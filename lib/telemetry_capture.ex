@@ -488,13 +488,18 @@ defmodule Excessibility.TelemetryCapture do
       # LiveView process that ran the EXPLAIN, then stashed on each ETS snapshot
       # at capture time (store_snapshot/7). Here we aggregate them across all
       # snapshots and thread them into the digest's `capture.warnings`.
+      effective_plan = plan_capture_mode()
+      requested_plan = requested_plan_mode()
+
       digest =
         Excessibility.Digest.build(timeline,
           ecto_configured?: configured_repos() != [],
           enrichers_run: enricher_names(enrichers),
-          plan_capture: plan_capture_mode(),
+          plan_capture: effective_plan,
           fixtures: fixtures(),
-          warnings: aggregate_plan_warnings(snapshots)
+          warnings:
+            aggregate_plan_warnings(snapshots) ++
+              analyze_downgrade_digest_warnings(requested_plan, effective_plan)
         )
 
       File.write!(Path.join(output_path, "digest.json"), Formatter.format_json(digest))
@@ -588,12 +593,40 @@ defmodule Excessibility.TelemetryCapture do
     end
   end
 
-  # `plan_capture_mode/0` is evaluated per query; warn about the ANALYZE
-  # downgrade at most once per process so a misconfigured run does not emit one
-  # identical warning per SELECT.
+  # The plan mode the run *asked* for, before the ANALYZE gate is applied. Kept
+  # distinct from the effective mode so the digest can surface requested vs
+  # effective (a downgrade) rather than silently reporting only `:explain`.
+  defp requested_plan_mode do
+    case System.get_env("EXCESSIBILITY_QUERY_PLAN") do
+      "explain" -> :explain
+      mode when mode in ["explain_analyze", "analyze"] -> :explain_analyze
+      _ -> :disabled
+    end
+  end
+
+  # A single value-free warning describing the ANALYZE→EXPLAIN downgrade, added
+  # to the digest's `capture.warnings` exactly once per run (write_snapshots/1
+  # runs once per capture). This carries the requested/effective modes into the
+  # value-free capture metadata.
+  defp analyze_downgrade_digest_warnings(:explain_analyze, :explain) do
+    [
+      "EXPLAIN ANALYZE requested but :query_plan_allow_analyze is not enabled; " <>
+        "effective plan mode downgraded to EXPLAIN (no data-touching plan capture)"
+    ]
+  end
+
+  defp analyze_downgrade_digest_warnings(_requested, _effective), do: []
+
+  @downgrade_warned_key {__MODULE__, :analyze_downgrade_warned}
+
+  # `plan_capture_mode/0` is evaluated once per query, and a journey spans many
+  # LiveView processes, so a per-process flag floods the command with identical
+  # downgrade warnings (issue #159). The flag is global to the run's BEAM (the
+  # `mix test` child that capture runs in), so the warning is emitted at most
+  # once per command/run.
   defp warn_analyze_downgrade_once do
-    unless Process.get(:excessibility_analyze_downgrade_warned) do
-      Process.put(:excessibility_analyze_downgrade_warned, true)
+    if :persistent_term.get(@downgrade_warned_key, false) == false do
+      :persistent_term.put(@downgrade_warned_key, true)
 
       Logger.warning(
         "Excessibility: EXPLAIN ANALYZE requested but :query_plan_allow_analyze is not " <>
@@ -601,6 +634,11 @@ defmodule Excessibility.TelemetryCapture do
       )
     end
   end
+
+  @doc false
+  # Test seam: clears the run-level downgrade-warning flag so a test can assert
+  # the warn-once behavior deterministically.
+  def reset_analyze_downgrade_warning, do: :persistent_term.erase(@downgrade_warned_key)
 
   # Fixtures for the digest coverage block, from both channels: the
   # `EXCESSIBILITY_FIXTURES` env JSON (precedence, string keys kept) falls back
