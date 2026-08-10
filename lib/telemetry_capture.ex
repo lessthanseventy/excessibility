@@ -348,6 +348,19 @@ defmodule Excessibility.TelemetryCapture do
       File.write!(timeline_path, timeline_json)
 
       IO.puts("📊 Excessibility: Wrote timeline.json with #{length(snapshots)} events")
+
+      # Build and write the value-free digest.json from the same in-memory
+      # timeline. Digest.build is crash-isolated; the outer rescue is a backstop.
+      digest =
+        Excessibility.Digest.build(timeline,
+          ecto_configured?: configured_repos() != [],
+          enrichers_run: enricher_names(enrichers),
+          plan_capture: plan_capture_mode(),
+          fixtures: fixtures()
+        )
+
+      File.write!(Path.join(output_path, "digest.json"), Formatter.format_json(digest))
+      IO.puts("🔒 Excessibility: Wrote digest.json (value-free)")
     end
   rescue
     error ->
@@ -378,5 +391,83 @@ defmodule Excessibility.TelemetryCapture do
 
         Registry.resolve_enrichers(analyzer_names)
     end
+  end
+
+  # Resolve the `enrichers` value passed to `build_timeline` (`:all`, `[]`, or a
+  # list of enricher names/modules) into a plain list of enricher name atoms for
+  # the digest's `capture.enrichers_run`. Defensive: never raises.
+  defp enricher_names(:all) do
+    Enum.map(Registry.discover_enrichers(), & &1.name())
+  rescue
+    _ -> []
+  end
+
+  defp enricher_names(enrichers) when is_list(enrichers) do
+    Enum.map(enrichers, &enricher_name/1)
+  rescue
+    _ -> []
+  end
+
+  defp enricher_names(_), do: []
+
+  # A name atom (e.g. `:ecto_queries`) passes through; an enricher module is
+  # resolved to its `name/0`.
+  defp enricher_name(mod) when is_atom(mod) do
+    if Code.ensure_loaded?(mod) and function_exported?(mod, :name, 0) do
+      mod.name()
+    else
+      mod
+    end
+  end
+
+  defp enricher_name(other), do: other
+
+  # The configured query-plan capture mode, reported into the digest. Task 10/11
+  # will actually run EXPLAIN; here it only surfaces intent. `:explain_analyze`
+  # requires an explicit opt-in flag, otherwise it downgrades to `:explain`.
+  defp plan_capture_mode do
+    case System.get_env("EXCESSIBILITY_QUERY_PLAN") do
+      "explain" ->
+        :explain
+
+      mode when mode in ["explain_analyze", "analyze"] ->
+        if Application.get_env(:excessibility, :query_plan_allow_analyze, false) do
+          :explain_analyze
+        else
+          Logger.warning(
+            "Excessibility: EXPLAIN ANALYZE requested but :query_plan_allow_analyze is not " <>
+              "enabled; downgrading to EXPLAIN (no data-touching plan capture)."
+          )
+
+          :explain
+        end
+
+      _ ->
+        :disabled
+    end
+  end
+
+  # Fixtures for the digest coverage block, from both channels: the
+  # `EXCESSIBILITY_FIXTURES` env JSON (precedence, string keys kept) falls back
+  # to `config :excessibility, :fixtures`, then `%{}`. Never crashes the run.
+  defp fixtures do
+    case System.get_env("EXCESSIBILITY_FIXTURES") do
+      blank when blank in [nil, ""] ->
+        config_fixtures()
+
+      json ->
+        case Jason.decode(json) do
+          {:ok, decoded} ->
+            decoded
+
+          {:error, _} ->
+            Logger.warning("Excessibility: EXCESSIBILITY_FIXTURES is not valid JSON; ignoring it.")
+            config_fixtures()
+        end
+    end
+  end
+
+  defp config_fixtures do
+    Application.get_env(:excessibility, :fixtures, %{})
   end
 end
