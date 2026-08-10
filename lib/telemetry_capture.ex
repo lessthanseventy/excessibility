@@ -125,10 +125,13 @@ defmodule Excessibility.TelemetryCapture do
     if Process.get(@in_explain_key) do
       :ok
     else
+      # Read the plan-capture mode ONCE per query and thread it down the whole
+      # attach path, so env/config is read a single time and any downgrade
+      # warning fires at most once per query (not once per helper hop).
       record =
         measurements
         |> EctoQueries.build_query_record(metadata)
-        |> maybe_attach_plan(metadata)
+        |> maybe_attach_plan(metadata, plan_capture_mode())
 
       Process.put(@ecto_process_key, [record | Process.get(@ecto_process_key, [])])
     end
@@ -138,16 +141,18 @@ defmodule Excessibility.TelemetryCapture do
   # EXPLAIN run; non-SELECTs are never executed as EXPLAIN (privacy + safety) and
   # simply carry `plan: nil`. When plan capture is disabled we add no `:plan` key
   # at all, keeping the default record shape unchanged.
-  defp maybe_attach_plan(record, metadata) do
-    if plan_capture_mode() != :disabled do
-      plan = if Excessibility.QueryEvidence.select?(record), do: capture_plan(record, metadata)
+  defp maybe_attach_plan(record, metadata, mode) do
+    if mode != :disabled do
+      plan =
+        if Excessibility.QueryEvidence.select?(record), do: capture_plan(record, metadata, mode)
+
       Map.put(record, :plan, plan)
     else
       record
     end
   end
 
-  defp capture_plan(record, metadata) do
+  defp capture_plan(record, metadata, mode) do
     repo = Map.get(record, :repo)
     sql = Map.get(record, :query, "")
     # Params are read transiently for EXPLAIN only and are NEVER stored on the
@@ -155,7 +160,7 @@ defmodule Excessibility.TelemetryCapture do
     params = Map.get(metadata, :params, [])
 
     if repo_queryable?(repo) do
-      run_explain(repo, sql, params)
+      run_explain(repo, sql, params, mode)
     end
   end
 
@@ -167,11 +172,11 @@ defmodule Excessibility.TelemetryCapture do
   # Run EXPLAIN under the re-entrancy flag, tolerating any failure. The flag is
   # ALWAYS cleared in `after`, even if the repo call raises or exits, so a single
   # bad EXPLAIN can never wedge capture for the rest of the process.
-  defp run_explain(repo, sql, params) do
+  defp run_explain(repo, sql, params, mode) do
     Process.put(@in_explain_key, true)
 
     try do
-      explain_sql = explain_sql_for(plan_capture_mode(), sql)
+      explain_sql = explain_sql_for(mode, sql)
       {:ok, result} = repo_query(repo, explain_sql, params)
       decoded = result.rows |> List.first() |> List.first()
       Excessibility.Dialect.resolve().parse_plan(decoded)

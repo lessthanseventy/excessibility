@@ -57,10 +57,19 @@ defmodule Mix.Tasks.Excessibility.Debug do
 
   ## Query Plan Evidence (opt-in, Postgres-only)
 
-  - `--plan` (or `--plan=explain`) - Capture value-free `EXPLAIN` plan evidence
-    for each SELECT and attach it to the digest's query shapes.
-  - `--plan=analyze` (or `--plan=explain_analyze`) - Capture `EXPLAIN ANALYZE`
-    plan evidence, which includes actual row counts.
+  - `--plan` - Boolean flag. Capture value-free `EXPLAIN` plan evidence for
+    each SELECT and attach it to the digest's query shapes. Runs
+    `EXPLAIN (FORMAT JSON) <query>` — it plans but never executes the query,
+    so it touches no data. SELECT-only.
+  - `--plan-analyze` - Boolean flag. Capture `EXPLAIN ANALYZE` plan evidence,
+    which includes actual row counts. This *executes* the query, so it is
+    double-gated: it additionally requires
+    `config :excessibility, query_plan_allow_analyze: true`. Only run inside a
+    DB sandbox / read-only environment.
+
+  Both are bare boolean flags and can be combined with a test path in any
+  order, e.g. `mix excessibility.debug --plan test/foo.exs` or
+  `mix excessibility.debug test/foo.exs --plan`.
 
   Safety notes:
 
@@ -69,7 +78,7 @@ defmodule Mix.Tasks.Excessibility.Debug do
   - **`EXPLAIN` does not `ANALYZE` by default.** Plain `--plan` runs
     `EXPLAIN (FORMAT JSON) <query>`, which plans but never executes the query,
     so it touches no data.
-  - **`ANALYZE` is double-gated.** `--plan=analyze` *executes* the query to
+  - **`ANALYZE` is double-gated.** `--plan-analyze` *executes* the query to
     gather real row counts, so it additionally requires
     `config :excessibility, query_plan_allow_analyze: true`. Without that
     config it downgrades to plain `EXPLAIN` with a warning. Only run `ANALYZE`
@@ -112,7 +121,8 @@ defmodule Mix.Tasks.Excessibility.Debug do
           profile: :string,
           no_analyze: :boolean,
           verbose: :boolean,
-          plan: :string
+          plan: :boolean,
+          plan_analyze: :boolean
         ],
         aliases: [f: :format, p: :profile]
       )
@@ -235,27 +245,20 @@ defmodule Mix.Tasks.Excessibility.Debug do
   end
 
   # Public (but @doc false) so the opt->env translation can be unit-tested
-  # without shelling out. Translates the `--plan` opt into the
-  # `EXCESSIBILITY_QUERY_PLAN` env passed to the `mix test` subprocess:
-  #   absent            -> []           (plan capture stays disabled)
-  #   --plan / --plan=explain         -> [{"EXCESSIBILITY_QUERY_PLAN", "explain"}]
-  #   --plan=analyze / =explain_analyze -> [{"EXCESSIBILITY_QUERY_PLAN", "explain_analyze"}]
-  # OptionParser `:string` yields no value for a bare `--plan`, so a nil/empty
-  # value is treated as the boolean-ish "explain".
+  # without shelling out. Translates the boolean `--plan` / `--plan-analyze`
+  # opts into the `EXCESSIBILITY_QUERY_PLAN` env passed to the `mix test`
+  # subprocess:
+  #   neither          -> []           (plan capture stays disabled)
+  #   --plan           -> [{"EXCESSIBILITY_QUERY_PLAN", "explain"}]
+  #   --plan-analyze   -> [{"EXCESSIBILITY_QUERY_PLAN", "explain_analyze"}]
+  # Both booleans, so plain `--plan test/foo.exs` no longer swallows the test
+  # path as a value. When both are set, analyze wins.
   @doc false
   def plan_env(opts) do
-    if Keyword.has_key?(opts, :plan) do
-      value = opts |> Keyword.get(:plan) |> to_string()
-
-      mode =
-        case value do
-          v when v in ["analyze", "explain_analyze"] -> "explain_analyze"
-          _ -> "explain"
-        end
-
-      [{"EXCESSIBILITY_QUERY_PLAN", mode}]
-    else
-      []
+    cond do
+      Keyword.get(opts, :plan_analyze, false) -> [{"EXCESSIBILITY_QUERY_PLAN", "explain_analyze"}]
+      Keyword.get(opts, :plan, false) -> [{"EXCESSIBILITY_QUERY_PLAN", "explain"}]
+      true -> []
     end
   end
 
