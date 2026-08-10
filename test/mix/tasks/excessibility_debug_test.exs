@@ -39,23 +39,22 @@ defmodule Mix.Tasks.Excessibility.DebugTest do
   end
 
   describe "plan_env/1 opt -> EXCESSIBILITY_QUERY_PLAN translation" do
-    test "bare --plan (OptionParser :string yields nil value) means explain" do
-      assert DebugTask.plan_env(plan: nil) == [{"EXCESSIBILITY_QUERY_PLAN", "explain"}]
+    test "absent flags set no env" do
+      assert DebugTask.plan_env([]) == []
     end
 
-    test "--plan=explain means explain" do
-      assert DebugTask.plan_env(plan: "explain") == [{"EXCESSIBILITY_QUERY_PLAN", "explain"}]
+    test "--plan (boolean) means explain" do
+      assert DebugTask.plan_env(plan: true) == [{"EXCESSIBILITY_QUERY_PLAN", "explain"}]
     end
 
-    test "--plan=analyze and --plan=explain_analyze mean explain_analyze" do
-      assert DebugTask.plan_env(plan: "analyze") == [{"EXCESSIBILITY_QUERY_PLAN", "explain_analyze"}]
-
-      assert DebugTask.plan_env(plan: "explain_analyze") ==
+    test "--plan-analyze (boolean) means explain_analyze" do
+      assert DebugTask.plan_env(plan_analyze: true) ==
                [{"EXCESSIBILITY_QUERY_PLAN", "explain_analyze"}]
     end
 
-    test "absent --plan sets no env" do
-      assert DebugTask.plan_env([]) == []
+    test "--plan-analyze wins when both are set" do
+      assert DebugTask.plan_env(plan: true, plan_analyze: true) ==
+               [{"EXCESSIBILITY_QUERY_PLAN", "explain_analyze"}]
     end
   end
 end
