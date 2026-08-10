@@ -98,11 +98,15 @@ defmodule Excessibility.TelemetryCapture.Enrichers.EctoQueries do
         native -> System.convert_time_unit(native, :native, :microsecond) / 1000
       end
 
+    raw = Map.get(metadata, :query, "")
+
     %{
       source: Map.get(metadata, :source, "unknown"),
-      operation: extract_operation(Map.get(metadata, :query, "")),
+      operation: extract_operation(raw),
       duration_ms: Float.round(duration_ms, 2),
-      query: Map.get(metadata, :query, ""),
+      query: raw,
+      normalized: Excessibility.SQLFingerprint.normalize(raw),
+      fingerprint: Excessibility.SQLFingerprint.fingerprint(raw),
       repo: Map.get(metadata, :repo)
     }
   end
