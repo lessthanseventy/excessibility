@@ -50,6 +50,36 @@ defmodule Excessibility.QueryEvidenceTest do
     refute Map.has_key?(shape, :plan)
   end
 
+  test "shapes/1 aggregates plan row work across every occurrence, not just the first (#167)" do
+    node = fn touched ->
+      %{
+        node: "Seq Scan",
+        relation: "children",
+        depth: 0,
+        estimated_rows: 1,
+        actual_rows: touched,
+        loops: 1,
+        rows_touched: touched,
+        estimate_error: 0.0
+      }
+    end
+
+    plan = fn touched ->
+      %{fingerprint: "sha256:plan", nodes: ["Seq Scan"], relations: ["children"], node_rows: [node.(touched)]}
+    end
+
+    # First occurrence is cheap (rows_touched = 1); a later occurrence of the
+    # SAME fingerprint scans 10_000. The emitted shape must carry the max.
+    first = Map.put(q(:select, "children", "sha256:aaa"), :plan, plan.(1))
+    later = Map.put(q(:select, "children", "sha256:aaa"), :plan, plan.(10_000))
+
+    [shape] = QueryEvidence.shapes([first, later])
+
+    assert shape.count == 2
+    assert [child] = shape.plan.node_rows
+    assert child.rows_touched == 10_000
+  end
+
   test "tolerates query maps missing :fingerprint (reloaded pre-feature timeline)" do
     # old-shape records: raw :query, string operation, NO :fingerprint key
     old = fn q -> %{operation: "select", source: "categories", query: q} end

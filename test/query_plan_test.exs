@@ -188,6 +188,92 @@ defmodule Excessibility.QueryPlanTest do
     end
   end
 
+  # A linear chain of `n` nodes (root Nested Loops down to a Seq Scan leaf) —
+  # deep enough to exceed the @max_nodes bound so truncation is exercised.
+  defp deep_plan(n) do
+    leaf = %{"Node Type" => "Seq Scan", "Relation Name" => "t0", "Plan Rows" => 1}
+
+    plan =
+      Enum.reduce(1..(n - 1), leaf, fn _i, child ->
+        %{"Node Type" => "Nested Loop", "Plan Rows" => 1, "Plans" => [child]}
+      end)
+
+    [%{"Plan" => plan}]
+  end
+
+  describe "bounded structural arrays (#167)" do
+    test "bounds nodes and node_rows to @max_nodes and reports the omitted count" do
+      s = QueryPlan.summarize(deep_plan(150))
+
+      assert length(s.nodes) == 100
+      assert length(s.node_rows) == 100
+      assert s.nodes_omitted == 50
+    end
+
+    test "small plans report zero omitted and are not truncated" do
+      s = QueryPlan.summarize(deep_plan(3))
+
+      assert length(s.nodes) == 3
+      assert length(s.node_rows) == 3
+      assert s.nodes_omitted == 0
+    end
+
+    test "structural fingerprint hashes the full tree even when truncated" do
+      # 120 vs 150 nodes differ structurally past the cap; the fingerprint must
+      # still tell them apart even though both `nodes` lists are capped at 100.
+      refute QueryPlan.summarize(deep_plan(120)).fingerprint ==
+               QueryPlan.summarize(deep_plan(150)).fingerprint
+    end
+  end
+
+  describe "aggregate/1 (#167)" do
+    test "a single occurrence is returned unchanged" do
+      s = QueryPlan.summarize(small_root_big_child(%{"Actual Rows" => 5, "Actual Loops" => 1}))
+      assert QueryPlan.aggregate([s]) == s
+    end
+
+    test "identical occurrences are returned unchanged" do
+      s = QueryPlan.summarize(small_root_big_child(%{"Actual Rows" => 5, "Actual Loops" => 1}))
+      assert QueryPlan.aggregate([s, s, s]) == s
+    end
+
+    test "empty list aggregates to nil" do
+      assert QueryPlan.aggregate([]) == nil
+    end
+
+    test "keeps the max child row work across occurrences of one fingerprint" do
+      small = QueryPlan.summarize(small_root_big_child(%{"Actual Rows" => 1, "Actual Loops" => 1}))
+      big = QueryPlan.summarize(small_root_big_child(%{"Actual Rows" => 10_000, "Actual Loops" => 1}))
+
+      agg = QueryPlan.aggregate([small, big])
+      child = Enum.find(agg.node_rows, &(&1.relation == "children"))
+
+      assert child.actual_rows == 10_000
+      assert child.rows_touched == 10_000
+      # The first (cheap) occurrence must not mask the heavier later one.
+      refute child.rows_touched == 1
+    end
+
+    test "is independent of occurrence order" do
+      small = QueryPlan.summarize(small_root_big_child(%{"Actual Rows" => 1, "Actual Loops" => 1}))
+      big = QueryPlan.summarize(small_root_big_child(%{"Actual Rows" => 10_000, "Actual Loops" => 1}))
+
+      assert QueryPlan.aggregate([small, big]) == QueryPlan.aggregate([big, small])
+    end
+
+    test "different plan structures pick the heaviest as a deterministic representative" do
+      light =
+        QueryPlan.summarize(
+          nested_plan(%{"Actual Rows" => 1, "Actual Loops" => 1}, %{"Actual Rows" => 1, "Actual Loops" => 1})
+        )
+
+      heavy = QueryPlan.summarize(small_root_big_child(%{"Actual Rows" => 10_000, "Actual Loops" => 1}))
+
+      assert QueryPlan.aggregate([light, heavy]).fingerprint == heavy.fingerprint
+      assert QueryPlan.aggregate([heavy, light]).fingerprint == heavy.fingerprint
+    end
+  end
+
   describe "value-free" do
     test "summary exposes only the allowlisted keys" do
       s = QueryPlan.summarize(nested_plan())
@@ -202,6 +288,7 @@ defmodule Excessibility.QueryPlanTest do
                  :mode,
                  :node_rows,
                  :nodes,
+                 :nodes_omitted,
                  :relations
                ]
     end

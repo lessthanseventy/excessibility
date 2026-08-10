@@ -24,14 +24,117 @@ defmodule Excessibility.QueryPlan do
   def summarize(%{"Plan" => plan}) when is_map(plan), do: summarize_plan(plan)
   def summarize(_), do: nil
 
-  # Upper bound on the per-node evidence list. Real EXPLAIN trees are far
-  # smaller; the cap is a safety valve so a pathological plan cannot bloat the
-  # digest. Truncation is deterministic (first N in depth-first order).
-  @max_node_rows 100
+  # Upper bound on every emitted structural array (`nodes` and `node_rows`, which
+  # share the same depth-first node sequence). Real EXPLAIN trees are far smaller;
+  # the cap is a safety valve so a pathological plan cannot bloat the digest.
+  # Truncation is deterministic (first N in depth-first order) and the number of
+  # dropped nodes is surfaced as `nodes_omitted` so truncation is never silent
+  # (issue #167). The structural fingerprint always hashes the *full* tree, so a
+  # truncated summary still groups and compares stably.
+  @max_nodes 100
+
+  @doc """
+  Aggregate the plan summaries of every occurrence of one query fingerprint into
+  a single, bounded, value-free summary.
+
+  A query fingerprint can fire many times in one journey; each occurrence carries
+  its own plan summary, and a *later* occurrence can do far more row work than the
+  first (issue #167). Selecting only the first occurrence's plan discards that
+  magnitude before comparison ever runs, so aggregation keeps the **maximum**
+  comparable row work per structural node path: estimated/actual rows, loops and
+  `rows_touched` are maxed position-by-position across occurrences that share a
+  plan structural fingerprint. `max/2` is commutative, so the result is
+  independent of occurrence order.
+
+  When occurrences carry different plan *structures* (e.g. the planner flipped to
+  a different plan), they are grouped by structural fingerprint, each group is
+  aggregated, and the group doing the most total row work is chosen as the
+  deterministic representative (ties broken by fingerprint). Returns `nil` for an
+  empty list and the sole summary unchanged for a single (or all-identical)
+  occurrence.
+  """
+  @spec aggregate([map()]) :: map() | nil
+  def aggregate([]), do: nil
+  def aggregate([summary]), do: summary
+
+  def aggregate(summaries) when is_list(summaries) do
+    case Enum.uniq(summaries) do
+      [only] -> only
+      _ -> do_aggregate(summaries)
+    end
+  rescue
+    # Aggregation must never break digest emission; fall back to the first plan.
+    _ -> List.first(summaries)
+  end
+
+  defp do_aggregate(summaries) do
+    summaries
+    |> Enum.group_by(&Map.get(&1, :fingerprint))
+    |> Enum.map(fn {_fp, group} ->
+      Enum.reduce(group, fn summary, acc -> merge_summary(acc, summary) end)
+    end)
+    |> Enum.max_by(&{total_rows_touched(&1), to_string(Map.get(&1, :fingerprint))})
+  end
+
+  # Merge two summaries sharing a structural fingerprint by keeping the max
+  # comparable row work per field and per structural node position. All other
+  # (structural) fields are identical, so `a` is kept for them.
+  defp merge_summary(a, b) do
+    Map.merge(a, %{
+      mode: merge_mode(Map.get(a, :mode), Map.get(b, :mode)),
+      estimated_rows: max_num(Map.get(a, :estimated_rows), Map.get(b, :estimated_rows)),
+      actual_rows: max_num(Map.get(a, :actual_rows), Map.get(b, :actual_rows)),
+      loops: max_num(Map.get(a, :loops), Map.get(b, :loops)),
+      estimate_error: max_num(Map.get(a, :estimate_error), Map.get(b, :estimate_error)),
+      node_rows: merge_node_rows(Map.get(a, :node_rows, []), Map.get(b, :node_rows, [])),
+      nodes_omitted: max(Map.get(a, :nodes_omitted, 0), Map.get(b, :nodes_omitted, 0))
+    })
+  end
+
+  # Same structural fingerprint ⇒ identical depth-first node sequence and length,
+  # so zipping by position is a stable node identity.
+  defp merge_node_rows(as, bs), do: Enum.zip_with(as, bs, &merge_node/2)
+
+  defp merge_node(a, b) do
+    Map.merge(a, %{
+      estimated_rows: max_num(Map.get(a, :estimated_rows), Map.get(b, :estimated_rows)),
+      actual_rows: max_num(Map.get(a, :actual_rows), Map.get(b, :actual_rows)),
+      loops: max_num(Map.get(a, :loops), Map.get(b, :loops)),
+      rows_touched: max_num(Map.get(a, :rows_touched), Map.get(b, :rows_touched)),
+      estimate_error: max_num(Map.get(a, :estimate_error), Map.get(b, :estimate_error))
+    })
+  end
+
+  defp merge_mode(a, b), do: if(analyze_mode?(a) or analyze_mode?(b), do: :explain_analyze, else: :explain)
+  defp analyze_mode?(mode), do: mode in [:explain_analyze, "explain_analyze"]
+
+  # Total comparable row work, used only to pick a deterministic representative
+  # when occurrences carry different plan structures. Falls back to estimated
+  # rows for plain EXPLAIN (no actuals), so representative selection is stable.
+  defp total_rows_touched(summary) do
+    summary
+    |> Map.get(:node_rows, [])
+    |> Enum.reduce(0, fn node, acc ->
+      acc + (num(Map.get(node, :rows_touched)) || num(Map.get(node, :estimated_rows)) || 0)
+    end)
+  end
+
+  defp num(n) when is_number(n), do: n
+  defp num(_), do: nil
+
+  defp max_num(a, b) do
+    cond do
+      is_number(a) and is_number(b) -> max(a, b)
+      is_number(a) -> a
+      is_number(b) -> b
+      true -> nil
+    end
+  end
 
   defp summarize_plan(plan) do
     tree = walk(plan)
-    nodes = Enum.map(tree, &node_label/1)
+    total = length(tree)
+    nodes = tree |> Enum.take(@max_nodes) |> Enum.map(&node_label/1)
     relations = tree |> Enum.map(&elem(&1, 1)) |> Enum.reject(&is_nil/1) |> Enum.uniq() |> Enum.sort()
 
     estimated = plan["Plan Rows"]
@@ -41,6 +144,7 @@ defmodule Excessibility.QueryPlan do
       mode: if(analyze?(plan), do: :explain_analyze, else: :explain),
       fingerprint: fingerprint(tree),
       nodes: nodes,
+      nodes_omitted: max(total - @max_nodes, 0),
       relations: relations,
       estimated_rows: estimated,
       actual_rows: actual,
@@ -56,11 +160,12 @@ defmodule Excessibility.QueryPlan do
   # order. Estimated rows are always kept (plain EXPLAIN); actual rows, loops
   # and rows_touched are only present when the node carries ANALYZE data. This
   # is what preserves a large child scan beneath a one-row root — a magnitude
-  # the structural fingerprint alone discards (issue #157).
+  # the structural fingerprint alone discards (issue #157). Bounded by the same
+  # @max_nodes / `nodes_omitted` contract as the `nodes` label list.
   defp node_rows(plan) do
     plan
     |> walk_node_rows(0)
-    |> Enum.take(@max_node_rows)
+    |> Enum.take(@max_nodes)
   end
 
   defp walk_node_rows(%{"Node Type" => type} = node, depth) do
