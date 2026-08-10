@@ -228,6 +228,58 @@ defmodule Excessibility.DigestTest do
            }
   end
 
+  describe "fixture validation (privacy)" do
+    test "keeps only string-keyed non-negative integer cardinalities" do
+      d = Digest.build(timeline(), fixtures: %{"records" => 2, "orgs" => 0})
+      assert d.coverage.fixtures == %{"records" => 2, "orgs" => 0}
+      assert d.capture.warnings == []
+    end
+
+    test "drops string values and surfaces the rejected key names (not values)" do
+      d =
+        Digest.build(timeline(),
+          fixtures: %{"request_email" => "alice@example.com", "records" => 2}
+        )
+
+      assert d.coverage.fixtures == %{"records" => 2}
+      # The dropped value must never appear anywhere in the emitted digest.
+      refute Jason.encode!(d) =~ "alice@example.com"
+      # The rejected key name is surfaced as a value-free warning.
+      assert Enum.any?(d.capture.warnings, &(&1 =~ "request_email"))
+    end
+
+    test "drops nested maps and lists rather than copying them" do
+      d =
+        Digest.build(timeline(),
+          fixtures: %{
+            "nested" => %{"secret" => "s3cr3t"},
+            "list" => [1, 2, 3],
+            "count" => 5
+          }
+        )
+
+      assert d.coverage.fixtures == %{"count" => 5}
+      refute Jason.encode!(d) =~ "s3cr3t"
+    end
+
+    test "drops negative and non-integer numeric cardinalities" do
+      d = Digest.build(timeline(), fixtures: %{"neg" => -1, "float" => 2.5, "ok" => 3})
+      assert d.coverage.fixtures == %{"ok" => 3}
+    end
+
+    test "atom keys from config :fixtures are normalized to strings and validated" do
+      d = Digest.build(timeline(), fixtures: %{records: 4, leaky: "value"})
+      assert d.coverage.fixtures == %{"records" => 4}
+      refute Jason.encode!(d) =~ "\"value\""
+    end
+
+    test "a non-map fixtures value is ignored with a warning" do
+      d = Digest.build(timeline(), fixtures: "not a map")
+      assert d.coverage.fixtures == %{}
+      assert Enum.any?(d.capture.warnings, &(&1 =~ "fixtures"))
+    end
+  end
+
   # A module-atom view (as live capture produces) must be rendered without the
   # `Elixir.` prefix everywhere it becomes an output field.
   defp atom_view_timeline do

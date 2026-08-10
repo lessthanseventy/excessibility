@@ -29,11 +29,13 @@ defmodule Excessibility.Digest do
   """
   def build(timeline, opts \\ []) do
     events = Map.get(timeline, :timeline, [])
+    {fixtures, fixture_warnings} = sanitize_fixtures(Keyword.get(opts, :fixtures, %{}))
+    warnings = Keyword.get(opts, :warnings, []) ++ fixture_warnings
 
     %{
       schema: @schema_version,
-      capture: capture_block(opts),
-      coverage: coverage_block(timeline, events, opts),
+      capture: capture_block(opts, warnings),
+      coverage: coverage_block(timeline, events, fixtures),
       events: build_events(events),
       trajectories: trajectories(events)
     }
@@ -56,7 +58,7 @@ defmodule Excessibility.Digest do
       }
   end
 
-  defp capture_block(opts) do
+  defp capture_block(opts, warnings) do
     %{
       status: :ok,
       ecto_configured: Keyword.get(opts, :ecto_configured?, false),
@@ -65,12 +67,13 @@ defmodule Excessibility.Digest do
       timing: :non_comparable,
       capture_version: capture_version(),
       # Plan-capture warnings accumulate in the LiveView process during EXPLAIN
-      # and are threaded here via `:warnings` (see TelemetryCapture.write_snapshots/1).
-      warnings: Keyword.get(opts, :warnings, [])
+      # and are threaded here via `:warnings`; fixture-validation warnings are
+      # appended by build/2 (see TelemetryCapture.write_snapshots/1).
+      warnings: warnings
     }
   end
 
-  defp coverage_block(timeline, events, opts) do
+  defp coverage_block(timeline, events, fixtures) do
     callbacks = Enum.map(events, & &1.event)
 
     %{
@@ -78,9 +81,48 @@ defmodule Excessibility.Digest do
       views: events |> Enum.map(&view_name(&1.view_module)) |> Enum.uniq(),
       callbacks_observed: Enum.uniq(callbacks),
       event_sequence: callbacks,
-      fixtures: Keyword.get(opts, :fixtures, %{})
+      fixtures: fixtures
     }
   end
+
+  # `coverage.fixtures` is documented as cardinality metadata only. Enforce that
+  # contract here at the safe-by-construction boundary so *both* channels (the
+  # `EXCESSIBILITY_FIXTURES` env JSON and `config :excessibility, :fixtures`) are
+  # covered: keep only string/atom-keyed entries whose value is a non-negative
+  # integer, drop everything else, and surface the dropped *key names* (never the
+  # rejected values) in a value-free warning.
+  defp sanitize_fixtures(fixtures) when is_map(fixtures) do
+    {kept, dropped} =
+      Enum.reduce(fixtures, {%{}, []}, fn {key, value}, {kept, dropped} ->
+        name = to_string(key)
+
+        if valid_cardinality?(value) do
+          {Map.put(kept, name, value), dropped}
+        else
+          {kept, [name | dropped]}
+        end
+      end)
+
+    {kept, fixture_warnings(Enum.sort(dropped))}
+  end
+
+  defp sanitize_fixtures(_other) do
+    {%{}, ["coverage.fixtures ignored: value was not a JSON object / map"]}
+  end
+
+  defp valid_cardinality?(value), do: is_integer(value) and value >= 0
+
+  defp fixture_warnings([]), do: []
+
+  defp fixture_warnings(keys) do
+    [
+      "coverage.fixtures: dropped #{length(keys)} non-cardinality " <>
+        "#{entry_word(keys)} (values must be non-negative integers): #{Enum.join(keys, ", ")}"
+    ]
+  end
+
+  defp entry_word([_single]), do: "entry"
+  defp entry_word(_many), do: "entries"
 
   # Map events in original sequence order, threading each view's previous
   # `assign_sizes` so per-event byte deltas only compare within the same

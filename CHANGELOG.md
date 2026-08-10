@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Privacy: strip SQL comments and validate fixture metadata in `digest.json`** ([#156](https://github.com/lessthanseventy/excessibility/issues/156)). `Excessibility.SQLFingerprint.normalize/1` now removes SQL line (`-- …`) and block (`/* … */`) comments before any value folding, using a literal-aware scanner so comment markers inside string/dollar-quoted literals or quoted identifiers are preserved rather than mistaken for comments. Comments no longer affect fingerprints (they never reach the normalized string), so grouping stays stable. `coverage.fixtures` is validated at the digest boundary — both the `EXCESSIBILITY_FIXTURES` env JSON and `config :excessibility, :fixtures` are reduced to string-key → non-negative-integer cardinalities; strings, floats, and nested maps/lists are dropped and their key names surfaced as a value-free `capture.warnings` entry. This closes two paths that could copy arbitrary application values into the "value-free" artifact.
+
 ### BREAKING
 - **`mix excessibility.compare` renamed to `mix excessibility.snapshot.compare`** ([#154](https://github.com/lessthanseventy/excessibility/issues/154)). The snapshot baseline-diff task moves under the `snapshot` namespace to make room for the new runtime-evidence digest tasks. There is no deprecated alias — update any scripts, CI steps, or editor tasks that call `mix excessibility.compare` (including `--keep good`/`--keep bad`) to `mix excessibility.snapshot.compare`. The task's behavior is unchanged.
 
