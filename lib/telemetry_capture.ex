@@ -109,9 +109,117 @@ defmodule Excessibility.TelemetryCapture do
     _ -> nil
   end
 
-  defp handle_ecto_query(_event, measurements, metadata, _config) do
-    record = EctoQueries.build_query_record(measurements, metadata)
-    Process.put(@ecto_process_key, [record | Process.get(@ecto_process_key, [])])
+  @in_explain_key :excessibility_in_explain
+  @plan_warnings_key :excessibility_plan_warnings
+
+  @doc false
+  # Public only so the plan-capture tests can drive it directly; not part of the
+  # supported API. Records an Ecto query and, when plan capture is enabled and the
+  # query is a SELECT, attaches value-free plan evidence via a crash-isolated,
+  # re-entrancy-guarded EXPLAIN.
+  def handle_ecto_query(_event, measurements, metadata, _config) do
+    # Re-entrancy guard FIRST: while we run our own EXPLAIN, its `[:ecto, :query]`
+    # telemetry fires in this same process. That event must NOT be recorded — it
+    # is not a query the code under test ran, and recording it would both pollute
+    # the timeline and (if it too were a SELECT) recurse. Return immediately.
+    if Process.get(@in_explain_key) do
+      :ok
+    else
+      record =
+        measurements
+        |> EctoQueries.build_query_record(metadata)
+        |> maybe_attach_plan(metadata)
+
+      Process.put(@ecto_process_key, [record | Process.get(@ecto_process_key, [])])
+    end
+  end
+
+  # Attach a value-free `:plan` when plan capture is enabled. SELECTs get an
+  # EXPLAIN run; non-SELECTs are never executed as EXPLAIN (privacy + safety) and
+  # simply carry `plan: nil`. When plan capture is disabled we add no `:plan` key
+  # at all, keeping the default record shape unchanged.
+  defp maybe_attach_plan(record, metadata) do
+    if plan_capture_mode() != :disabled do
+      plan = if Excessibility.QueryEvidence.select?(record), do: capture_plan(record, metadata)
+      Map.put(record, :plan, plan)
+    else
+      record
+    end
+  end
+
+  defp capture_plan(record, metadata) do
+    repo = Map.get(record, :repo)
+    sql = Map.get(record, :query, "")
+    # Params are read transiently for EXPLAIN only and are NEVER stored on the
+    # record (privacy).
+    params = Map.get(metadata, :params, [])
+
+    if repo_queryable?(repo) do
+      run_explain(repo, sql, params)
+    end
+  end
+
+  defp repo_queryable?(repo) do
+    is_atom(repo) and not is_nil(repo) and Code.ensure_loaded?(repo) and
+      (function_exported?(repo, :query, 3) or function_exported?(repo, :query, 2))
+  end
+
+  # Run EXPLAIN under the re-entrancy flag, tolerating any failure. The flag is
+  # ALWAYS cleared in `after`, even if the repo call raises or exits, so a single
+  # bad EXPLAIN can never wedge capture for the rest of the process.
+  defp run_explain(repo, sql, params) do
+    Process.put(@in_explain_key, true)
+
+    try do
+      explain_sql = explain_sql_for(plan_capture_mode(), sql)
+      {:ok, result} = repo_query(repo, explain_sql, params)
+      decoded = result.rows |> List.first() |> List.first()
+      Excessibility.Dialect.resolve().parse_plan(decoded)
+    rescue
+      error ->
+        add_plan_warning("EXPLAIN failed for #{inspect(repo)}: #{Exception.message(error)}")
+        nil
+    catch
+      kind, reason ->
+        add_plan_warning("EXPLAIN #{kind} for #{inspect(repo)}: #{inspect(reason)}")
+        nil
+    after
+      Process.delete(@in_explain_key)
+    end
+  end
+
+  defp repo_query(repo, sql, params) do
+    if function_exported?(repo, :query, 3) do
+      repo.query(sql, params, [])
+    else
+      repo.query(sql, params)
+    end
+  end
+
+  # The dialect owns EXPLAIN syntax. For `:explain_analyze` we prefix the
+  # ANALYZE variant, which is double-gated (env + :query_plan_allow_analyze) and
+  # only ever reached for SELECTs. NOTE: EXPLAIN ANALYZE *executes* the statement,
+  # so it should only be run inside a DB sandbox; a dialect-level ANALYZE builder
+  # can replace this local helper later.
+  defp explain_sql_for(:explain_analyze, sql), do: analyze_explain_sql(sql)
+  defp explain_sql_for(_mode, sql), do: Excessibility.Dialect.resolve().explain_sql(sql)
+
+  # SELECT-only + sandbox caveat: see `explain_sql_for/2`. Postgres-shaped.
+  defp analyze_explain_sql(sql), do: "EXPLAIN (ANALYZE, FORMAT JSON) " <> sql
+
+  defp add_plan_warning(message) do
+    Process.put(@plan_warnings_key, [message | Process.get(@plan_warnings_key, [])])
+  end
+
+  @doc """
+  Returns and clears any plan-capture warnings accumulated in the current
+  process (oldest first), so a caller can surface them in the digest. Returns
+  `[]` when none.
+  """
+  def drain_plan_warnings do
+    warnings = @plan_warnings_key |> Process.get([]) |> Enum.reverse()
+    Process.delete(@plan_warnings_key)
+    warnings
   end
 
   @doc """
@@ -351,6 +459,13 @@ defmodule Excessibility.TelemetryCapture do
 
       # Build and write the value-free digest.json from the same in-memory
       # timeline. Digest.build is crash-isolated; the outer rescue is a backstop.
+      #
+      # DEFERRED(#154, Task 11 — surface plan warnings): Plan-capture warnings
+      # are accumulated (drain_plan_warnings/0) in the LiveView process that ran
+      # the EXPLAIN, which is NOT this on_exit process, so draining here would
+      # yield nothing. Threading them through requires collecting per-process
+      # warnings alongside the ETS snapshots — deferred to Task 11 so they are
+      # surfaced in `capture.warnings` rather than lost.
       digest =
         Excessibility.Digest.build(timeline,
           ecto_configured?: configured_repos() != [],
