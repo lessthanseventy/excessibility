@@ -457,11 +457,12 @@ defmodule Excessibility.TelemetryCapture do
 
       json ->
         case Jason.decode(json) do
-          {:ok, decoded} ->
-            decoded
+          {:ok, map} when is_map(map) ->
+            map
 
-          {:error, _} ->
-            Logger.warning("Excessibility: EXCESSIBILITY_FIXTURES is not valid JSON; ignoring it.")
+          _ ->
+            Logger.warning("Excessibility: EXCESSIBILITY_FIXTURES is not a JSON object; ignoring it.")
+
             config_fixtures()
         end
     end
