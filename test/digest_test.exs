@@ -58,6 +58,56 @@ defmodule Excessibility.DigestTest do
     assert d.capture.ecto_configured == false
   end
 
+  # A timeline whose ecto_queries carry a value-free `:plan` surfaces that plan
+  # on the query shape (representative's plan; plans are per-fingerprint-stable).
+  defp planned_timeline do
+    plan = %{fingerprint: "sha256:plan", nodes: ["Seq Scan"], relations: ["categories"]}
+
+    %{
+      test: "PageLiveTest: plan",
+      timeline: [
+        %{
+          sequence: 1,
+          event: "handle_event:save",
+          view_module: "PageLive",
+          ecto_queries: [
+            %{
+              operation: :select,
+              source: "categories",
+              fingerprint: "sha256:aaa",
+              normalized: "select … where id = $?",
+              duration_ms: 1.0,
+              query: "SELECT ...",
+              plan: plan
+            }
+          ],
+          assign_sizes: %{},
+          total_memory: 0
+        }
+      ]
+    }
+  end
+
+  test "query shape surfaces a value-free plan when present" do
+    d = Digest.build(planned_timeline(), ecto_configured?: true)
+    ev = Enum.find(d.events, &(&1.callback == "handle_event:save"))
+    [shape] = ev.queries.shapes
+
+    assert shape.plan == %{
+             fingerprint: "sha256:plan",
+             nodes: ["Seq Scan"],
+             relations: ["categories"]
+           }
+
+    # Still value-free: no raw sql leaks even with a plan attached.
+    refute Jason.encode!(d) =~ "SELECT ..."
+  end
+
+  test "capture.warnings includes plan-capture warnings threaded via opts" do
+    d = Digest.build(timeline(), ecto_configured?: true, warnings: ["boom"])
+    assert "boom" in d.capture.warnings
+  end
+
   # Three events of the SAME view where `products` term_bytes grows 0 -> 9000 -> 18000.
   defp growing_timeline do
     %{

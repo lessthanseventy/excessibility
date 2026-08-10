@@ -55,6 +55,26 @@ defmodule Mix.Tasks.Excessibility.Debug do
   - `--no-analyze` - Skip analysis, show timeline only
   - `--verbose` - Show detailed stats even when no issues found
 
+  ## Query Plan Evidence (opt-in, Postgres-only)
+
+  - `--plan` (or `--plan=explain`) - Capture value-free `EXPLAIN` plan evidence
+    for each SELECT and attach it to the digest's query shapes.
+  - `--plan=analyze` (or `--plan=explain_analyze`) - Capture `EXPLAIN ANALYZE`
+    plan evidence, which includes actual row counts.
+
+  Safety notes:
+
+  - **SELECT-only.** Only `SELECT` queries are ever run through `EXPLAIN`;
+    non-SELECT statements are never re-executed.
+  - **`EXPLAIN` does not `ANALYZE` by default.** Plain `--plan` runs
+    `EXPLAIN (FORMAT JSON) <query>`, which plans but never executes the query,
+    so it touches no data.
+  - **`ANALYZE` is double-gated.** `--plan=analyze` *executes* the query to
+    gather real row counts, so it additionally requires
+    `config :excessibility, query_plan_allow_analyze: true`. Without that
+    config it downgrades to plain `EXPLAIN` with a warning. Only run `ANALYZE`
+    inside a DB sandbox.
+
   ## Formats
 
   - `markdown` (default) - Human and AI-readable report with inline HTML
@@ -91,7 +111,8 @@ defmodule Mix.Tasks.Excessibility.Debug do
           analyze: :string,
           profile: :string,
           no_analyze: :boolean,
-          verbose: :boolean
+          verbose: :boolean,
+          plan: :string
         ],
         aliases: [f: :format, p: :profile]
       )
@@ -104,7 +125,8 @@ defmodule Mix.Tasks.Excessibility.Debug do
     Process.put(:excessibility_debug_opts, %{
       format: format,
       minimal: minimal_mode,
-      filter_opts: filter_opts
+      filter_opts: filter_opts,
+      plan_env: plan_env(opts)
     })
 
     if test_args == [] do
@@ -186,6 +208,7 @@ defmodule Mix.Tasks.Excessibility.Debug do
     # Get opts from process dictionary
     debug_opts = Process.get(:excessibility_debug_opts, %{})
     filter_opts = Map.get(debug_opts, :filter_opts, [])
+    plan_env = Map.get(debug_opts, :plan_env, [])
 
     # Resolve which analyzers to run and pass via env var
     analyzer_names = parse_analyzer_selection(filter_opts)
@@ -197,17 +220,43 @@ defmodule Mix.Tasks.Excessibility.Debug do
     {output, exit_code} =
       System.cmd("mix", ["test" | test_args],
         stderr_to_stdout: true,
-        env: [
-          {"MIX_ENV", "test"},
-          {"EXCESSIBILITY_TELEMETRY_CAPTURE", "true"},
-          {"EXCESSIBILITY_ANALYZERS", analyzers_env}
-        ]
+        env:
+          [
+            {"MIX_ENV", "test"},
+            {"EXCESSIBILITY_TELEMETRY_CAPTURE", "true"},
+            {"EXCESSIBILITY_ANALYZERS", analyzers_env}
+          ] ++ plan_env
       )
 
     # Print output to console as it was before, but now we also have the string
     Mix.shell().info(output)
 
     {output, exit_code}
+  end
+
+  # Public (but @doc false) so the opt->env translation can be unit-tested
+  # without shelling out. Translates the `--plan` opt into the
+  # `EXCESSIBILITY_QUERY_PLAN` env passed to the `mix test` subprocess:
+  #   absent            -> []           (plan capture stays disabled)
+  #   --plan / --plan=explain         -> [{"EXCESSIBILITY_QUERY_PLAN", "explain"}]
+  #   --plan=analyze / =explain_analyze -> [{"EXCESSIBILITY_QUERY_PLAN", "explain_analyze"}]
+  # OptionParser `:string` yields no value for a bare `--plan`, so a nil/empty
+  # value is treated as the boolean-ish "explain".
+  @doc false
+  def plan_env(opts) do
+    if Keyword.has_key?(opts, :plan) do
+      value = opts |> Keyword.get(:plan) |> to_string()
+
+      mode =
+        case value do
+          v when v in ["analyze", "explain_analyze"] -> "explain_analyze"
+          _ -> "explain"
+        end
+
+      [{"EXCESSIBILITY_QUERY_PLAN", mode}]
+    else
+      []
+    end
   end
 
   defp gather_snapshots do

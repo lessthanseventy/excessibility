@@ -48,7 +48,7 @@ defmodule Excessibility.Digest do
           plan_capture: Keyword.get(opts, :plan_capture, :disabled),
           timing: :non_comparable,
           capture_version: capture_version(),
-          warnings: [Exception.message(e)]
+          warnings: [Exception.message(e) | Keyword.get(opts, :warnings, [])]
         },
         coverage: %{tests: [], views: [], callbacks_observed: [], event_sequence: [], fixtures: %{}},
         events: [],
@@ -64,7 +64,9 @@ defmodule Excessibility.Digest do
       plan_capture: Keyword.get(opts, :plan_capture, :disabled),
       timing: :non_comparable,
       capture_version: capture_version(),
-      warnings: []
+      # Plan-capture warnings accumulate in the LiveView process during EXPLAIN
+      # and are threaded here via `:warnings` (see TelemetryCapture.write_snapshots/1).
+      warnings: Keyword.get(opts, :warnings, [])
     }
   end
 

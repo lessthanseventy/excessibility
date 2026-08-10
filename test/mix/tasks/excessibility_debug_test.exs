@@ -37,4 +37,25 @@ defmodule Mix.Tasks.Excessibility.DebugTest do
     assert output =~ "No digest.json was produced"
     assert output =~ "LiveView telemetry"
   end
+
+  describe "plan_env/1 opt -> EXCESSIBILITY_QUERY_PLAN translation" do
+    test "bare --plan (OptionParser :string yields nil value) means explain" do
+      assert DebugTask.plan_env(plan: nil) == [{"EXCESSIBILITY_QUERY_PLAN", "explain"}]
+    end
+
+    test "--plan=explain means explain" do
+      assert DebugTask.plan_env(plan: "explain") == [{"EXCESSIBILITY_QUERY_PLAN", "explain"}]
+    end
+
+    test "--plan=analyze and --plan=explain_analyze mean explain_analyze" do
+      assert DebugTask.plan_env(plan: "analyze") == [{"EXCESSIBILITY_QUERY_PLAN", "explain_analyze"}]
+
+      assert DebugTask.plan_env(plan: "explain_analyze") ==
+               [{"EXCESSIBILITY_QUERY_PLAN", "explain_analyze"}]
+    end
+
+    test "absent --plan sets no env" do
+      assert DebugTask.plan_env([]) == []
+    end
+  end
 end

@@ -36,6 +36,20 @@ defmodule Excessibility.QueryEvidenceTest do
     assert QueryEvidence.select?(%{operation: :select})
   end
 
+  test "shapes/1 attaches the representative's plan when present" do
+    plan = %{fingerprint: "sha256:plan", nodes: ["Seq Scan"], relations: ["categories"]}
+
+    with_plan = fn -> Map.put(q(:select, "categories", "sha256:aaa"), :plan, plan) end
+
+    [shape] = QueryEvidence.shapes([with_plan.(), with_plan.()])
+    assert shape.plan == plan
+  end
+
+  test "shapes/1 omits the :plan key entirely when the representative has no plan" do
+    [shape] = QueryEvidence.shapes([q(:select, "categories", "sha256:aaa")])
+    refute Map.has_key?(shape, :plan)
+  end
+
   test "tolerates query maps missing :fingerprint (reloaded pre-feature timeline)" do
     # old-shape records: raw :query, string operation, NO :fingerprint key
     old = fn q -> %{operation: "select", source: "categories", query: q} end
