@@ -507,7 +507,7 @@ Add to `mix.exs`:
 ```elixir
 def deps do
   [
-    {:excessibility, "~> 0.18", only: [:dev, :test]}
+    {:excessibility, "~> 0.19", only: [:dev, :test]}
   ]
 end
 ```

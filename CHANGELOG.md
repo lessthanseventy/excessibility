@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-08-10
+
 ### Added
 - **Plan evidence preserves and compares child-node row work** ([#157](https://github.com/lessthanseventy/excessibility/issues/157)). `Excessibility.QueryPlan.summarize/1` now emits a bounded, deterministic, value-free `node_rows` list (one entry per plan node in depth-first order: `node`, `relation`, `depth`, `estimated_rows`, plus `actual_rows`/`loops`/`rows_touched`/`estimate_error` only under EXPLAIN ANALYZE). `rows_touched` = `actual_rows × loops`, so a large child scan looping beneath a one-row root is represented numerically rather than discarded. `Excessibility.DigestCompare` now compares plan row work **even when the structural fingerprint is unchanged** — a plan whose shape is stable but whose actual rows jump from 1 to 10,000 now produces a plan delta instead of `{"plans": []}`. Structural plan changes (`structural_change: true`, differing node tree) and numeric row deltas (root `estimated_rows_delta`/`actual_rows_delta` and per-node `node_deltas`) are reported separately.
 
