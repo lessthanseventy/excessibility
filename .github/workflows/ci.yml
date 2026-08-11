@@ -11,6 +11,22 @@ jobs:
     name: Test (Elixir ${{ matrix.elixir }} / OTP ${{ matrix.otp }})
     runs-on: ubuntu-latest
 
+    # Disposable Postgres for the DB-gated privacy regression (#175). Tests that
+    # do not set DATABASE_URL exclude the `:database` tag and ignore this.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: excessibility_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     strategy:
       matrix:
         elixir: ['1.18', '1.19']
@@ -78,6 +94,11 @@ jobs:
 
       - name: Run tests
         run: mix test
+        env:
+          # Enables the DB-gated privacy regression (#175) against the disposable
+          # Postgres service above; without it that test's `:database` tag is
+          # excluded and the suite runs unchanged.
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/excessibility_test
 
       - name: Build documentation
         if: matrix.elixir == '1.19'

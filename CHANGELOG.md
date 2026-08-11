@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Real-Postgrex privacy regression for mixed-case dollar and E-string SQL** ([#175](https://github.com/lessthanseventy/excessibility/issues/175)). The #166 final-digest guard hand-built its query metadata via `EctoQueries.build_query_record/2`, so it never crossed the real Ecto/Postgrex adapter boundary that produces that metadata in production — the suite could stay green while that boundary regressed. Adds a DB-gated test (`test/telemetry_capture_real_postgres_test.exs`) that executes the reported mixed-case dollar-quoted (`$TAG$ … $tag$ … $TAG$`) and escaped `E'…'` SQL through a real repo against a disposable PostgreSQL database, captures the genuine `[:excessibility, :test_repo, :query]` telemetry event (not a constructed record), builds the digest, and scans the complete artifact — asserting no email, comment body, or bare numeric literal leaks while the trailing SQL shape (column aliases past each folded literal) and a legitimate numeric fixture cardinality survive. The test runs only when `DATABASE_URL` is set (CI adds a disposable Postgres service; `test_helper.exs` excludes the `:database` tag otherwise, so local `mix test` with no database is unchanged). `postgrex` and `ecto_sql` are added as `only: :test` dependencies and are not part of the published package.
+
 ## [0.19.0] - 2026-08-10
 
 ### Added
