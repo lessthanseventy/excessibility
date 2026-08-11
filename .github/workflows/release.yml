@@ -1,11 +1,22 @@
 name: Release
 
-# Deliberate, human-gated release path (issue #176). Run this manually AFTER the
-# release PR (version bump + README + CHANGELOG) has merged to main and CI is
-# green. It creates the version tag for the current @version and a GitHub
-# release. It NEVER moves an existing tag — tags are immutable, so a re-release
-# must bump the version (or the abandoned tag must be deleted deliberately
-# first, out of band).
+# Deliberate, human-gated release path (issues #176, #187). Run this manually
+# AFTER the release PR (version bump + README + CHANGELOG) has merged to main and
+# all required checks are green. It creates the version tag for the current
+# @version and a GitHub release.
+#
+# Safety invariants (#187):
+#   * Only the default branch (main) may be released — an arbitrary dispatch ref
+#     is refused.
+#   * The release commit must still be the tip of origin/main at run time.
+#   * CI and Version Check must have SUCCEEDED for that exact SHA — the real
+#     PostgreSQL + browser coverage lives there, so the release never relies on a
+#     reduced local `mix test`.
+#   * CHANGELOG must carry a dated `## [<version>]` section and an empty
+#     [Unreleased], so release notes never misclassify shipped fixes.
+#   * Tags are immutable and NEVER force-moved. A tag that already targets the
+#     exact release SHA makes a rerun resume (it (re)creates the missing GitHub
+#     release); a tag targeting any other SHA aborts.
 #
 # Hex publication stays a separate deliberate step (`mix hex.publish`), or wire
 # it in below behind a HEX_API_KEY secret once you want it automated.
@@ -15,6 +26,8 @@ on:
 
 permissions:
   contents: write
+  # Minimal read scope to verify CI / Version Check runs for the release SHA.
+  actions: read
 
 jobs:
   release:
@@ -22,42 +35,94 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Refuse any ref except the default branch
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::Release must be dispatched from main; got '$GITHUB_REF'. Re-dispatch with the default branch selected."
+            exit 1
+          fi
+          echo "✓ Dispatched from main."
+
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Set up Elixir
-        uses: erlef/setup-beam@v1
-        with:
-          elixir-version: '1.18'
-          otp-version: '26'
-          install-hex: true
-          install-rebar: true
+      - name: Require HEAD to be the current tip of origin/main
+        run: |
+          git fetch --quiet origin main
+          head_sha="$(git rev-parse HEAD)"
+          main_sha="$(git rev-parse origin/main)"
+          echo "release SHA:     $head_sha"
+          echo "origin/main tip: $main_sha"
+          if [ "$head_sha" != "$main_sha" ]; then
+            echo "::error::Release SHA $head_sha is not the current tip of origin/main ($main_sha). main moved after dispatch — re-run once it settles."
+            exit 1
+          fi
+          echo "✓ Releasing the current tip of main."
 
       - name: Extract version from mix.exs
         id: version
         run: |
           VERSION=$(grep '@version "' mix.exs | sed 's/.*@version "\([^"]*\)".*/\1/')
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Releasing v$VERSION"
 
-      - name: Refuse to move an existing tag
+      - name: Require a dated, folded CHANGELOG for this version
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
-            echo "::error::Tag v$VERSION already exists. Tags are immutable."
-            echo "Bump @version for a new release, or delete the abandoned tag deliberately (and out of band) before re-releasing this version."
+
+          if ! grep -Eq "^## \[$VERSION\] - [0-9]{4}-[0-9]{2}-[0-9]{2}" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no dated '## [$VERSION] - YYYY-MM-DD' section. Fold the release entries out of [Unreleased] into a dated v$VERSION section before releasing."
             exit 1
           fi
-          echo "✓ v$VERSION does not exist yet — safe to create."
 
-      - name: Final test gate
+          # The [Unreleased] section (everything up to the next '## [') must carry
+          # no entries at release time — otherwise shipped fixes would be
+          # misclassified as unreleased in the generated notes (#187).
+          unreleased="$(awk '/^## \[Unreleased\]/{f=1; next} /^## \[/{f=0} f' CHANGELOG.md)"
+          if echo "$unreleased" | grep -Eq '^\s*[-*]\s'; then
+            echo "::error::CHANGELOG.md [Unreleased] still lists entries. Fold them into the dated v$VERSION section before releasing:"
+            echo "$unreleased" | grep -E '^\s*[-*]\s'
+            exit 1
+          fi
+          echo "✓ CHANGELOG has a dated v$VERSION section and an empty [Unreleased]."
+
+      - name: Verify CI and Version Check succeeded for this SHA
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          mix deps.get
-          mix test
+          sha="$GITHUB_SHA"
+          for wf in ci.yml version-check.yml; do
+            count="$(gh api "repos/${{ github.repository }}/actions/workflows/$wf/runs?head_sha=$sha&status=success" --jq '.total_count')"
+            if [ "${count:-0}" -lt 1 ]; then
+              echo "::error::No successful run of $wf for $sha. Wait for the required checks to pass on the release commit (this is where the PostgreSQL + browser coverage runs)."
+              exit 1
+            fi
+            echo "✓ $wf succeeded for $sha ($count run(s))."
+          done
+
+      - name: Resolve tag state (immutable; reruns resume)
+        id: tag
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          sha="$GITHUB_SHA"
+
+          if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
+            tag_sha="$(git rev-parse "v$VERSION^{commit}")"
+            if [ "$tag_sha" = "$sha" ]; then
+              echo "✓ Tag v$VERSION already targets the release SHA — resuming to create the missing GitHub release."
+              echo "create_tag=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "::error::Tag v$VERSION exists but targets $tag_sha, not the release SHA $sha. Tags are immutable — bump @version, or delete the abandoned tag deliberately (out of band) before re-releasing this version."
+              exit 1
+            fi
+          else
+            echo "create_tag=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Create and push tag
+        if: steps.tag.outputs.create_tag == 'true'
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           git config user.name "github-actions[bot]"
@@ -66,11 +131,17 @@ jobs:
           git push origin "v$VERSION"
           echo "✓ Created and pushed tag v$VERSION"
 
-      - name: Create GitHub release
+      - name: Create GitHub release (idempotent)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          gh release create "v$VERSION" \
-            --title "v$VERSION" \
-            --notes "See [CHANGELOG.md](https://github.com/lessthanseventy/excessibility/blob/v$VERSION/CHANGELOG.md) for details."
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "✓ GitHub release v$VERSION already exists — nothing to do."
+          else
+            gh release create "v$VERSION" \
+              --target "$GITHUB_SHA" \
+              --title "v$VERSION" \
+              --notes "See [CHANGELOG.md](https://github.com/lessthanseventy/excessibility/blob/v$VERSION/CHANGELOG.md) for details."
+            echo "✓ Created GitHub release v$VERSION"
+          fi
