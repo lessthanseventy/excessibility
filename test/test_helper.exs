@@ -11,7 +11,29 @@ Application.put_env(:excessibility, Excessibility.TestEndpoint,
 Code.require_file("test/support/test_endpoint.ex", File.cwd!())
 Code.require_file("test/support/scanner_stub.ex", File.cwd!())
 
-ExUnit.start()
+# The real-Postgrex privacy regression (#175) needs a live database. When
+# DATABASE_URL is set (CI's disposable Postgres, or a local dev DB), start a
+# real repo so the `:database`-tagged test runs against genuine adapter
+# telemetry. Otherwise exclude that tag so `mix test` stays green with no DB.
+database_url = System.get_env("DATABASE_URL")
+
+if database_url do
+  Application.put_env(:excessibility, Excessibility.TestRepo,
+    url: database_url,
+    pool_size: 2
+  )
+
+  Code.require_file("test/support/test_repo.ex", File.cwd!())
+
+  case Excessibility.TestRepo.start_link() do
+    {:ok, _} -> :ok
+    {:error, {:already_started, _}} -> :ok
+  end
+
+  ExUnit.start()
+else
+  ExUnit.start(exclude: [:database])
+end
 
 Mox.defmock(Excessibility.LiveViewMock, for: Excessibility.LiveView.Behaviour)
 Mox.defmock(Excessibility.BrowserMock, for: Excessibility.BrowserBehaviour)

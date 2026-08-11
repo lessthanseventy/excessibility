@@ -84,6 +84,10 @@ defmodule Excessibility.MixProject do
     [
       {:credo, "~> 1.5", only: [:dev, :test], runtime: false},
       {:ecto, "~> 3.0", only: :test},
+      # ecto_sql + postgrex are exercised only by the DB-gated privacy regression
+      # (test/telemetry_capture_real_postgres_test.exs); skipped without a database.
+      {:ecto_sql, "~> 3.0", only: :test},
+      {:postgrex, "~> 0.17", only: :test},
       {:ex_doc, "~> 0.18", only: :dev, runtime: false},
       {:floki, "~> 0.30"},
       {:igniter, "~> 0.7", runtime: false},
