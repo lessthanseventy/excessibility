@@ -201,6 +201,20 @@ defmodule Excessibility.QueryPlanTest do
     [%{"Plan" => plan}]
   end
 
+  # A linear chain of `n` nodes where every node carries a DISTINCT generic
+  # relation name (zero-padded so lexical sort is stable), so both the node set
+  # and the unique-relation set grow to `n` — used to exercise the relations cap.
+  defp deep_plan_unique_relations(n) do
+    plan =
+      Enum.reduce((n - 1)..0//-1, nil, fn i, child ->
+        rel = "rel_#{String.pad_leading(Integer.to_string(i), 4, "0")}"
+        base = %{"Node Type" => "Seq Scan", "Relation Name" => rel, "Plan Rows" => 1}
+        if child, do: Map.put(base, "Plans", [child]), else: base
+      end)
+
+    [%{"Plan" => plan}]
+  end
+
   describe "bounded structural arrays (#167)" do
     test "bounds nodes and node_rows to @max_nodes and reports the omitted count" do
       s = QueryPlan.summarize(deep_plan(150))
@@ -208,6 +222,25 @@ defmodule Excessibility.QueryPlanTest do
       assert length(s.nodes) == 100
       assert length(s.node_rows) == 100
       assert s.nodes_omitted == 50
+    end
+
+    test "bounds relations to @max_nodes and reports relations_omitted (#174)" do
+      s = QueryPlan.summarize(deep_plan_unique_relations(150))
+
+      assert length(s.relations) == 100
+      assert s.relations_omitted == 50
+      # Deterministic: sorted, so the kept set is the first 100 sorted uniques.
+      assert s.relations == Enum.sort(s.relations)
+
+      assert s.relations ==
+               0..149 |> Enum.map(&"rel_#{String.pad_leading(Integer.to_string(&1), 4, "0")}") |> Enum.take(100)
+    end
+
+    test "small plans report zero relations_omitted (#174)" do
+      s = QueryPlan.summarize(deep_plan_unique_relations(3))
+
+      assert length(s.relations) == 3
+      assert s.relations_omitted == 0
     end
 
     test "small plans report zero omitted and are not truncated" do
@@ -289,7 +322,8 @@ defmodule Excessibility.QueryPlanTest do
                  :node_rows,
                  :nodes,
                  :nodes_omitted,
-                 :relations
+                 :relations,
+                 :relations_omitted
                ]
     end
 

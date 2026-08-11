@@ -135,7 +135,14 @@ defmodule Excessibility.QueryPlan do
     tree = walk(plan)
     total = length(tree)
     nodes = tree |> Enum.take(@max_nodes) |> Enum.map(&node_label/1)
-    relations = tree |> Enum.map(&elem(&1, 1)) |> Enum.reject(&is_nil/1) |> Enum.uniq() |> Enum.sort()
+
+    # `relations` is bounded by the same @max_nodes contract as `nodes`: a
+    # pathological or partition-heavy plan can carry many distinct relations, so
+    # the sorted unique set is capped and the drop count surfaced as
+    # `relations_omitted` — no unbounded structural array without visible
+    # omission metadata (issue #174).
+    all_relations = tree |> Enum.map(&elem(&1, 1)) |> Enum.reject(&is_nil/1) |> Enum.uniq() |> Enum.sort()
+    relations = Enum.take(all_relations, @max_nodes)
 
     estimated = plan["Plan Rows"]
     actual = plan["Actual Rows"]
@@ -146,6 +153,7 @@ defmodule Excessibility.QueryPlan do
       nodes: nodes,
       nodes_omitted: max(total - @max_nodes, 0),
       relations: relations,
+      relations_omitted: max(length(all_relations) - @max_nodes, 0),
       estimated_rows: estimated,
       actual_rows: actual,
       loops: plan["Actual Loops"],
