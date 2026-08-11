@@ -1,0 +1,76 @@
+name: Release
+
+# Deliberate, human-gated release path (issue #176). Run this manually AFTER the
+# release PR (version bump + README + CHANGELOG) has merged to main and CI is
+# green. It creates the version tag for the current @version and a GitHub
+# release. It NEVER moves an existing tag — tags are immutable, so a re-release
+# must bump the version (or the abandoned tag must be deleted deliberately
+# first, out of band).
+#
+# Hex publication stays a separate deliberate step (`mix hex.publish`), or wire
+# it in below behind a HEX_API_KEY secret once you want it automated.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Tag and release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: '1.18'
+          otp-version: '26'
+          install-hex: true
+          install-rebar: true
+
+      - name: Extract version from mix.exs
+        id: version
+        run: |
+          VERSION=$(grep '@version "' mix.exs | sed 's/.*@version "\([^"]*\)".*/\1/')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Releasing v$VERSION"
+
+      - name: Refuse to move an existing tag
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
+            echo "::error::Tag v$VERSION already exists. Tags are immutable."
+            echo "Bump @version for a new release, or delete the abandoned tag deliberately (and out of band) before re-releasing this version."
+            exit 1
+          fi
+          echo "✓ v$VERSION does not exist yet — safe to create."
+
+      - name: Final test gate
+        run: |
+          mix deps.get
+          mix test
+
+      - name: Create and push tag
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "v$VERSION" -m "Release v$VERSION"
+          git push origin "v$VERSION"
+          echo "✓ Created and pushed tag v$VERSION"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          gh release create "v$VERSION" \
+            --title "v$VERSION" \
+            --notes "See [CHANGELOG.md](https://github.com/lessthanseventy/excessibility/blob/v$VERSION/CHANGELOG.md) for details."
