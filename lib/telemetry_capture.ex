@@ -9,6 +9,7 @@ defmodule Excessibility.TelemetryCapture do
   alias Excessibility.TelemetryCapture.Enrichers.EctoQueries
   alias Excessibility.TelemetryCapture.Formatter
   alias Excessibility.TelemetryCapture.Registry
+  alias Excessibility.TelemetryCapture.SnapshotStore
   alias Excessibility.TelemetryCapture.Timeline
 
   require Logger
@@ -22,10 +23,11 @@ defmodule Excessibility.TelemetryCapture do
   Call this before running tests to enable auto-capture.
   """
   def attach do
-    # Create ETS table for cross-process snapshot storage
-    unless :ets.whereis(:excessibility_snapshots) != :undefined do
-      :ets.new(:excessibility_snapshots, [:named_table, :public, :bag])
-    end
+    # Own the cross-process snapshot ETS table in a dedicated, long-lived process
+    # so its lifetime is not tied to whichever test process happened to call
+    # attach/0 first — a test finishing must not delete the table out from under
+    # another test still writing to it (flaky ETS race).
+    SnapshotStore.ensure_started()
 
     :telemetry.attach_many(
       "excessibility-capture",

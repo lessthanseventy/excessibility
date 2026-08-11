@@ -11,6 +11,11 @@ Application.put_env(:excessibility, Excessibility.TestEndpoint,
 Code.require_file("test/support/test_endpoint.ex", File.cwd!())
 Code.require_file("test/support/scanner_stub.ex", File.cwd!())
 
+# Own the snapshot ETS table in a long-lived process before any test runs, so its
+# lifetime is decoupled from individual test processes (prevents a flaky ETS race
+# where one test's teardown deleted the table mid-run of another).
+Excessibility.TelemetryCapture.SnapshotStore.ensure_started()
+
 # The real-Postgrex privacy regression (#175) needs a live database. When
 # DATABASE_URL is set (CI's disposable Postgres, or a local dev DB), start a
 # real repo so the `:database`-tagged test runs against genuine adapter
