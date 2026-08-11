@@ -1,0 +1,87 @@
+name: Version Check
+
+# Validation only — this workflow NEVER creates or moves tags (issue #176).
+# Tag creation lives in release.yml, a deliberate human-gated path that runs
+# after the release PR merges and CI passes.
+#
+# On every push to main it checks that the declared Hex *package surface*
+# is consistent with the version: if a tag for the current @version already
+# exists, the packaged files must be unchanged. It does NOT fail merely because
+# HEAD differs from the tag — commits that only touch non-package files (tests,
+# CI, CHANGELOG, docs outside the package) are allowed to diverge from a tag.
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  version-check:
+    name: Validate package version consistency
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: '1.18'
+          otp-version: '26'
+          install-hex: true
+          install-rebar: true
+
+      - name: Extract version from mix.exs
+        id: version
+        run: |
+          VERSION=$(grep '@version "' mix.exs | sed 's/.*@version "\([^"]*\)".*/\1/')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          MAJOR_MINOR=$(echo $VERSION | cut -d. -f1,2)
+          echo "major_minor=$MAJOR_MINOR" >> $GITHUB_OUTPUT
+          echo "Version from mix.exs: $VERSION"
+
+      - name: Check README version
+        run: |
+          MAJOR_MINOR="${{ steps.version.outputs.major_minor }}"
+          if ! grep -q "{:excessibility, \"~> $MAJOR_MINOR\"" README.md; then
+            echo "ERROR: README.md version does not match mix.exs"
+            echo "Expected: {:excessibility, \"~> $MAJOR_MINOR\""
+            echo "Found in README.md:"
+            grep "{:excessibility," README.md || echo "(no excessibility dependency found)"
+            exit 1
+          fi
+          echo "✓ README.md version matches: ~> $MAJOR_MINOR"
+
+      - name: Package-surface drift guard
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          if ! git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
+            echo "✓ No existing v$VERSION tag — nothing to compare."
+            echo "  A version bump precedes tagging, so a not-yet-tagged version is expected on main."
+            exit 0
+          fi
+
+          echo "Tag v$VERSION exists — comparing the declared Hex package surface at the tag vs HEAD."
+
+          # Build the package (the exact files that ship to Hex) at HEAD and at
+          # the tag. hex.build needs neither deps nor compilation, so this is cheap.
+          mix hex.build --unpack -o /tmp/pkg_head
+          git worktree add -q /tmp/pkg_tag_src "v$VERSION"
+          ( cd /tmp/pkg_tag_src && mix hex.build --unpack -o /tmp/pkg_tag )
+
+          # hex_metadata.config is build metadata, not shipped source; compare
+          # only the packaged files themselves.
+          rm -f /tmp/pkg_head/hex_metadata.config /tmp/pkg_tag/hex_metadata.config
+
+          if diff -r /tmp/pkg_tag /tmp/pkg_head; then
+            echo "✓ Package surface is identical to v$VERSION."
+            echo "  Only non-package files (tests, CI, docs) differ — safe to merge without a bump."
+          else
+            echo "::error::The Hex package surface changed but v$VERSION is already tagged (and may be published)."
+            echo "Tags are immutable. Bump @version in mix.exs (plus README and CHANGELOG) before merging package changes."
+            exit 1
+          fi
