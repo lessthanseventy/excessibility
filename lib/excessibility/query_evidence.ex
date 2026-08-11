@@ -7,6 +7,12 @@ defmodule Excessibility.QueryEvidence do
 
   @default_min_repetitions 3
 
+  # Upper bound on the number of distinct structural plan variants kept per query
+  # fingerprint. A parameterized query can pick different plans by selectivity, so
+  # one SQL fingerprint legitimately carries several structures; the cap keeps the
+  # public digest bounded while `variants_omitted` records any truncation (#173).
+  @max_plan_variants 8
+
   def shapes(queries) do
     queries
     |> Enum.with_index(1)
@@ -56,18 +62,24 @@ defmodule Excessibility.QueryEvidence do
   def select?(%{operation: op}), do: to_string(op) == "select"
   def select?(_), do: false
 
-  # A query fingerprint can fire many times, and a *later* occurrence can do far
-  # more row work than the first, so aggregate the plan across **every**
-  # occurrence rather than trusting the first (issue #167). Aggregation keeps the
-  # max comparable row work per structural node path and is order-independent.
-  # Only attach `:plan` when at least one occurrence carried a non-nil plan — the
-  # common no-plan case keeps a clean shape with no `:plan` key at all.
+  # A query fingerprint can fire many times, and occurrences can differ two ways:
+  # a *later* occurrence of one structure can do more row work than the first
+  # (issue #167), and a parameterized query can pick a *different* structure by
+  # selectivity (issue #173). So we keep the bounded **set** of distinct plan
+  # variants — the heaviest instance of each structure — rather than one
+  # representative. `:plans`/`:variants_omitted` are attached only when at least
+  # one occurrence carried a plan; the common no-plan case keeps a clean shape.
   defp put_aggregated_plan(shape, pairs) do
     plans = pairs |> Enum.map(fn {q, _i} -> Map.get(q, :plan) end) |> Enum.reject(&is_nil/1)
 
-    case Excessibility.QueryPlan.aggregate(plans) do
-      nil -> shape
-      plan -> Map.put(shape, :plan, plan)
+    case Excessibility.QueryPlan.aggregate_variants(plans) do
+      [] ->
+        shape
+
+      variants ->
+        shape
+        |> Map.put(:plans, Enum.take(variants, @max_plan_variants))
+        |> Map.put(:variants_omitted, max(length(variants) - @max_plan_variants, 0))
     end
   end
 

@@ -189,17 +189,27 @@ defmodule Mix.Tasks.Excessibility.Digest.Compare do
   defp plans_section([]), do: "## Plans\n\nnone\n"
 
   defp plans_section(plans) do
-    body =
-      Enum.map_join(plans, "\n", fn p ->
-        kind = if p[:structural_change], do: "structural", else: "numeric"
-
-        header =
-          "- #{p[:view]} #{p[:callback]} #{p[:fingerprint]} (#{kind}): plan #{p[:base_plan]} -> #{p[:head_plan]}#{root_rows(p)}"
-
-        Enum.join([header | node_delta_lines(p[:node_deltas] || [])], "\n")
-      end)
-
+    body = Enum.map_join(plans, "\n", &plan_lines/1)
     "## Plans\n\n" <> body <> "\n"
+  end
+
+  # One SQL fingerprint can carry several structural plan variants (#173):
+  # variants added/removed capture shape changes, `variant_deltas` the numeric
+  # change to a structure present on both sides.
+  defp plan_lines(p) do
+    omitted = if p[:variants_omitted], do: " (variants omitted)", else: ""
+    header = "- #{p[:view]} #{p[:callback]} #{p[:fingerprint]}#{omitted}"
+
+    lines =
+      Enum.map(p[:variants_removed] || [], &"    - removed plan: #{&1}") ++
+        Enum.map(p[:variants_added] || [], &"    + added plan: #{&1}") ++
+        Enum.flat_map(p[:variant_deltas] || [], &variant_delta_lines/1)
+
+    Enum.join([header | lines], "\n")
+  end
+
+  defp variant_delta_lines(d) do
+    ["    ~ plan #{d[:plan]}#{root_rows(d)}" | node_delta_lines(d[:node_deltas] || [])]
   end
 
   defp root_rows(p) do

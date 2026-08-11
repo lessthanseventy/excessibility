@@ -86,9 +86,10 @@ defmodule Excessibility.DigestCompare do
   end
 
   # Fold events into %{{view, callback} => %{queries, plans, assigns}} where
-  # per-fingerprint counts sum, per-fingerprint plans are aggregated by max row
-  # work per structural node path (so a later, heavier occurrence of the same
-  # query across events is not discarded — issue #167), and per-assign
+  # per-fingerprint counts sum, per-fingerprint plans accumulate the full set of
+  # distinct structural variants (keyed by plan fingerprint, max row work per
+  # node path kept per structure — so neither a later heavier occurrence (#167)
+  # nor a non-dominant variant (#173) is discarded), and per-assign
   # term_bytes/cardinality take the max — all order-independent so the aggregate
   # is deterministic.
   defp aggregate(digest) do
@@ -109,13 +110,7 @@ defmodule Excessibility.DigestCompare do
         fp = to_string(get(s, :fingerprint))
         count = get(s, :count, 0) || 0
         qacc = Map.update(qacc, fp, count, &(&1 + count))
-
-        pacc =
-          case get(s, :plan) do
-            nil -> pacc
-            plan -> Map.update(pacc, fp, plan, &merge_plan(&1, plan))
-          end
-
+        pacc = merge_plan_variants(pacc, fp, s)
         {qacc, pacc}
       end)
 
@@ -203,31 +198,58 @@ defmodule Excessibility.DigestCompare do
     |> Enum.sort_by(fn %{view: v, callback: c, fingerprint: fp} -> {v, c, fp} end)
   end
 
-  # A plan can change two independent ways under stable SQL:
-  #   * structurally — the node tree (fingerprint) differs; or
-  #   * numerically — the same tree does more work (rows/loops changed).
-  # The old logic returned early whenever fingerprints matched, so a query that
-  # still returns one row while scanning thousands beneath the root produced no
-  # delta at all (issue #157). We now report both, kept separate: `structural_change`
-  # flags the shape change, while root and per-node row deltas carry the magnitude.
-  defp plan_delta(view, callback, fingerprint, base_plan, head_plan) do
-    base_pfp = to_string(get(base_plan, :fingerprint))
-    head_pfp = to_string(get(head_plan, :fingerprint))
-    structural? = base_pfp != head_pfp
+  # One SQL fingerprint carries a *set* of structural plan variants per side
+  # (issue #173). A plan change is expressed at the variant level:
+  #   * a structure appearing only in head/base is an added/removed variant, and
+  #   * a structure present on both sides can still do more work (rows/loops),
+  #     reported as a numeric `variant_delta` — the #157 case, where a stable
+  #     shape scanning thousands more rows must not read as "no change".
+  # Collapsing to a single heaviest representative discarded any non-dominant
+  # variant that changed; keeping the whole set is what makes that visible.
+  defp plan_delta(view, callback, fingerprint, base_entry, head_entry) do
+    base_variants = base_entry.variants
+    head_variants = head_entry.variants
+    base_fps = mapset_keys(base_variants)
+    head_fps = mapset_keys(head_variants)
 
-    estimated_delta = numeric_delta(base_plan, head_plan, :estimated_rows)
-    actual_delta = numeric_delta(base_plan, head_plan, :actual_rows)
-    node_deltas = node_deltas(base_plan, head_plan, structural?)
+    added = head_fps |> MapSet.difference(base_fps) |> Enum.sort()
+    removed = base_fps |> MapSet.difference(head_fps) |> Enum.sort()
 
-    if structural? or nonzero?(estimated_delta) or nonzero?(actual_delta) or node_deltas != [] do
+    variant_deltas =
+      base_fps
+      |> MapSet.intersection(head_fps)
+      |> Enum.sort()
+      |> Enum.flat_map(&variant_delta(&1, base_variants[&1], head_variants[&1]))
+
+    if added == [] and removed == [] and variant_deltas == [] do
+      []
+    else
       [
         %{
           view: view,
           callback: callback,
           fingerprint: fingerprint,
-          base_plan: base_pfp,
-          head_plan: head_pfp,
-          structural_change: structural?,
+          variants_added: added,
+          variants_removed: removed,
+          variant_deltas: variant_deltas,
+          variants_omitted: base_entry.omitted > 0 or head_entry.omitted > 0
+        }
+      ]
+    end
+  end
+
+  # A shared variant is the same structure on both sides (same plan fingerprint,
+  # so identical node trees in identical depth-first order); numeric root and
+  # per-node row deltas carry the magnitude of any change.
+  defp variant_delta(plan_fingerprint, base_plan, head_plan) do
+    estimated_delta = numeric_delta(base_plan, head_plan, :estimated_rows)
+    actual_delta = numeric_delta(base_plan, head_plan, :actual_rows)
+    node_deltas = node_deltas(base_plan, head_plan)
+
+    if nonzero?(estimated_delta) or nonzero?(actual_delta) or node_deltas != [] do
+      [
+        %{
+          plan: plan_fingerprint,
           estimated_rows_delta: estimated_delta,
           actual_rows_delta: actual_delta,
           node_deltas: node_deltas
@@ -238,14 +260,9 @@ defmodule Excessibility.DigestCompare do
     end
   end
 
-  # Per-node numeric deltas are only meaningful when the two plans share a
-  # structure: an unchanged fingerprint means identical node trees in identical
-  # depth-first order, so zipping by position is a stable node identity. When the
-  # structure itself changed, positions no longer correspond, so we report only
-  # the structural change and root row deltas.
-  defp node_deltas(_base_plan, _head_plan, true), do: []
-
-  defp node_deltas(base_plan, head_plan, false) do
+  # Per-node numeric deltas zip by depth-first position, a stable node identity
+  # because the shared variant has an identical node tree on both sides.
+  defp node_deltas(base_plan, head_plan) do
     base_nodes = get(base_plan, :node_rows) || []
     head_nodes = get(head_plan, :node_rows) || []
 
@@ -449,33 +466,55 @@ defmodule Excessibility.DigestCompare do
   defp fmt_list([]), do: "none"
   defp fmt_list(list), do: Enum.join(list, ", ")
 
-  # When one query fingerprint carries plans across multiple events of the same
-  # {view, callback}, aggregate them independent of event order. If the plans
-  # share a structural fingerprint, keep the max comparable row work per node
-  # position (a later, heavier occurrence is not discarded — issue #167). If the
-  # structures differ, positions no longer correspond, so keep a deterministic
-  # representative: the plan whose `fingerprint` is lexicographically smallest
-  # (existing wins on ties), preserving byte-for-byte reproducibility.
-  defp merge_plan(existing, candidate) do
-    if to_string(get(existing, :fingerprint)) == to_string(get(candidate, :fingerprint)) do
-      %{
-        fingerprint: get(existing, :fingerprint),
-        estimated_rows: max_num(get(existing, :estimated_rows), get(candidate, :estimated_rows)),
-        actual_rows: max_num(get(existing, :actual_rows), get(candidate, :actual_rows)),
-        loops: max_num(get(existing, :loops), get(candidate, :loops)),
-        node_rows: merge_node_rows(get(existing, :node_rows) || [], get(candidate, :node_rows) || [])
-      }
+  # Fold one shape's plan variants into the {sql_fp => %{variants, omitted}}
+  # accumulator. Accepts both the current `:plans` list and a legacy single
+  # `:plan` (wrapped), so reloaded pre-#173 digests still compare. Variants key
+  # by plan fingerprint; occurrences of the same structure across events keep the
+  # max comparable row work per node position (a later, heavier occurrence is not
+  # discarded — issue #167), independent of event order.
+  defp merge_plan_variants(pacc, fp, shape) do
+    variants = plan_variants_of(shape)
+    omitted = get(shape, :variants_omitted, 0) || 0
+
+    if variants == [] and omitted == 0 do
+      pacc
     else
-      min_plan(existing, candidate)
+      entry = Map.get(pacc, fp, %{variants: %{}, omitted: 0})
+
+      merged =
+        Enum.reduce(variants, entry.variants, fn plan, vacc ->
+          pfp = to_string(get(plan, :fingerprint))
+          Map.update(vacc, pfp, plan, &merge_plan(&1, plan))
+        end)
+
+      Map.put(pacc, fp, %{variants: merged, omitted: max(entry.omitted, omitted)})
     end
   end
 
-  defp min_plan(existing, candidate) do
-    if to_string(get(candidate, :fingerprint)) < to_string(get(existing, :fingerprint)) do
-      candidate
-    else
-      existing
+  defp plan_variants_of(shape) do
+    case get(shape, :plans) do
+      plans when is_list(plans) ->
+        plans
+
+      _ ->
+        case get(shape, :plan) do
+          nil -> []
+          plan -> [plan]
+        end
     end
+  end
+
+  # Two instances of the same structure (same plan fingerprint): keep the max
+  # comparable row work per node position, so a variant's reported magnitude is
+  # its worst observed instance.
+  defp merge_plan(existing, candidate) do
+    %{
+      fingerprint: get(existing, :fingerprint),
+      estimated_rows: max_num(get(existing, :estimated_rows), get(candidate, :estimated_rows)),
+      actual_rows: max_num(get(existing, :actual_rows), get(candidate, :actual_rows)),
+      loops: max_num(get(existing, :loops), get(candidate, :loops)),
+      node_rows: merge_node_rows(get(existing, :node_rows) || [], get(candidate, :node_rows) || [])
+    }
   end
 
   # Zip by position (stable node identity under a shared structural fingerprint)
