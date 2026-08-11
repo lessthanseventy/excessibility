@@ -22,13 +22,17 @@ Excessibility.TelemetryCapture.SnapshotStore.ensure_started()
 # telemetry. Otherwise exclude that tag so `mix test` stays green with no DB.
 database_url = System.get_env("DATABASE_URL")
 
+# Always define the repo module so the reference in the (possibly excluded)
+# database test compiles without an "undefined module" warning. `use Ecto.Repo`
+# has no side effects at definition time — a real connection is only opened by
+# `start_link/0` below, and only when a database is actually configured.
+Code.require_file("test/support/test_repo.ex", File.cwd!())
+
 if database_url do
   Application.put_env(:excessibility, Excessibility.TestRepo,
     url: database_url,
     pool_size: 2
   )
-
-  Code.require_file("test/support/test_repo.ex", File.cwd!())
 
   case Excessibility.TestRepo.start_link() do
     {:ok, _} -> :ok
@@ -37,7 +41,11 @@ if database_url do
 
   ExUnit.start()
 else
-  ExUnit.start(exclude: [:database])
+  # Exclude by tag *value* (`database: true`), not the bare atom. An atom filter
+  # matches the tag key regardless of value, so a DB-free companion guard
+  # colocated in a `@moduletag :database` module could not opt back in with
+  # `@tag database: false` — it stayed silently excluded (issue #186).
+  ExUnit.start(exclude: [database: true])
 end
 
 Mox.defmock(Excessibility.LiveViewMock, for: Excessibility.LiveView.Behaviour)
