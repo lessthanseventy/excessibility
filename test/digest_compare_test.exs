@@ -356,6 +356,111 @@ defmodule Excessibility.DigestCompareTest do
     assert p.variant_deltas == []
   end
 
+  test "a bound-omitted plan variant that changed is surfaced, never read as equal (#183)" do
+    # Both sides capture 9 distinct structural variants under one SQL fingerprint.
+    # Eight are identical; the ninth differs and is exactly the one the bound
+    # (@max_plan_variants == 8) drops. The retained sets match, so without the
+    # omission signal the comparison would report nothing at all.
+    variant = fn fp -> %{fingerprint: "sha256:#{fp}", estimated_rows: 5, node_rows: []} end
+    query = fn plan -> %{operation: :select, source: "t", fingerprint: "sha256:aaa", normalized: "n", plan: plan} end
+    retained = for i <- 0..7, do: variant.("a#{i}")
+
+    [base_shape] = QueryEvidence.shapes(Enum.map(retained ++ [variant.("zbase")], query))
+    [head_shape] = QueryEvidence.shapes(Enum.map(retained ++ [variant.("zhead")], query))
+
+    assert base_shape.variants_omitted == 1
+    assert head_shape.variants_omitted == 1
+
+    base = digest([event("PageLive", "handle_event:save", shapes: [base_shape])], plan_capture: :explain)
+    head = digest([event("PageLive", "handle_event:save", shapes: [head_shape])], plan_capture: :explain)
+
+    result = DigestCompare.diff(base, head)
+
+    # A forced plans entry carries the per-side omission counts even though the
+    # retained variant sets are identical.
+    assert [p] = result.plans
+    assert p.fingerprint == "sha256:aaa"
+    assert p.variants_added == []
+    assert p.variants_removed == []
+    assert p.variant_deltas == []
+    assert p.base_variants_omitted == 1
+    assert p.head_variants_omitted == 1
+
+    # And the incompleteness is stated in coverage, so an empty-looking entry is
+    # never read as a clean result.
+    assert Enum.any?(result.coverage.notes, &String.contains?(&1, "omitted"))
+  end
+
+  test "a bound-omitted variant on a query present on only one side is surfaced as a coverage note (#183)" do
+    # `plan_diffs/3` only iterates the intersection of SQL fingerprints, so a
+    # fingerprint present on just one side never reaches a plans entry. Its
+    # omission must still surface via coverage.
+    base =
+      digest(
+        [
+          event("PageLive", "handle_event:save",
+            shapes: [
+              shape("sha256:aaa", 1, %{plans: [%{fingerprint: "sha256:p", estimated_rows: 5, node_rows: []}]}),
+              shape("sha256:only", 1, %{
+                plans: [%{fingerprint: "sha256:q", estimated_rows: 5, node_rows: []}],
+                variants_omitted: 2
+              })
+            ]
+          )
+        ],
+        plan_capture: :explain
+      )
+
+    head =
+      digest(
+        [
+          event("PageLive", "handle_event:save",
+            shapes: [shape("sha256:aaa", 1, %{plans: [%{fingerprint: "sha256:p", estimated_rows: 5, node_rows: []}]})]
+          )
+        ],
+        plan_capture: :explain
+      )
+
+    result = DigestCompare.diff(base, head)
+
+    # No shared-fingerprint plan omission to force an entry for...
+    assert Enum.all?(result.plans, &(&1.base_variants_omitted == 0 and &1.head_variants_omitted == 0))
+    # ...but base's extra fingerprint dropped two structures, and that is not silent.
+    assert Enum.any?(result.coverage.notes, &(String.contains?(&1, "base") and String.contains?(&1, "omitted")))
+    assert Enum.any?(result.coverage.notes, &String.contains?(&1, "2"))
+  end
+
+  test "plan omission is not noted when plans are not comparable (#183)" do
+    # If plan capture modes differ, plans are suppressed and the scope difference
+    # is already noted; an omission note would be misleading noise.
+    base =
+      digest(
+        [
+          event("PageLive", "handle_event:save",
+            shapes: [
+              shape("sha256:aaa", 1, %{
+                plans: [%{fingerprint: "sha256:p", estimated_rows: 5, node_rows: []}],
+                variants_omitted: 3
+              })
+            ]
+          )
+        ],
+        plan_capture: :explain
+      )
+
+    head =
+      digest(
+        [event("PageLive", "handle_event:save", shapes: [shape("sha256:aaa", 1)])],
+        plan_capture: :disabled
+      )
+
+    result = DigestCompare.diff(base, head)
+
+    assert result.plans == []
+    refute Enum.any?(result.coverage.notes, &String.contains?(&1, "omitted"))
+    assert Enum.any?(result.coverage.notes, &String.contains?(&1, "plan capture differs"))
+  end
+
   test "plan capture mismatch suppresses plans and adds a scope note" do
     base =
       digest(

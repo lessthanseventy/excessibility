@@ -97,8 +97,15 @@ defmodule Excessibility.MixProject do
       {:phoenix, "~> 1.5"},
       {:phoenix_live_view, "~> 0.17 or ~> 1.0"},
       {:styler, "~> 0.9", only: [:dev, :test], runtime: false},
-      # Wallaby is optional - add it to your project if you want Wallaby.Session support
-      {:wallaby, "~> 0.25", optional: true, only: :test}
+      # Wallaby is optional - add it to your project if you want Wallaby.Session support.
+      # `runtime: false` keeps the modules compiled and on the code path (so the
+      # `Wallaby.Session` struct and `Code.ensure_loaded?/1` in `Excessibility.Source`
+      # still work) but stops Wallaby's OTP application from auto-starting under
+      # `mix test`. That auto-start runs `Wallaby.Chrome.validate/0`, which *raises*
+      # when no `chromedriver` is on `PATH` — crashing the pure-unit suite on any
+      # machine without a browser driver, even though every test mocks `:browser_mod`
+      # and never needs a live driver.
+      {:wallaby, "~> 0.25", optional: true, only: :test, runtime: false}
     ]
   end
 end

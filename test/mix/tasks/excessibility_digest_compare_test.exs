@@ -100,6 +100,51 @@ defmodule Mix.Tasks.Excessibility.Digest.CompareTest do
     assert output =~ "handle_event:delete"
   end
 
+  test "markdown surfaces bound-omitted plan variants as not-compared (#183)", ctx do
+    plan_shape = fn ->
+      %{
+        schema: "excessibility.digest/v1",
+        capture: %{ecto_configured: true, plan_capture: "explain", enrichers_run: ["ecto_queries"]},
+        events: [
+          %{
+            sequence: 1,
+            view: "PageLive",
+            callback: "handle_event:save",
+            queries: %{
+              count: 1,
+              shapes: [
+                %{
+                  fingerprint: "sha256:aaa",
+                  count: 1,
+                  operation: "select",
+                  source: "t",
+                  plans: [%{fingerprint: "sha256:p", estimated_rows: 5, node_rows: []}],
+                  variants_omitted: 1
+                }
+              ]
+            },
+            assigns: %{shapes: []}
+          }
+        ]
+      }
+    end
+
+    base_path = Path.join(ctx.dir, "omit_base.json")
+    head_path = Path.join(ctx.dir, "omit_head.json")
+    File.write!(base_path, Jason.encode!(plan_shape.()))
+    File.write!(head_path, Jason.encode!(plan_shape.()))
+
+    output =
+      capture_io(fn ->
+        assert CompareTask.run(["--base", base_path, "--head", head_path]) == :ok
+      end)
+
+    # The plans entry (and/or coverage note) states the omitted variants were
+    # never compared, so a header-only entry cannot read as a clean result.
+    assert output =~ "not compared"
+    assert output =~ "omitted"
+  end
+
   test "--format json produces valid JSON that decodes and does not raise on tuples", ctx do
     output =
       capture_io(fn ->
