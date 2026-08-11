@@ -88,16 +88,20 @@ defmodule Excessibility.DigestTest do
     }
   end
 
-  test "query shape surfaces a value-free plan when present" do
+  test "query shape surfaces a value-free plan variant set when present" do
     d = Digest.build(planned_timeline(), ecto_configured?: true)
     ev = Enum.find(d.events, &(&1.callback == "handle_event:save"))
     [shape] = ev.queries.shapes
 
-    assert shape.plan == %{
-             fingerprint: "sha256:plan",
-             nodes: ["Seq Scan"],
-             relations: ["categories"]
-           }
+    assert shape.plans == [
+             %{
+               fingerprint: "sha256:plan",
+               nodes: ["Seq Scan"],
+               relations: ["categories"]
+             }
+           ]
+
+    assert shape.variants_omitted == 0
 
     # Still value-free: no raw sql leaks even with a plan attached.
     refute Jason.encode!(d) =~ "SELECT ..."

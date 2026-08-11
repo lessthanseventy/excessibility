@@ -143,9 +143,10 @@ defmodule Excessibility.DigestCompareTest do
 
     assert [p] = result.plans
     assert p.fingerprint == "sha256:aaa"
-    assert p.base_plan == "sha256:plan1"
-    assert p.head_plan == "sha256:plan2"
-    assert p.estimated_rows_delta == 400
+    # A single structure changed shape: the old one is removed, the new added.
+    assert p.variants_removed == ["sha256:plan1"]
+    assert p.variants_added == ["sha256:plan2"]
+    assert p.variant_deltas == []
   end
 
   test "stable plan fingerprint with changed actual rows still produces a plan delta (#157)" do
@@ -181,12 +182,14 @@ defmodule Excessibility.DigestCompareTest do
 
     assert [p] = result.plans
     assert p.fingerprint == "sha256:aaa"
-    assert p.base_plan == "sha256:plan"
-    assert p.head_plan == "sha256:plan"
-    # Structural shape is unchanged; the change is purely numeric.
-    assert p.structural_change == false
-    assert p.actual_rows_delta == 9_999
-    assert p.estimated_rows_delta == 0
+    # Structural shape is unchanged (no added/removed variants); the change is
+    # purely numeric, reported against the shared variant.
+    assert p.variants_added == []
+    assert p.variants_removed == []
+    assert [d] = p.variant_deltas
+    assert d.plan == "sha256:plan"
+    assert d.actual_rows_delta == 9_999
+    assert d.estimated_rows_delta == 0
   end
 
   test "node-level actual-row change under a stable fingerprint surfaces as a node delta (#157)" do
@@ -233,8 +236,11 @@ defmodule Excessibility.DigestCompareTest do
     result = DigestCompare.diff(base, head)
 
     assert [p] = result.plans
-    assert p.structural_change == false
-    assert [node] = p.node_deltas
+    assert p.variants_added == []
+    assert p.variants_removed == []
+    assert [d] = p.variant_deltas
+    assert d.plan == "sha256:plan"
+    assert [node] = d.node_deltas
     assert node.relation == "children"
     assert node.depth == 1
     assert node.actual_rows_delta == 9_990
@@ -296,8 +302,10 @@ defmodule Excessibility.DigestCompareTest do
     result = DigestCompare.diff(base, head)
 
     assert [p] = result.plans
-    assert p.structural_change == false
-    assert node = Enum.find(p.node_deltas, &(&1.relation == "children"))
+    assert p.variants_added == []
+    assert p.variants_removed == []
+    assert [d] = p.variant_deltas
+    assert node = Enum.find(d.node_deltas, &(&1.relation == "children"))
     assert node.rows_touched_delta == 10_000
   end
 
@@ -315,6 +323,37 @@ defmodule Excessibility.DigestCompareTest do
       )
 
     assert DigestCompare.diff(base, head).plans == []
+  end
+
+  test "a changed non-dominant plan variant is reported even when a heavier variant is unchanged (#173)" do
+    heavy = %{fingerprint: "sha256:A", estimated_rows: 10_000, node_rows: []}
+    light_b = %{fingerprint: "sha256:B", estimated_rows: 5, node_rows: []}
+    light_c = %{fingerprint: "sha256:C", estimated_rows: 5, node_rows: []}
+
+    # One SQL fingerprint carrying two distinct structures per side; counts equal.
+    # base = {heavy A, light B}; head = {same heavy A, changed light C}.
+    base =
+      digest(
+        [event("PageLive", "handle_event:save", shapes: [shape("sha256:aaa", 2, %{plans: [heavy, light_b]})])],
+        plan_capture: :explain
+      )
+
+    head =
+      digest(
+        [event("PageLive", "handle_event:save", shapes: [shape("sha256:aaa", 2, %{plans: [heavy, light_c]})])],
+        plan_capture: :explain
+      )
+
+    result = DigestCompare.diff(base, head)
+
+    assert [p] = result.plans
+    assert p.fingerprint == "sha256:aaa"
+    # The secondary path changed structure B -> C; the dominant path A must not
+    # mask it. The previous single-representative aggregate reported nothing here.
+    assert p.variants_removed == ["sha256:B"]
+    assert p.variants_added == ["sha256:C"]
+    # Heavy A is byte-identical on both sides, so it contributes no delta.
+    assert p.variant_deltas == []
   end
 
   test "plan capture mismatch suppresses plans and adds a scope note" do
