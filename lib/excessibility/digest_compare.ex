@@ -18,6 +18,12 @@ defmodule Excessibility.DigestCompare do
     explains that one side did not measure queries.
   - Plans are diffed only when both `capture.plan_capture` modes match. A
     difference is scope-noted, never reported as a plan change.
+  - The plan-variant set per SQL fingerprint is bounded by the digest, so a side
+    can drop structures it never emitted. When either side omitted variants the
+    incompleteness is made explicit — a forced `plans` entry carrying per-side
+    `base_variants_omitted` / `head_variants_omitted` counts, plus a
+    `coverage.notes` entry — so a bounded comparison never renders "no change"
+    for a structure it could not see (issue #183).
   - Assign deltas are diffed only when the `assign_sizes` enricher ran on both
     sides; other enricher differences are scope-noted.
   - A `schema` mismatch adds a prominent note.
@@ -63,7 +69,7 @@ defmodule Excessibility.DigestCompare do
 
     %{
       schema: @schema,
-      coverage: coverage(base_agg, head_agg, base_scope, head_scope),
+      coverage: coverage(base_agg, head_agg, base_scope, head_scope, plans_comparable?),
       queries: if(ecto_both?, do: query_diffs(base_agg, head_agg, shared), else: []),
       plans: if(plans_comparable?, do: plan_diffs(base_agg, head_agg, shared), else: []),
       assigns: if(assigns_both?, do: assign_diffs(base_agg, head_agg, shared), else: [])
@@ -206,6 +212,14 @@ defmodule Excessibility.DigestCompare do
   #     shape scanning thousands more rows must not read as "no change".
   # Collapsing to a single heaviest representative discarded any non-dominant
   # variant that changed; keeping the whole set is what makes that visible.
+  #
+  # That set is itself bounded (`@max_plan_variants` in `QueryEvidence`), so a
+  # side can carry variants it never emitted. When the dropped variant is the one
+  # that changed, the retained sets match and every delta above is empty — yet the
+  # comparison is *incomplete*, not equal (issue #183). We therefore force an
+  # entry whenever either side omitted variants and surface the per-side counts
+  # (`base_variants_omitted` / `head_variants_omitted`), so a bounded comparison
+  # can never render "no change" for a structure it could not see.
   defp plan_delta(view, callback, fingerprint, base_entry, head_entry) do
     base_variants = base_entry.variants
     head_variants = head_entry.variants
@@ -221,7 +235,8 @@ defmodule Excessibility.DigestCompare do
       |> Enum.sort()
       |> Enum.flat_map(&variant_delta(&1, base_variants[&1], head_variants[&1]))
 
-    if added == [] and removed == [] and variant_deltas == [] do
+    if added == [] and removed == [] and variant_deltas == [] and
+         base_entry.omitted == 0 and head_entry.omitted == 0 do
       []
     else
       [
@@ -232,7 +247,8 @@ defmodule Excessibility.DigestCompare do
           variants_added: added,
           variants_removed: removed,
           variant_deltas: variant_deltas,
-          variants_omitted: base_entry.omitted > 0 or head_entry.omitted > 0
+          base_variants_omitted: base_entry.omitted,
+          head_variants_omitted: head_entry.omitted
         }
       ]
     end
@@ -357,14 +373,20 @@ defmodule Excessibility.DigestCompare do
     end
   end
 
-  defp coverage(base_agg, head_agg, base_scope, head_scope) do
+  defp coverage(base_agg, head_agg, base_scope, head_scope, plans_comparable?) do
     base_keys = base_agg |> Map.keys() |> MapSet.new()
     head_keys = head_agg |> Map.keys() |> MapSet.new()
     base_views = views(base_agg)
     head_views = views(head_agg)
 
+    omission = %{
+      comparable?: plans_comparable?,
+      base: total_omitted(base_agg),
+      head: total_omitted(head_agg)
+    }
+
     %{
-      notes: notes(base_scope, head_scope),
+      notes: notes(base_scope, head_scope, omission),
       views_added: head_views |> MapSet.difference(base_views) |> Enum.sort(),
       views_removed: base_views |> MapSet.difference(head_views) |> Enum.sort(),
       callbacks_added: head_keys |> MapSet.difference(base_keys) |> Enum.sort(),
@@ -376,16 +398,29 @@ defmodule Excessibility.DigestCompare do
     agg |> Map.keys() |> MapSet.new(fn {view, _callback} -> view end)
   end
 
+  # Total plan variants the digest bound dropped on one side, across every
+  # {view, callback} and SQL fingerprint — including fingerprints present on only
+  # one side, which `plan_diffs/3` (intersection-only) never reaches. Used solely
+  # to surface incompleteness as a coverage note (issue #183).
+  defp total_omitted(agg) do
+    agg
+    |> Map.values()
+    |> Enum.flat_map(fn %{plans: plans} -> Map.values(plans) end)
+    |> Enum.map(& &1.omitted)
+    |> Enum.sum()
+  end
+
   # Measurement-scope notes: each describes a *difference in what was measured*,
   # so a scope change is never mistaken for a regression. Sorted + deduped for
   # determinism.
-  defp notes(base, head) do
+  defp notes(base, head, omission) do
     []
     |> status_note(base, head)
     |> non_digest_note(base, head)
     |> schema_note(base, head)
     |> ecto_note(base, head)
     |> plan_note(base, head)
+    |> omission_note(omission)
     |> enricher_note(base, head)
     |> Enum.uniq()
     |> Enum.sort()
@@ -447,6 +482,29 @@ defmodule Excessibility.DigestCompare do
     else
       notes
     end
+  end
+
+  # The digest bounds each SQL fingerprint's plan-variant set, so a side can drop
+  # structures it never emitted. A bounded comparison that cannot see a structure
+  # must not stay silent about it — surface per-side counts and state plainly that
+  # those variants were never compared (issue #183). Only meaningful when plans
+  # were actually comparable; otherwise the scope difference is already noted.
+  defp omission_note(notes, %{comparable?: false}), do: notes
+  defp omission_note(notes, %{base: 0, head: 0}), do: notes
+
+  defp omission_note(notes, %{base: base, head: head}) do
+    notes
+    |> maybe_omission_note(head, "head")
+    |> maybe_omission_note(base, "base")
+  end
+
+  defp maybe_omission_note(notes, 0, _side), do: notes
+
+  defp maybe_omission_note(notes, count, side) do
+    [
+      "#{side} omitted #{count} bounded plan variant(s) that were not compared (digest bound)"
+      | notes
+    ]
   end
 
   defp enricher_note(notes, base, head) do

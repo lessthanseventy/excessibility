@@ -195,9 +195,11 @@ defmodule Mix.Tasks.Excessibility.Digest.Compare do
 
   # One SQL fingerprint can carry several structural plan variants (#173):
   # variants added/removed capture shape changes, `variant_deltas` the numeric
-  # change to a structure present on both sides.
+  # change to a structure present on both sides. The variant set is bounded, so
+  # per-side omission counts state plainly that the dropped structures were never
+  # compared — a header-only entry must not read as a clean result (#183).
   defp plan_lines(p) do
-    omitted = if p[:variants_omitted], do: " (variants omitted)", else: ""
+    omitted = omitted_suffix(p[:base_variants_omitted], p[:head_variants_omitted])
     header = "- #{p[:view]} #{p[:callback]} #{p[:fingerprint]}#{omitted}"
 
     lines =
@@ -206,6 +208,17 @@ defmodule Mix.Tasks.Excessibility.Digest.Compare do
         Enum.flat_map(p[:variant_deltas] || [], &variant_delta_lines/1)
 
     Enum.join([header | lines], "\n")
+  end
+
+  defp omitted_suffix(base, head) do
+    base = base || 0
+    head = head || 0
+
+    if base > 0 or head > 0 do
+      " (base omitted #{base}, head omitted #{head} — not compared)"
+    else
+      ""
+    end
   end
 
   defp variant_delta_lines(d) do

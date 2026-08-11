@@ -16,8 +16,19 @@ defmodule Excessibility.MCP.SubprocessTest do
     end
 
     test "respects cd option" do
-      {output, 0} = Subprocess.run("pwd", [], cd: "/tmp")
-      assert String.trim(output) == "/tmp"
+      # Use a freshly created dir and compare by identity (device + inode) rather
+      # than by textual path: macOS resolves symlinked roots like /tmp to
+      # /private/tmp, so `pwd` in the subprocess prints the physical path and a
+      # string compare would spuriously fail (issue #183).
+      dir = Path.join(System.tmp_dir!(), "subprocess_cd_#{System.unique_integer([:positive])}")
+      File.mkdir_p!(dir)
+      on_exit(fn -> File.rm_rf!(dir) end)
+
+      {output, 0} = Subprocess.run("pwd", [], cd: dir)
+      reported = String.trim(output)
+
+      assert File.dir?(reported)
+      assert dir_identity(reported) == dir_identity(dir)
     end
 
     test "captures stderr when stderr_to_stdout is true" do
@@ -29,6 +40,13 @@ defmodule Excessibility.MCP.SubprocessTest do
       {output, 0} = Subprocess.run("sh", ["-c", "echo $MY_VAR"], env: [{"MY_VAR", "test_value"}])
       assert String.trim(output) == "test_value"
     end
+  end
+
+  # A directory's identity is its (device, inode) pair, stable across symlinked
+  # path spellings (e.g. /tmp vs /private/tmp on macOS).
+  defp dir_identity(path) do
+    stat = File.stat!(path)
+    {stat.major_device, stat.minor_device, stat.inode}
   end
 
   describe "timeout handling" do
