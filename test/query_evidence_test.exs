@@ -36,18 +36,49 @@ defmodule Excessibility.QueryEvidenceTest do
     assert QueryEvidence.select?(%{operation: :select})
   end
 
-  test "shapes/1 attaches the representative's plan when present" do
+  test "shapes/1 attaches the plan variant set when present" do
     plan = %{fingerprint: "sha256:plan", nodes: ["Seq Scan"], relations: ["categories"]}
 
     with_plan = fn -> Map.put(q(:select, "categories", "sha256:aaa"), :plan, plan) end
 
     [shape] = QueryEvidence.shapes([with_plan.(), with_plan.()])
-    assert shape.plan == plan
+    assert shape.plans == [plan]
+    assert shape.variants_omitted == 0
+    refute Map.has_key?(shape, :plan)
   end
 
-  test "shapes/1 omits the :plan key entirely when the representative has no plan" do
+  test "shapes/1 preserves every distinct structural plan variant under one fingerprint (#173)" do
+    heavy = %{fingerprint: "sha256:A", nodes: ["Seq Scan"], relations: ["a"], node_rows: []}
+    light = %{fingerprint: "sha256:B", nodes: ["Index Scan"], relations: ["b"], node_rows: []}
+
+    # Same SQL fingerprint, two DISTINCT plan structures across the journey.
+    [shape] =
+      QueryEvidence.shapes([
+        Map.put(q(:select, "t", "sha256:aaa"), :plan, heavy),
+        Map.put(q(:select, "t", "sha256:aaa"), :plan, light)
+      ])
+
+    assert Enum.map(shape.plans, & &1.fingerprint) == ["sha256:A", "sha256:B"]
+    assert shape.variants_omitted == 0
+  end
+
+  test "shapes/1 bounds the variant set and reports variants_omitted" do
+    variants =
+      for i <- 0..19 do
+        plan = %{fingerprint: "sha256:v#{String.pad_leading(Integer.to_string(i), 2, "0")}", node_rows: []}
+        Map.put(q(:select, "t", "sha256:aaa"), :plan, plan)
+      end
+
+    [shape] = QueryEvidence.shapes(variants)
+
+    assert length(shape.plans) == 8
+    assert shape.variants_omitted == 12
+  end
+
+  test "shapes/1 omits the :plans key entirely when no occurrence has a plan" do
     [shape] = QueryEvidence.shapes([q(:select, "categories", "sha256:aaa")])
-    refute Map.has_key?(shape, :plan)
+    refute Map.has_key?(shape, :plans)
+    refute Map.has_key?(shape, :variants_omitted)
   end
 
   test "shapes/1 aggregates plan row work across every occurrence, not just the first (#167)" do
@@ -76,7 +107,8 @@ defmodule Excessibility.QueryEvidenceTest do
     [shape] = QueryEvidence.shapes([first, later])
 
     assert shape.count == 2
-    assert [child] = shape.plan.node_rows
+    assert [variant] = shape.plans
+    assert [child] = variant.node_rows
     assert child.rows_touched == 10_000
   end
 

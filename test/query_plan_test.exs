@@ -307,6 +307,47 @@ defmodule Excessibility.QueryPlanTest do
     end
   end
 
+  describe "aggregate_variants/1 (#173)" do
+    test "empty list yields no variants" do
+      assert QueryPlan.aggregate_variants([]) == []
+    end
+
+    test "occurrences of one structure collapse to a single max-merged variant" do
+      small = QueryPlan.summarize(small_root_big_child(%{"Actual Rows" => 1, "Actual Loops" => 1}))
+      big = QueryPlan.summarize(small_root_big_child(%{"Actual Rows" => 10_000, "Actual Loops" => 1}))
+
+      assert [variant] = QueryPlan.aggregate_variants([small, big])
+      assert variant.fingerprint == big.fingerprint
+      child = Enum.find(variant.node_rows, &(&1.relation == "children"))
+      assert child.rows_touched == 10_000
+    end
+
+    test "distinct structures are ALL preserved, sorted by fingerprint (not collapsed)" do
+      light =
+        QueryPlan.summarize(
+          nested_plan(%{"Actual Rows" => 1, "Actual Loops" => 1}, %{"Actual Rows" => 1, "Actual Loops" => 1})
+        )
+
+      heavy = QueryPlan.summarize(small_root_big_child(%{"Actual Rows" => 10_000, "Actual Loops" => 1}))
+
+      variants = QueryPlan.aggregate_variants([light, heavy])
+      # Both distinct structures survive — the non-dominant one is NOT discarded.
+      assert length(variants) == 2
+      assert Enum.map(variants, & &1.fingerprint) == Enum.sort([light.fingerprint, heavy.fingerprint])
+    end
+
+    test "is independent of occurrence order" do
+      light =
+        QueryPlan.summarize(
+          nested_plan(%{"Actual Rows" => 1, "Actual Loops" => 1}, %{"Actual Rows" => 1, "Actual Loops" => 1})
+        )
+
+      heavy = QueryPlan.summarize(small_root_big_child(%{"Actual Rows" => 10_000, "Actual Loops" => 1}))
+
+      assert QueryPlan.aggregate_variants([light, heavy]) == QueryPlan.aggregate_variants([heavy, light])
+    end
+  end
+
   describe "value-free" do
     test "summary exposes only the allowlisted keys" do
       s = QueryPlan.summarize(nested_plan())

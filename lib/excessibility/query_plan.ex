@@ -58,22 +58,49 @@ defmodule Excessibility.QueryPlan do
   def aggregate([summary]), do: summary
 
   def aggregate(summaries) when is_list(summaries) do
-    case Enum.uniq(summaries) do
+    case aggregate_variants(summaries) do
+      [] -> nil
       [only] -> only
-      _ -> do_aggregate(summaries)
+      variants -> Enum.max_by(variants, &{total_rows_touched(&1), to_string(Map.get(&1, :fingerprint))})
     end
   rescue
     # Aggregation must never break digest emission; fall back to the first plan.
     _ -> List.first(summaries)
   end
 
-  defp do_aggregate(summaries) do
+  @doc """
+  Aggregate every occurrence of one query fingerprint into the **bounded set of
+  distinct structural plan variants**, one representative per structure.
+
+  A parameterized query can pick different plans by selectivity, so one SQL
+  fingerprint legitimately carries several plan structures across a journey.
+  `aggregate/1` collapses them to the single heaviest representative, which
+  discards any non-dominant variant that changed or regressed (issue #173). This
+  keeps them all: occurrences are grouped by structural fingerprint, each group
+  is merged by keeping the **maximum** comparable row work per node path (the
+  same `merge_summary/2` used by `aggregate/1`, so the heaviest instance of each
+  structure survives), and the resulting representatives are returned sorted by
+  fingerprint for determinism. Returns `[]` for an empty list.
+  """
+  @spec aggregate_variants([map()]) :: [map()]
+  def aggregate_variants([]), do: []
+
+  def aggregate_variants(summaries) when is_list(summaries) do
     summaries
     |> Enum.group_by(&Map.get(&1, :fingerprint))
     |> Enum.map(fn {_fp, group} ->
-      Enum.reduce(group, fn summary, acc -> merge_summary(acc, summary) end)
+      # Identical occurrences of a structure collapse untouched (no merge_summary
+      # enrichment); only genuinely differing instances are max-merged.
+      case Enum.uniq(group) do
+        [only] -> only
+        uniq -> Enum.reduce(uniq, fn summary, acc -> merge_summary(acc, summary) end)
+      end
     end)
-    |> Enum.max_by(&{total_rows_touched(&1), to_string(Map.get(&1, :fingerprint))})
+    |> Enum.sort_by(&to_string(Map.get(&1, :fingerprint)))
+  rescue
+    # Variant aggregation must never break digest emission; fall back to the
+    # de-duplicated input so distinct structures are still preserved.
+    _ -> Enum.uniq(summaries)
   end
 
   # Merge two summaries sharing a structural fingerprint by keeping the max
