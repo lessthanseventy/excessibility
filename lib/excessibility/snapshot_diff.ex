@@ -80,12 +80,18 @@ defmodule Excessibility.SnapshotDiff do
   @doc """
   Run `live_region_findings/3` over each consecutive pair in a list of
   snapshots captured for the same test, and concatenate the findings.
+
+  Pairs that straddle a full-page navigation are skipped: when both
+  snapshots carry a LiveView root id and the ids differ, they are separate
+  views (a fresh mount, not an in-place patch) and the live-region rule
+  does not apply. Pairs with indeterminate identity (controller/static
+  snapshots) are diffed as usual.
   """
   @spec scan_sequence([String.t()], keyword()) :: [Rule.finding()]
   def scan_sequence(snapshots, opts \\ []) when is_list(snapshots) do
     snapshots
     |> Enum.chunk_every(2, 1, :discard)
-    |> Enum.flat_map(fn [old, new] -> live_region_findings(old, new, opts) end)
+    |> Enum.flat_map(fn [old, new] -> pair_findings(old, new, opts) end)
   end
 
   @doc """
@@ -98,7 +104,8 @@ defmodule Excessibility.SnapshotDiff do
 
   Snapshots without that metadata (the default `Module_line.html` naming
   carries no reliable test boundary) are skipped, so this is inert unless
-  capture metadata is present.
+  capture metadata is present. Consecutive pairs that straddle a full-page
+  navigation are skipped the same way as in `scan_sequence/2`.
   """
   @spec scan_files([Path.t()], keyword()) :: [{Path.t(), Rule.finding()}]
   def scan_files(paths, opts \\ []) when is_list(paths) do
@@ -130,8 +137,57 @@ defmodule Excessibility.SnapshotDiff do
     |> Enum.sort_by(fn {_path, _html, meta} -> meta.sequence end)
     |> Enum.chunk_every(2, 1, :discard)
     |> Enum.flat_map(fn [{_p1, old, _m1}, {p2, new, _m2}] ->
-      old |> live_region_findings(new, opts) |> Enum.map(&{p2, &1})
+      old |> pair_findings(new, opts) |> Enum.map(&{p2, &1})
     end)
+  end
+
+  # Cross-snapshot findings for a single consecutive pair, guarded against
+  # full-page navigations. Journey-style tests snapshot several *different*
+  # views in one test; those pairs are separate pages, not an in-place
+  # LiveView patch, so the live-region rule (WCAG 4.1.3, which is about DOM
+  # patches without a page load) does not apply — flagging them would be a
+  # false positive whose only "fix" (wrapping layout in aria-live) re-reads
+  # the whole page on every navigation. We suppress a pair only on positive
+  # proof of navigation: both sides carry a LiveView root id and they differ.
+  # Indeterminate identity (controller/static pages, plain fragments) is
+  # never suppressed, so no real finding is silently dropped.
+  defp pair_findings(old_html, new_html, opts) do
+    if navigation?(old_html, new_html),
+      do: [],
+      else: live_region_findings(old_html, new_html, opts)
+  end
+
+  defp navigation?(old_html, new_html) do
+    with old_id when is_binary(old_id) <- view_identity(old_html),
+         new_id when is_binary(new_id) <- view_identity(new_html) do
+      old_id != new_id
+    else
+      _ -> false
+    end
+  end
+
+  # A LiveView's root element carries a per-mount, patch-stable identity: a
+  # fresh `live/2` mount gets a new `id`, an in-place patch keeps it. Prefer
+  # the main root, fall back to any connected root, then to the root-id a
+  # nested view points back to. Returns nil when no LiveView root is present
+  # (controller/static snapshots), i.e. identity is indeterminate.
+  defp view_identity(html) do
+    case Floki.parse_document(html) do
+      {:ok, tree} -> root_id(tree)
+      _ -> nil
+    end
+  end
+
+  defp root_id(tree) do
+    first_attr(tree, "[data-phx-main]", "id") ||
+      first_attr(tree, "[data-phx-session]", "id") ||
+      first_attr(tree, "[data-phx-root-id]", "data-phx-root-id")
+  end
+
+  defp first_attr(tree, selector, attr) do
+    tree
+    |> Floki.attribute(selector, attr)
+    |> List.first()
   end
 
   # ── Diff walk ──────────────────────────────────────────────────────
