@@ -143,12 +143,22 @@ defmodule Excessibility.SnapshotDiffTest do
       assert finding.rule == :content_change_without_live_region
     end
 
-    test "diffs when identity is indeterminate on either side (no regression)" do
-      # One side has no phx root id — we can't prove navigation, so diff it.
-      identified = lv("phx-AAA", @table_two)
+    test "treats LiveView->non-LiveView (root presence differs) as a navigation (#193)" do
+      # A LiveView cannot patch into a dead controller render, so a rooted
+      # snapshot followed by an unrooted one is a page change, not a patch.
+      live = lv("phx-AAA", @table_two)
       plain = ~s(<html><body>#{@table_one}</body></html>)
 
-      assert [_] = SnapshotDiff.scan_sequence([identified, plain])
+      assert [] = SnapshotDiff.scan_sequence([live, plain])
+    end
+
+    test "still diffs a neither-rooted pair (truly indeterminate, no regression)" do
+      # No LiveView root on either side and a bounded, overlapping change:
+      # nothing proves navigation, so it is diffed and flagged.
+      before = ~s(<html><body>#{@table_two}</body></html>)
+      later = ~s(<html><body>#{@table_one}</body></html>)
+
+      assert [_] = SnapshotDiff.scan_sequence([before, later])
     end
 
     test "keys on the main root when a nested LiveView is present" do
@@ -157,6 +167,100 @@ defmodule Excessibility.SnapshotDiffTest do
       nested_b = ~s(<div data-phx-session="c" data-phx-parent-id="phx-AAA" id="phx-C2">#{@table_one}</div>)
       before = lv("phx-AAA", nested_a)
       later = lv("phx-AAA", nested_b)
+
+      assert [_] = SnapshotDiff.scan_sequence([before, later])
+    end
+  end
+
+  describe "navigation-scale changes — dead-render navigations (issue #193, Case A)" do
+    # A page whose whole <body> subtree differs in structure from the next,
+    # the way a LiveView -> controller (dead render) transition looks: no
+    # shared LiveView root, divergent top-level markup, disjoint text.
+    @event_page ~s(<html><body><div class="lv"><h1>Event Detail</h1><p>Concert tickets venue doors midnight support artist lineup schedule map parking</p></div></body></html>)
+    @login_page ~s(<html><body><main class="auth"><h1>Log in</h1><form><label>Email password remember forgot register submit credentials account</label></form></main></body></html>)
+    @register_page ~s(<html><body><section class="signup"><h1>Create account</h1><form><label>Name birthday phone confirm terms newsletter subscribe finish welcome</label></form></section></body></html>)
+
+    test "skips a LiveView->controller navigation (whole body replaced, no shared root)" do
+      assert [] = SnapshotDiff.scan_sequence([@event_page, @login_page])
+    end
+
+    test "skips a controller->controller navigation" do
+      assert [] = SnapshotDiff.scan_sequence([@login_page, @register_page])
+    end
+
+    test "skips a LiveView->controller navigation via root presence, not text" do
+      # The clean signal: a LiveView (has root) cannot patch into a dead
+      # controller render (no root), so presence-differs is a navigation.
+      live = lv("phx-AAA", "<h1>Event Detail</h1><p>tickets venue doors artist</p>")
+      controller = @login_page
+
+      assert [] = SnapshotDiff.scan_sequence([live, controller])
+    end
+
+    test "never treats a same-view in-place patch as navigation, even when tiny and fully replaced" do
+      # Regression for the review's CRITICAL: a toast/counter that is the bulk
+      # of a small LiveView and whose text fully changes must stay flagged —
+      # identity (same root id) protects it, not text ratios.
+      toast_before = lv("phx-AAA", ~s(<div class="toast">Saved</div>))
+      toast_after = lv("phx-AAA", ~s(<div class="toast">Error occurred</div>))
+      assert [_] = SnapshotDiff.scan_sequence([toast_before, toast_after])
+
+      count_before = lv("phx-AAA", ~s(<span id="count">0</span>))
+      count_after = lv("phx-AAA", ~s(<span id="count">5</span>))
+      assert [_] = SnapshotDiff.scan_sequence([count_before, count_after])
+    end
+
+    test "flags a tiny fully-replaced status even in a non-rooted fragment (size floor)" do
+      # No LiveView root, no chrome padding: the size floor keeps a short
+      # status region from being mistaken for a whole-page navigation.
+      before = ~s(<html><body><div id="status">Loading</div></body></html>)
+      later = ~s(<html><body><div id="status">Done</div></body></html>)
+
+      assert [_] = SnapshotDiff.scan_sequence([before, later])
+    end
+
+    test "still flags a small status update inside an otherwise-stable page" do
+      # Bulk of the page (nav + list) is unchanged; only a tiny status region
+      # flips. Low coverage keeps it a real un-announced status message.
+      chrome = String.duplicate("<li>home about events tags admin members settings help</li>", 6)
+      before = ~s(<html><body><nav><ul>#{chrome}</ul></nav><main><div id="status">Loading</div></main></body></html>)
+
+      later =
+        ~s(<html><body><nav><ul>#{chrome}</ul></nav><main><div id="status">42 results found</div></main></body></html>)
+
+      assert [finding] = SnapshotDiff.scan_sequence([before, later])
+      assert finding.selector =~ "status"
+    end
+
+    test "still flags a large but mostly-stable feed losing one item" do
+      # Feed dominates the page (high coverage) but most items are unchanged
+      # (high overlap), so it is an in-place update, not a navigation.
+      rows = fn extra -> Enum.map_join(1..12, "", &"<li>Item #{&1} approved active visible</li>") <> extra end
+      before = ~s(<html><body><main><ul>#{rows.("<li>Item 13 approved active visible</li>")}</ul></main></body></html>)
+      later = ~s(<html><body><main><ul>#{rows.("")}</ul></main></body></html>)
+
+      assert [_] = SnapshotDiff.scan_sequence([before, later])
+    end
+  end
+
+  describe "user-input controls — typed content is not a status message (issue #193, Case B)" do
+    test "does not flag a changed <textarea> value" do
+      before = ~s(<html><body><form><textarea id="event_description">Draft one</textarea></form></body></html>)
+      later = ~s(<html><body><form><textarea id="event_description">Draft two edited</textarea></form></body></html>)
+
+      assert [] = SnapshotDiff.scan_sequence([before, later])
+    end
+
+    test "does not flag a change inside a [contenteditable] region" do
+      before = ~s(<html><body><div contenteditable="true"><p>hello there</p></div></body></html>)
+      later = ~s(<html><body><div contenteditable="true"><p>hello there world edited</p></div></body></html>)
+
+      assert [] = SnapshotDiff.scan_sequence([before, later])
+    end
+
+    test "still flags a normal non-input region that changed" do
+      before = ~s(<html><body><section><p id="count">0 results</p></section></body></html>)
+      later = ~s(<html><body><section><p id="count">5 results</p></section></body></html>)
 
       assert [_] = SnapshotDiff.scan_sequence([before, later])
     end

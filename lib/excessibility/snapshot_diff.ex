@@ -28,6 +28,22 @@ defmodule Excessibility.SnapshotDiff do
   alias Excessibility.LiveViewRules.Rule
 
   @live_roles ~w(alert status log)
+  @input_tags ~w(textarea input select)
+
+  # Text-ratio fallback for classifying a *dead-render* navigation (issue
+  # #193, Case A) when neither snapshot has a LiveView root to key on. It is
+  # deliberately NOT applied to a same-view LiveView patch — there, identity
+  # (a stable root id) already proves the change is in-place, so a small
+  # fully-replaced region (a toast, a counter) stays a real status message.
+  #
+  # A region qualifies as navigation-scale only when it is (a) substantial in
+  # absolute size — a short status region can never be a "page" — AND (b) the
+  # bulk of the document (`coverage`) AND (c) almost entirely new text
+  # (`overlap`). The size floor is what prevents suppressing a small
+  # region-dominated status update in a non-rooted fragment.
+  @nav_min_chars 64
+  @nav_coverage_threshold 0.5
+  @nav_overlap_threshold 0.2
 
   @typedoc "A single changed region produced by `diff/3`."
   @type region :: %{
@@ -37,6 +53,10 @@ defmodule Excessibility.SnapshotDiff do
           old_text: String.t(),
           new_text: String.t(),
           announced: boolean(),
+          user_input: boolean(),
+          size: non_neg_integer(),
+          coverage: float(),
+          overlap: float(),
           element: String.t()
         }
 
@@ -54,11 +74,24 @@ defmodule Excessibility.SnapshotDiff do
   def diff(old_html, new_html, _opts \\ []) when is_binary(old_html) and is_binary(new_html) do
     with {:ok, old_tree} <- Floki.parse_document(old_html),
          {:ok, new_tree} <- Floki.parse_document(new_html) do
-      regions(root_node(old_tree), root_node(new_tree), [])
+      old_root = root_node(old_tree)
+      new_root = root_node(new_tree)
+      doc_len = max(String.length(text(old_root)), String.length(text(new_root)))
+
+      old_root
+      |> regions(new_root, [])
+      |> Enum.map(&put_coverage(&1, doc_len))
     else
       _ -> []
     end
   end
+
+  # Coverage is the region's share of the whole document's text; it can only
+  # be computed once the document length is known, so `region/3` records the
+  # region's own `size` and `diff/3` divides here.
+  defp put_coverage(region, doc_len) when doc_len > 0, do: %{region | coverage: region.size / doc_len}
+
+  defp put_coverage(region, _doc_len), do: %{region | coverage: 0.0}
 
   @doc """
   Return accessibility findings for content that changed outside any live
@@ -71,10 +104,31 @@ defmodule Excessibility.SnapshotDiff do
   """
   @spec live_region_findings(String.t(), String.t(), keyword()) :: [Rule.finding()]
   def live_region_findings(old_html, new_html, opts \\ []) do
+    # When both snapshots are the same LiveView instance (same root id), the
+    # change is an in-place patch by definition, so the navigation-scale text
+    # heuristic must not run — identity already settled it. It only applies
+    # to the indeterminate case (controller/static pages with no root).
+    nav_heuristic? = not same_rooted_view?(old_html, new_html)
+
     old_html
     |> diff(new_html, opts)
-    |> Enum.reject(& &1.announced)
+    |> Enum.reject(&suppress?(&1, nav_heuristic?))
     |> Enum.map(&build_finding/1)
+  end
+
+  # A changed region is not a status message — and so must not be flagged —
+  # when it is already announced (aria-live/role/output), when the user
+  # authored it themselves (a form control they are typing into; issue #193
+  # Case B), or, for non-LiveView pages only, when it is a full-page
+  # navigation rather than an in-place patch (issue #193 Case A).
+  defp suppress?(region, nav_heuristic?) do
+    region.announced or region.user_input or
+      (nav_heuristic? and navigation_scale?(region))
+  end
+
+  defp navigation_scale?(%{size: size, coverage: coverage, overlap: overlap}) do
+    size >= @nav_min_chars and coverage >= @nav_coverage_threshold and
+      overlap <= @nav_overlap_threshold
   end
 
   @doc """
@@ -147,21 +201,35 @@ defmodule Excessibility.SnapshotDiff do
   # LiveView patch, so the live-region rule (WCAG 4.1.3, which is about DOM
   # patches without a page load) does not apply — flagging them would be a
   # false positive whose only "fix" (wrapping layout in aria-live) re-reads
-  # the whole page on every navigation. We suppress a pair only on positive
-  # proof of navigation: both sides carry a LiveView root id and they differ.
-  # Indeterminate identity (controller/static pages, plain fragments) is
-  # never suppressed, so no real finding is silently dropped.
+  # the whole page on every navigation.
   defp pair_findings(old_html, new_html, opts) do
     if navigation?(old_html, new_html),
       do: [],
       else: live_region_findings(old_html, new_html, opts)
   end
 
+  # A pair is a navigation, on value-free structural evidence, when:
+  #   * both sides carry a LiveView root id and the ids differ — a fresh
+  #     mount, not a patch; or
+  #   * exactly one side carries a LiveView root — a LiveView cannot patch
+  #     into a dead controller render, so presence-differs is a page change.
+  # Neither-rooted pairs (controller/static/plain fragments) are indeterminate
+  # here; that case is handled downstream by the size/coverage/overlap
+  # heuristic in `navigation_scale?/1`, so nothing is silently dropped.
   defp navigation?(old_html, new_html) do
-    with old_id when is_binary(old_id) <- view_identity(old_html),
-         new_id when is_binary(new_id) <- view_identity(new_html) do
-      old_id != new_id
-    else
+    case {view_identity(old_html), view_identity(new_html)} do
+      {nil, nil} -> false
+      {old_id, new_id} when is_binary(old_id) and is_binary(new_id) -> old_id != new_id
+      _ -> true
+    end
+  end
+
+  # True only when both snapshots are provably the same LiveView instance
+  # (same root id) — i.e. any content change between them is an in-place
+  # patch, where the navigation-scale heuristic must stand down.
+  defp same_rooted_view?(old_html, new_html) do
+    case {view_identity(old_html), view_identity(new_html)} do
+      {old_id, new_id} when is_binary(old_id) and is_binary(new_id) -> old_id == new_id
       _ -> false
     end
   end
@@ -222,14 +290,22 @@ defmodule Excessibility.SnapshotDiff do
 
   defp region(old_node, new_node, ancestors) do
     {tag, _attrs, _children} = new_node
+    old_full = text(old_node)
+    new_full = text(new_node)
+    lineage = [new_node | ancestors]
 
     %{
       change: :changed,
       selector: selector(new_node),
       tag: tag,
-      old_text: old_node |> text() |> String.slice(0, 300),
-      new_text: new_node |> text() |> String.slice(0, 300),
-      announced: Enum.any?([new_node | ancestors], &live_region?/1),
+      old_text: String.slice(old_full, 0, 300),
+      new_text: String.slice(new_full, 0, 300),
+      announced: Enum.any?(lineage, &live_region?/1),
+      user_input: Enum.any?(lineage, &user_input?/1),
+      size: max(String.length(old_full), String.length(new_full)),
+      # `coverage` is filled in by `diff/3` once the document length is known.
+      coverage: 0.0,
+      overlap: token_overlap(old_full, new_full),
       element: new_node |> Floki.raw_html() |> String.slice(0, 300)
     }
   end
@@ -263,8 +339,13 @@ defmodule Excessibility.SnapshotDiff do
   end
 
   defp text(node) do
+    # `sep: " "` puts a space between adjacent text nodes so element
+    # boundaries (e.g. `<td>A</td><td>B</td>`) become token boundaries, which
+    # keeps token-overlap meaningful. The separator collapses under the
+    # whitespace normalization below; this slightly increases diff sensitivity
+    # at element boundaries (biasing toward flagging, never toward suppressing).
     node
-    |> Floki.text()
+    |> Floki.text(sep: " ")
     |> String.replace(~r/\s+/, " ")
     |> String.trim()
   end
@@ -289,6 +370,41 @@ defmodule Excessibility.SnapshotDiff do
   end
 
   defp live_region?(_), do: false
+
+  # A form control (or contenteditable region) holds content the user typed,
+  # which assistive tech already echoes — it is never a status message.
+  defp user_input?({tag, attrs, _children}) do
+    tag in @input_tags or contenteditable?(attrs)
+  end
+
+  defp user_input?(_), do: false
+
+  defp contenteditable?(attrs) do
+    case find_attr(attrs, "contenteditable") do
+      nil -> false
+      value -> String.downcase(value) != "false"
+    end
+  end
+
+  # Jaccard overlap of the two texts' word sets, in [0.0, 1.0]. 1.0 when both
+  # are empty (no change to measure). Used to tell a wholesale replacement
+  # (near 0.0) from a mostly-stable update (near 1.0).
+  defp token_overlap(old_text, new_text) do
+    old_tokens = tokenize(old_text)
+    new_tokens = tokenize(new_text)
+    union = old_tokens |> MapSet.union(new_tokens) |> MapSet.size()
+
+    if union == 0 do
+      1.0
+    else
+      intersection = old_tokens |> MapSet.intersection(new_tokens) |> MapSet.size()
+      intersection / union
+    end
+  end
+
+  defp tokenize(text) do
+    text |> String.downcase() |> String.split(~r/\s+/, trim: true) |> MapSet.new()
+  end
 
   defp live_role?(attrs) do
     case find_attr(attrs, "role") do
