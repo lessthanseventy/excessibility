@@ -120,6 +120,48 @@ defmodule Excessibility.SnapshotDiffTest do
     end
   end
 
+  describe "scan_sequence/2 — same-view identity guard (issue #191)" do
+    # Wrap a body in a LiveView main root carrying a per-mount id, the way a
+    # captured LiveView snapshot looks. A fresh `live/2` mount gets a new id;
+    # an in-place patch keeps the same id.
+    defp lv(id, body) do
+      ~s(<html><body><div data-phx-main data-phx-session="tok" id="#{id}">#{body}</div></body></html>)
+    end
+
+    test "skips a pair whose LiveView root id changed (full navigation)" do
+      dashboard = lv("phx-AAA", "<main><h1>Dashboard</h1></main>")
+      events = lv("phx-BBB", "<main><h1>Events</h1><table><tbody><tr><td>x</td></tr></tbody></table></main>")
+
+      assert [] = SnapshotDiff.scan_sequence([dashboard, events])
+    end
+
+    test "still flags an in-place patch that keeps the same root id" do
+      before = lv("phx-AAA", @table_two)
+      later = lv("phx-AAA", @table_one)
+
+      assert [finding] = SnapshotDiff.scan_sequence([before, later])
+      assert finding.rule == :content_change_without_live_region
+    end
+
+    test "diffs when identity is indeterminate on either side (no regression)" do
+      # One side has no phx root id — we can't prove navigation, so diff it.
+      identified = lv("phx-AAA", @table_two)
+      plain = ~s(<html><body>#{@table_one}</body></html>)
+
+      assert [_] = SnapshotDiff.scan_sequence([identified, plain])
+    end
+
+    test "keys on the main root when a nested LiveView is present" do
+      # Same page patched: main id stable, nested child remounts. Same view.
+      nested_a = ~s(<div data-phx-session="c" data-phx-parent-id="phx-AAA" id="phx-C1">#{@table_two}</div>)
+      nested_b = ~s(<div data-phx-session="c" data-phx-parent-id="phx-AAA" id="phx-C2">#{@table_one}</div>)
+      before = lv("phx-AAA", nested_a)
+      later = lv("phx-AAA", nested_b)
+
+      assert [_] = SnapshotDiff.scan_sequence([before, later])
+    end
+  end
+
   describe "scan_files/2 — pair snapshots by captured test metadata" do
     setup do
       dir = Path.join(System.tmp_dir!(), "excessibility_diff_#{System.unique_integer([:positive])}")
@@ -150,6 +192,15 @@ defmodule Excessibility.SnapshotDiffTest do
       p2 = Path.join(dir, "Mod_20.html")
       File.write!(p1, "<html><body>#{@table_two}</body></html>")
       File.write!(p2, "<html><body>#{@table_one}</body></html>")
+
+      assert [] = SnapshotDiff.scan_files([p1, p2])
+    end
+
+    test "skips paired files whose LiveView root id changed (issue #191)", %{dir: dir} do
+      body_a = ~s(<div data-phx-main id="phx-AAA"><main><h1>Dashboard</h1></main></div>)
+      body_b = ~s(<div data-phx-main id="phx-BBB"><main><h1>Events</h1>#{@table_one}</main></div>)
+      p1 = write_snap(dir, "j_1.html", "journey test", 1, body_a)
+      p2 = write_snap(dir, "j_2.html", "journey test", 2, body_b)
 
       assert [] = SnapshotDiff.scan_files([p1, p2])
     end
