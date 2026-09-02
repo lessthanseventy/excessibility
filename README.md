@@ -123,6 +123,12 @@ end
 
 The same checks are available on snapshots via
 `mix excessibility --viewports 1440x900,320x800 --check-clipping`.
+Add `--screenshots` to also save a full-page PNG per snapshot per width
+(`landing.320x800.png`) — the evidence a reflow claim needs. It is off by
+default because it drives a browser screenshot for every snapshot at every
+width. Screenshots taken during a test run (`html_snapshot(view,
+screenshot?: true)`) honour the same `:viewports` list, so a suite can emit
+its narrow-width images without a separate pass.
 Scan reports also carry a `:warnings` list — e.g. a linked stylesheet
 that failed to load, which would silently invalidate contrast findings.
 
@@ -740,7 +746,8 @@ All configuration goes in `test/test_helper.exs` or `config/test.exs`:
 | `:axe_runner_path` | No | auto-detected | Path to axe-runner.js script |
 | `:playwright_path` | No | bundled copy | Path to an existing Playwright installation to reuse (skips the second browser download) |
 | `:node_modules_path` | No | bundled copy | Path to a host `node_modules` directory providing `playwright` **and** `@axe-core/playwright` (skips the bundled `npm install` entirely; pins the axe version to the host's) |
-| `:viewports` | No | `[]` | `{width, height}` tuples for `mix excessibility` to scan each snapshot at |
+| `:viewports` | No | `[]` | `{width, height}` tuples to scan each snapshot at — used by `mix excessibility` and by `html_snapshot(source, screenshot?: true)`, which writes one PNG per width |
+| `:screenshots` | No | `false` | Make `mix excessibility` save a full-page PNG beside each snapshot (one per viewport). Equivalent to `--screenshots` |
 | `:check_clipping` | No | `false` | Flag interactive elements mostly outside the visible area, plus page-level horizontal overflow |
 | `:clipping_ratio` | No | `0.9` | Minimum visible-width ratio before an element counts as clipped |
 | `:head_render_path` | No | `"/"` | Route used for rendering `<head>` content |
@@ -804,6 +811,24 @@ html_snapshot(conn, screenshot?: true)
 
 Screenshots are saved alongside HTML files with `.png` extension. Playwright is installed automatically as part of the npm dependencies.
 
+To shoot the same snapshot at several widths — the only way to produce
+evidence for a WCAG 1.4.10 Reflow claim — pass `:viewports`, or set the
+`:viewports` config key once and let every `screenshot?: true` call inherit it:
+
+```elixir
+html_snapshot(conn, screenshot?: true, viewports: [{1440, 900}, {320, 800}])
+#=> MyApp_PageTest_42.1440x900.png
+#=> MyApp_PageTest_42.320x800.png
+```
+
+Each width gets its own suffixed PNG; the unsuffixed `.png` is written only
+when no viewports are configured (pass `viewports: []` at the call site to
+opt one snapshot back out of a suite-wide setting). The previous run's images
+are cleared before each capture, so a leftover narrow-width PNG can never sit
+beside fresh ones pretending to be current evidence. Note that the runner
+analyses each width in turn, so N viewports costs N axe runs per screenshot. To capture images for snapshots you already
+have, run `mix excessibility --screenshots --viewports 1440x900,320x800`.
+
 ## Mix Tasks
 
 | Task | Description |
@@ -811,6 +836,7 @@ Screenshots are saved alongside HTML files with `.png` extension. Playwright is 
 | `mix excessibility.install` | Configure config/test.exs, install Playwright and axe-core via npm |
 | `mix excessibility` | Run axe-core against all existing snapshots |
 | `mix excessibility [test args]` | Run tests, then axe-core on new snapshots (passthrough to mix test) |
+| `mix excessibility --screenshots` | Also save a full-page PNG beside each snapshot, one per `--viewports` width |
 | `mix excessibility.check [url]` | Run axe-core on a live URL via Playwright |
 | `mix excessibility.snapshots` | List and manage HTML snapshots |
 | `mix excessibility.baseline` | Lock current snapshots as baseline |
