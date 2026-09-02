@@ -310,7 +310,7 @@ Position this as **supplemental** input for debugging and code-aware review. It 
     "enrichers_run": ["assign_sizes", "collection_size", "ecto_queries", "state"],
     "plan_capture": "disabled",     // disabled | explain | explain_analyze
     "timing": "non_comparable",     // single run is never treated as a base/head
-    "capture_version": "0.19.0",
+    "capture_version": "0.20.0",
     "warnings": []
   },
   "coverage": {
@@ -513,7 +513,7 @@ Add to `mix.exs`:
 ```elixir
 def deps do
   [
-    {:excessibility, "~> 0.19", only: [:dev, :test]}
+    {:excessibility, "~> 0.20", only: [:dev, :test]}
   ]
 end
 ```
@@ -674,7 +674,7 @@ mix excessibility.review --format json
 
 ```json
 {
-  "excessibility_version": "0.19.0",
+  "excessibility_version": "0.20.0",
   "summary": { "block": 1, "review": 0, "auto": 55 },
   "warnings": [],
   "behavioral": [],
