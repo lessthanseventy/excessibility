@@ -13,7 +13,7 @@ defmodule Excessibility.SQLFingerprint do
   @doc """
   Normalize SQL to a stable, value-free string. The generic folds here are
   dialect-agnostic; any dialect-specific normalization is applied last via
-  `Excessibility.Dialect.normalize_extras/1` (no-op for Postgres today).
+  `c:Excessibility.Dialect.normalize_extras/1` (no-op for Postgres today).
 
   The literal-aware `scan/3` runs first, on the **original-case** SQL: Postgres
   dollar-quote tags (`$TAG$`) and E-string escapes are case-sensitive, so
