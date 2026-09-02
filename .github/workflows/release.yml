@@ -18,11 +18,25 @@ name: Release
 #     exact release SHA makes a rerun resume (it (re)creates the missing GitHub
 #     release); a tag targeting any other SHA aborts.
 #
-# Hex publication stays a separate deliberate step (`mix hex.publish`), or wire
-# it in below behind a HEX_API_KEY secret once you want it automated.
+# Hex publication runs at the end of this job, behind the HEX_API_KEY secret and
+# the `publish_hex` input. It is deliberately LAST: everything above it is a
+# guard or is reversible, and a Hex release is effectively permanent (a public
+# version can only be replaced within one hour of first publication).
+#
+# One-time setup:
+#   1. hex.pm -> Dashboard -> Keys -> generate a key with `api:write`.
+#   2. Repo -> Settings -> Secrets and variables -> Actions -> new repository
+#      secret named HEX_API_KEY.
+# Hex has no OIDC/trusted-publishing support, so a stored key is the only
+# mechanism available. Rotate it from the same hex.pm page if it ever leaks.
 
 on:
   workflow_dispatch:
+    inputs:
+      publish_hex:
+        description: "Publish the package and docs to Hex.pm after tagging"
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -102,6 +116,57 @@ jobs:
             echo "✓ $wf succeeded for $sha ($count run(s))."
           done
 
+      # Everything Hex-related that can fail is checked BEFORE a tag exists, so a
+      # bad key or an unbuildable package never leaves a half-done release.
+      - name: Set up Elixir
+        if: inputs.publish_hex
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: '1.19'
+          otp-version: '27'
+          install-rebar: true
+          install-hex: true
+
+      - name: Preflight the Hex publish
+        id: hex
+        if: inputs.publish_hex
+        env:
+          HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          PACKAGE="$(grep -m1 'app: :' mix.exs | sed 's/.*app: :\([a-z0-9_]*\).*/\1/')"
+          echo "package=$PACKAGE" >> "$GITHUB_OUTPUT"
+
+          if [ -z "$HEX_API_KEY" ]; then
+            echo "::error::HEX_API_KEY secret is not set. Generate a key with the api:write permission at https://hex.pm/dashboard/keys and add it as a repository secret, or re-dispatch with publish_hex disabled to tag only."
+            exit 1
+          fi
+          echo "✓ HEX_API_KEY is present."
+
+          # Already on Hex is NOT an error: it is the resumable case (a version
+          # published by hand, or a rerun after the publish step failed). Record
+          # it and skip the publish rather than aborting the tag/release.
+          status="$(curl -sS -o /dev/null -w '%{http_code}' "https://hex.pm/api/packages/$PACKAGE/releases/$VERSION")"
+          if [ "$status" = "200" ]; then
+            echo "already_published=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::$PACKAGE $VERSION is already on Hex — the publish step will be skipped, but tagging continues."
+          elif [ "$status" = "404" ]; then
+            echo "already_published=false" >> "$GITHUB_OUTPUT"
+            echo "✓ $PACKAGE $VERSION is not yet on Hex."
+          else
+            echo "::error::Unexpected HTTP $status from hex.pm while checking whether $PACKAGE $VERSION is published. Refusing to guess."
+            exit 1
+          fi
+
+      - name: Verify the package builds
+        if: inputs.publish_hex && steps.hex.outputs.already_published == 'false'
+        run: |
+          mix deps.get
+          # --dry-run runs the same local checks as a real publish (package
+          # surface, metadata, docs build) and uploads nothing.
+          mix hex.publish --dry-run --yes
+          echo "✓ Package and docs build; local publish checks pass."
+
       - name: Resolve tag state (immutable; reruns resume)
         id: tag
         run: |
@@ -145,3 +210,35 @@ jobs:
               --notes "See [CHANGELOG.md](https://github.com/lessthanseventy/excessibility/blob/v$VERSION/CHANGELOG.md) for details."
             echo "✓ Created GitHub release v$VERSION"
           fi
+
+      - name: Publish to Hex.pm
+        if: inputs.publish_hex
+        env:
+          HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if [ "${{ steps.hex.outputs.already_published }}" = "true" ]; then
+            echo "✓ ${{ steps.hex.outputs.package }} $VERSION is already on Hex — nothing to publish."
+            exit 0
+          fi
+          mix hex.publish --yes
+          echo "✓ Published ${{ steps.hex.outputs.package }} $VERSION and its docs to Hex."
+
+      - name: Summary
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          {
+            echo "### Released v$VERSION"
+            echo ""
+            echo "- Tag: \`v$VERSION\` -> \`$GITHUB_SHA\`"
+            echo "- GitHub release: https://github.com/${{ github.repository }}/releases/tag/v$VERSION"
+            if [ "${{ inputs.publish_hex }}" = "true" ]; then
+              if [ "${{ steps.hex.outputs.already_published }}" = "true" ]; then
+                echo "- Hex: already published, skipped"
+              else
+                echo "- Hex: https://hex.pm/packages/${{ steps.hex.outputs.package }}/$VERSION"
+              fi
+            else
+              echo "- Hex: skipped (publish_hex disabled) — run \`mix hex.publish\` locally when ready"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
