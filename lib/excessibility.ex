@@ -35,6 +35,9 @@ defmodule Excessibility do
   - `:prompt_on_diff` - Interactive diff resolution (default: `true`)
   - `:tag_on_diff` - Save `.good.html` and `.bad.html` on diff (default: `true`)
   - `:screenshot?` - Generate PNG screenshots (default: `false`)
+  - `:viewports` - `{width, height}` tuples to shoot the screenshot at, one
+    PNG each (`name.320x800.png`). Falls back to the `:viewports` config key;
+    default is a single 1280x720 shot
   - `:open_browser?` - Open snapshot in browser (default: `false`)
   - `:cleanup?` - Delete existing module snapshots first (default: `false`)
 

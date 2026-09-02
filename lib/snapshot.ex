@@ -50,6 +50,9 @@ defmodule Excessibility.Snapshot do
   - `:name` - Custom filename (default: `ModuleName_LineNumber.html`)
 
   - `:screenshot?` - Generate PNG screenshot via Playwright (default: `false`)
+  - `:viewports` - List of `{width, height}` tuples to shoot the screenshot at,
+    producing one suffixed PNG per width (`name.320x800.png`). Falls back to
+    `config :excessibility, :viewports`; default is a single 1280x720 shot
   - `:open_browser?` - Open snapshot in browser after writing (default: `false`)
   - `:cleanup?` - Delete existing snapshots for this module first (default: `false`)
 
@@ -172,18 +175,78 @@ defmodule Excessibility.Snapshot do
     Logger.info("Snapshot written to #{path}")
 
     if Keyword.get(opts, :screenshot?, false) do
-      screenshot_path = String.replace(path, ".html", ".png")
+      screenshot_path = String.replace_suffix(path, ".html", ".png")
       file_url = "file://" <> Path.expand(path)
 
       scanner_mod = Application.get_env(:excessibility, :scanner_mod, Excessibility.Scanner)
+      viewports = screenshot_viewports(opts)
 
-      case scanner_mod.scan(file_url, screenshot: screenshot_path) do
-        {:ok, _} -> Logger.info("Wrote screenshot: #{screenshot_path}")
+      scan_opts =
+        if viewports == [], do: [screenshot: screenshot_path], else: [screenshot: screenshot_path, viewports: viewports]
+
+      purge_screenshots(screenshot_path)
+
+      case scanner_mod.scan(file_url, scan_opts) do
+        {:ok, _} -> log_written(screenshot_paths(screenshot_path, viewports), path)
         {:error, reason} -> Logger.error("Screenshot failed: #{inspect(reason)}")
       end
     end
 
     path
+  end
+
+  # Widths to shoot the screenshot at: the `:viewports` option when given,
+  # else the `:viewports` config key (the same key `mix excessibility` reads).
+  # An empty result keeps the single default-viewport screenshot.
+  defp screenshot_viewports(opts) do
+    case Keyword.get(opts, :viewports) || Application.get_env(:excessibility, :viewports) do
+      [_ | _] = viewports -> Enum.filter(viewports, &valid_viewport?/1)
+      _ -> []
+    end
+  end
+
+  defp valid_viewport?({w, h}) when is_integer(w) and is_integer(h) and w > 0 and h > 0, do: true
+  defp valid_viewport?(_), do: false
+
+  # The runner swallows a screenshot failure by design (it is non-fatal, and
+  # under `:viewports` each width is caught independently), so `{:ok, _}` does
+  # not mean every PNG landed. Only claim the files that are actually there.
+  defp log_written(expected_paths, snapshot_path) do
+    case Enum.filter(expected_paths, &File.exists?/1) do
+      [] -> Logger.error("Screenshot reported success but wrote no PNG for #{Path.basename(snapshot_path)}")
+      written -> Logger.info("Wrote screenshot: #{Enum.join(written, ", ")}")
+    end
+  end
+
+  # A PNG name encodes its viewport, so changing the configured width set would
+  # otherwise strand the previous run's images beside the current ones — and a
+  # stale 320px screenshot *is* a reflow claim, indistinguishable from fresh
+  # evidence. Clear this snapshot's whole PNG set before the scan rewrites it.
+  defp purge_screenshots(screenshot_path) do
+    base = String.replace(screenshot_path, ~r/\.png$/i, "")
+
+    [screenshot_path | Path.wildcard(base <> ".*x*.png")]
+    |> Enum.uniq()
+    |> Enum.each(&File.rm/1)
+  end
+
+  # The runner suffixes each viewport's PNG (`name.320x800.png`), so the log
+  # has to name the files that were actually written.
+  defp screenshot_paths(base_path, []), do: [base_path]
+
+  defp screenshot_paths(base_path, viewports) do
+    Enum.map(viewports, fn {w, h} -> viewport_screenshot_path(base_path, "#{w}x#{h}") end)
+  end
+
+  # Mirrors `viewportScreenshotPath/2` in assets/axe-runner.js: the `.png`
+  # match is case-insensitive, and a base that does not end in `.png` gets the
+  # suffix appended rather than substituted.
+  defp viewport_screenshot_path(base_path, suffix) do
+    if base_path =~ ~r/\.png$/i do
+      String.replace(base_path, ~r/\.png$/i, ".#{suffix}.png")
+    else
+      "#{base_path}.#{suffix}.png"
+    end
   end
 
   defp maybe_open_browser(path, opts) do
@@ -196,9 +259,10 @@ defmodule Excessibility.Snapshot do
   defp cleanup_snapshots(module) do
     prefix = module |> to_string() |> String.replace(".", "_")
 
-    @snapshots_path
-    |> Path.join("#{prefix}_*.html")
-    |> Path.wildcard()
+    # Screenshots are named after their snapshot, so they go stale the moment
+    # the snapshot they document is deleted.
+    ["#{prefix}_*.html", "#{prefix}_*.png"]
+    |> Enum.flat_map(&Path.wildcard(Path.join(@snapshots_path, &1)))
     |> Enum.each(&File.rm/1)
 
     Logger.info("Old snapshots for #{module} cleaned up")

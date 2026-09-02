@@ -32,12 +32,19 @@ defmodule Mix.Tasks.Excessibility do
       # visible area, and page-level horizontal overflow
       mix excessibility --viewports 1440x900,320x800 --check-clipping
 
+      # Also save a full-page PNG next to each snapshot (one per viewport
+      # when --viewports is given). Off by default: it drives a browser
+      # screenshot per snapshot per width
+      mix excessibility --screenshots --viewports 1440x900,320x800
+
   ## Configuration
 
   - `:axe_disable_rules` - List of axe rule IDs to disable (default: `[]`)
   - `:viewports` - List of `{width, height}` tuples to scan each snapshot
     at (default: single 1280x720 scan). Equivalent to the `--viewports`
     flag; the flag wins when both are given.
+  - `:screenshots` - Save a full-page PNG beside each snapshot, one per
+    viewport (default: `false`). Equivalent to the `--screenshots` flag.
   - `:check_clipping` - Flag interactive elements whose visible width falls
     below `:clipping_ratio`, plus page-level horizontal overflow (default:
     `false`). Equivalent to the `--check-clipping` flag.
@@ -60,8 +67,9 @@ defmodule Mix.Tasks.Excessibility do
   @impl Mix.Task
   def run(args) do
     {viewports, args} = extract_viewports(args)
-    {check_clipping?, test_args} = extract_check_clipping(args)
-    scan_config = %{viewports: viewports, check_clipping?: check_clipping?}
+    {check_clipping?, args} = extract_check_clipping(args)
+    {screenshots?, test_args} = extract_screenshots(args)
+    scan_config = %{viewports: viewports, check_clipping?: check_clipping?, screenshots?: screenshots?}
 
     if test_args == [] do
       # No test args - check all existing snapshots
@@ -77,9 +85,31 @@ defmodule Mix.Tasks.Excessibility do
   defp extract_viewports(args) do
     case Enum.split_while(args, &(&1 != "--viewports" and not String.starts_with?(&1, "--viewports="))) do
       {_all, []} -> {config_viewports(), args}
-      {leading, ["--viewports", spec | rest]} -> {parse_viewport_specs(spec), leading ++ rest}
-      {leading, ["--viewports=" <> spec | rest]} -> {parse_viewport_specs(spec), leading ++ rest}
+      {leading, ["--viewports", spec | rest]} -> take_viewport_spec(spec, leading, rest)
+      {leading, ["--viewports=" <> spec | rest]} -> {require_viewport_spec(spec), leading ++ rest}
       {leading, ["--viewports"]} -> {config_viewports(), leading}
+    end
+  end
+
+  # Consume the following token ONLY when it actually parses as a viewport
+  # spec. Consuming it unconditionally silently swallowed the next argument, so
+  # `--viewports --screenshots` turned screenshots off and `--viewports
+  # test/foo_test.exs` ate the test path and scanned every snapshot instead —
+  # both with no error.
+  defp take_viewport_spec(spec, leading, rest) do
+    case parse_viewport_specs(spec) do
+      [] -> {config_viewports(), leading ++ [spec | rest]}
+      viewports -> {viewports, leading ++ rest}
+    end
+  end
+
+  # The attached form is unambiguous: a value that parses to nothing is a typo,
+  # never the next argument, so say so rather than silently scanning at a
+  # single width.
+  defp require_viewport_spec(spec) do
+    case parse_viewport_specs(spec) do
+      [] -> Mix.raise("Invalid --viewports: #{spec} (expected WxH[,WxH...], e.g. 1440x900,320x800)")
+      viewports -> viewports
     end
   end
 
@@ -95,6 +125,16 @@ defmodule Mix.Tasks.Excessibility do
       {true, List.delete(args, "--check-clipping")}
     else
       {Application.get_env(:excessibility, :check_clipping, false) == true, args}
+    end
+  end
+
+  # --screenshots is our flag, not mix test's; strip it before passing the
+  # remaining args through. Falls back to the :screenshots config key.
+  defp extract_screenshots(args) do
+    if "--screenshots" in args do
+      {true, List.delete(args, "--screenshots")}
+    else
+      {Application.get_env(:excessibility, :screenshots, false) == true, args}
     end
   end
 
@@ -186,7 +226,12 @@ defmodule Mix.Tasks.Excessibility do
     |> Enum.sort()
   end
 
-  defp run_axe(files, %{viewports: viewports, check_clipping?: check_clipping?}) do
+  # Screenshots are opt-in: a few hundred snapshots x N viewports through a
+  # browser costs minutes, so `mix excessibility` stays image-free by default.
+  defp screenshot_opts(_file, false), do: []
+  defp screenshot_opts(file, true), do: [screenshot: String.replace_suffix(file, ".html", ".png")]
+
+  defp run_axe(files, %{viewports: viewports, check_clipping?: check_clipping?, screenshots?: screenshots?}) do
     disable_rules = Application.get_env(:excessibility, :axe_disable_rules, [])
     scan_opts = if disable_rules == [], do: [], else: [disable_rules: disable_rules]
     scan_opts = if viewports == [], do: scan_opts, else: [{:viewports, viewports} | scan_opts]
@@ -200,7 +245,7 @@ defmodule Mix.Tasks.Excessibility do
     results =
       Enum.map(files, fn file ->
         file_url = "file://" <> Path.expand(file)
-        axe_result = Excessibility.Scanner.scan(file_url, scan_opts)
+        axe_result = Excessibility.Scanner.scan(file_url, screenshot_opts(file, screenshots?) ++ scan_opts)
 
         lv_findings =
           if lv_rules_enabled? do

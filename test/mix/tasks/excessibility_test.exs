@@ -247,6 +247,32 @@ defmodule Mix.Tasks.ExcessibilityTest do
     end
   end
 
+  describe "own-flag argument stripping (#196)" do
+    setup do
+      on_exit(fn -> Application.delete_env(:excessibility, :viewports) end)
+      :ok
+    end
+
+    test "a bare --viewports does not swallow the --check-clipping that follows it" do
+      setup_clipping_mock(clipped?: false)
+      Application.put_env(:excessibility, :viewports, [{1440, 900}, {320, 800}])
+      File.write!(Path.join(@snapshot_dir, "landing.html"), "<html></html>")
+
+      # The clipping mock exits 1 unless it receives --check-clipping.
+      output = capture_io(fn -> Excessibility.run(["--viewports", "--check-clipping"]) end)
+
+      assert output =~ "passed accessibility checks"
+    end
+
+    test "an unparseable --viewports= value is reported rather than silently ignored" do
+      File.write!(Path.join(@snapshot_dir, "landing.html"), "<html></html>")
+
+      assert_raise Mix.Error, ~r/Invalid --viewports: 1440X900/, fn ->
+        Excessibility.run(["--viewports=1440X900"])
+      end
+    end
+  end
+
   describe "clipping detection (#122 follow-up)" do
     setup do
       on_exit(fn -> Application.delete_env(:excessibility, :check_clipping) end)
@@ -296,7 +322,120 @@ defmodule Mix.Tasks.ExcessibilityTest do
     end
   end
 
+  describe "screenshots (#196)" do
+    setup do
+      on_exit(fn -> Application.delete_env(:excessibility, :screenshots) end)
+      :ok
+    end
+
+    test "--screenshots writes a PNG next to each snapshot" do
+      setup_screenshot_mock()
+      File.write!(Path.join(@snapshot_dir, "landing.html"), "<html></html>")
+
+      capture_io(fn -> Excessibility.run(["--screenshots"]) end)
+
+      assert File.exists?(Path.join(@snapshot_dir, "landing.png"))
+    end
+
+    test ":screenshots config is honored without a CLI flag" do
+      setup_screenshot_mock()
+      Application.put_env(:excessibility, :screenshots, true)
+      File.write!(Path.join(@snapshot_dir, "landing.html"), "<html></html>")
+
+      capture_io(fn -> Excessibility.run([]) end)
+
+      assert File.exists?(Path.join(@snapshot_dir, "landing.png"))
+    end
+
+    test "--screenshots is off by default" do
+      setup_no_screenshot_mock()
+      File.write!(Path.join(@snapshot_dir, "landing.html"), "<html></html>")
+
+      output = capture_io(fn -> Excessibility.run([]) end)
+
+      assert output =~ "passed accessibility checks"
+      refute File.exists?(Path.join(@snapshot_dir, "landing.png"))
+    end
+
+    test "a bare --viewports does not swallow the --screenshots that follows it" do
+      setup_screenshot_mock()
+      File.write!(Path.join(@snapshot_dir, "landing.html"), "<html></html>")
+
+      # The mock exits 1 unless it receives --screenshot, so a swallowed flag
+      # fails here rather than merely producing no image.
+      capture_io(fn -> Excessibility.run(["--viewports", "--screenshots"]) end)
+
+      assert File.exists?(Path.join(@snapshot_dir, "landing.png"))
+    end
+
+    test "--screenshots with --viewports writes one PNG per width" do
+      setup_screenshot_mock()
+      File.write!(Path.join(@snapshot_dir, "landing.html"), "<html></html>")
+
+      capture_io(fn -> Excessibility.run(["--screenshots", "--viewports", "1440x900,320x800"]) end)
+
+      assert File.exists?(Path.join(@snapshot_dir, "landing.1440x900.png"))
+      assert File.exists?(Path.join(@snapshot_dir, "landing.320x800.png"))
+      refute File.exists?(Path.join(@snapshot_dir, "landing.png"))
+    end
+  end
+
   # --- Mock Helpers ---
+
+  # Writes the PNG(s) the real runner would write, but only when it actually
+  # received --screenshot — otherwise errors, so these tests prove the flag is
+  # plumbed through. Mirrors the runner's per-viewport suffixing.
+  defp setup_screenshot_mock do
+    mock_path =
+      create_mock_script("""
+      #!/usr/bin/env node
+      const fs = require("fs");
+      const args = process.argv.slice(2);
+      const idx = args.indexOf("--screenshot");
+      if (idx === -1 || !args[idx + 1]) {
+        process.stdout.write(JSON.stringify({error: "playwright_error", message: "runner did not receive --screenshot"}));
+        process.exit(1);
+      }
+      const base = args[idx + 1];
+      const vIdx = args.indexOf("--viewports");
+      if (vIdx === -1) {
+        fs.writeFileSync(base, "png");
+        process.stdout.write(JSON.stringify({violations: [], passes: [], incomplete: []}));
+      } else {
+        const vps = args[vIdx + 1].split(",");
+        for (const vp of vps) fs.writeFileSync(base.replace(/\\.png$/, `.${vp}.png`), "png");
+        process.stdout.write(JSON.stringify({
+          results: vps.map((vp) => ({viewport: vp, violations: [], incomplete: [], passes_count: 1, inapplicable_count: 0}))
+        }));
+      }
+      process.exit(0);
+      """)
+
+    Application.put_env(:excessibility, :axe_runner_path, mock_path)
+
+    on_exit(fn -> File.rm_rf!(Path.dirname(mock_path)) end)
+    :ok
+  end
+
+  # Errors if --screenshot is passed, so the default-off case is proven rather
+  # than merely observed as a missing file.
+  defp setup_no_screenshot_mock do
+    mock_path =
+      create_mock_script("""
+      #!/usr/bin/env node
+      if (process.argv.slice(2).includes("--screenshot")) {
+        process.stdout.write(JSON.stringify({error: "playwright_error", message: "runner unexpectedly received --screenshot"}));
+        process.exit(1);
+      }
+      process.stdout.write(JSON.stringify({violations: [], passes: [], incomplete: []}));
+      process.exit(0);
+      """)
+
+    Application.put_env(:excessibility, :axe_runner_path, mock_path)
+
+    on_exit(fn -> File.rm_rf!(Path.dirname(mock_path)) end)
+    :ok
+  end
 
   # Emits per-viewport results with clipping data, but only when the
   # runner actually received --check-clipping.
