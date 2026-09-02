@@ -47,6 +47,45 @@ defmodule Excessibility.ReleaseWorkflowTest do
       assert @release_yml =~ ~r/not the release SHA/
     end
 
+    test "the Hex publish is the last thing the release does" do
+      # Everything above it is a guard or is reversible; a public Hex version
+      # can only be replaced within an hour of first publication.
+      publish = @release_yml |> :binary.match("mix hex.publish --yes") |> elem(0)
+      tag = @release_yml |> :binary.match("git push origin \"v$VERSION\"") |> elem(0)
+      release = @release_yml |> :binary.match("gh release create") |> elem(0)
+
+      assert publish > tag, "the Hex publish must run after the tag is pushed"
+      assert publish > release, "the Hex publish must run after the GitHub release is created"
+    end
+
+    test "everything that can fail about the Hex publish is checked before tagging" do
+      preflight = @release_yml |> :binary.match("Preflight the Hex publish") |> elem(0)
+      dry_run = @release_yml |> :binary.match("mix hex.publish --dry-run") |> elem(0)
+      tag = @release_yml |> :binary.match("Create and push tag") |> elem(0)
+
+      assert preflight < tag, "a missing HEX_API_KEY must fail before a tag exists"
+      assert dry_run < tag, "an unbuildable package must fail before a tag exists"
+    end
+
+    test "an already-published version resumes rather than aborting" do
+      # The v0.19.0 case: published to Hex by hand, never tagged. Re-running
+      # must still create the tag and release, and skip only the publish.
+      # The already-on-Hex branch must warn and carry on, never abort...
+      assert @release_yml =~ ~r/already_published=true"[^\n]*\n[^\n]*::notice::/,
+             "an already-published version must be a notice, not an error"
+
+      # ...and the publish step itself must then no-op cleanly.
+      assert @release_yml =~ ~r/already_published \}\}" = "true" \]; then\n[^\n]*\n\s*exit 0/,
+             "the publish step must exit 0 when the version is already on Hex"
+    end
+
+    test "the Hex API key is never inlined and comes only from the secret" do
+      assert @release_yml =~ "HEX_API_KEY: ${{ secrets.HEX_API_KEY }}"
+
+      refute @release_yml =~ ~r/HEX_API_KEY:\s*["']?[0-9a-zA-Z]{20,}/,
+             "the Hex API key must come from the repository secret, never a literal"
+    end
+
     test "never force-moves a tag" do
       for forbidden <- ["tag -f", "tag --force", "push -f", "push --force", "--force-with-lease"] do
         refute @release_yml =~ forbidden, "release.yml must never force-move a tag (found: #{forbidden})"
