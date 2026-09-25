@@ -24,7 +24,7 @@ defmodule Excessibility.MixProject do
       main: "readme",
       source_ref: "v#{@version}",
       source_url: @source_url,
-      extras: ["README.md", "LICENSE.md"],
+      extras: ["README.md", "docs/library-api.md", "docs/llm-debugging.md", "LICENSE.md"],
       groups_for_modules: [
         Core: [
           Excessibility,
