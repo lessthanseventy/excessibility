@@ -34,7 +34,7 @@ defmodule Excessibility.TelemetryCapture.Formatter do
   defp prepare_for_json(%{__struct__: _} = struct) do
     struct
     |> Map.from_struct()
-    |> Map.drop([:__meta__])
+    |> Map.delete(:__meta__)
     |> prepare_for_json()
   end
 

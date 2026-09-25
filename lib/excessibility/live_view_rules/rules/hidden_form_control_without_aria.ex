@@ -121,7 +121,7 @@ defmodule Excessibility.LiveViewRules.Rules.HiddenFormControlWithoutAria do
       message:
         "<#{tag} type=\"#{find_attr(attrs, "type")}\"> #{target} is visually hidden but its " <>
           "visual replacement does not expose checked state via aria-checked/aria-pressed " <>
-          "or role=\"checkbox\"/\"radio\". Screen-reader users won't know the control is toggled.",
+          ~s(or role="checkbox"/"radio". Screen-reader users won't know the control is toggled.),
       element: element |> Floki.raw_html() |> String.slice(0, 300),
       selector: build_selector(tag, attrs),
       help:

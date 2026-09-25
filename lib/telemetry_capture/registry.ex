@@ -31,8 +31,10 @@ defmodule Excessibility.TelemetryCapture.Registry do
       Registry.get_analyzer(:memory)
   """
 
+  alias Excessibility.TelemetryCapture.Analyzer
+
   @enricher_behaviour Excessibility.TelemetryCapture.Enricher
-  @analyzer_behaviour Excessibility.TelemetryCapture.Analyzer
+  @analyzer_behaviour Analyzer
 
   # Compile-time discovery helper functions
   file_to_module = fn path, subdir ->
@@ -136,8 +138,6 @@ defmodule Excessibility.TelemetryCapture.Registry do
   Returns deduplicated list of enricher names.
   """
   def resolve_enrichers(analyzer_names) do
-    alias Excessibility.TelemetryCapture.Analyzer
-
     analyzer_names
     |> Enum.map(&get_analyzer/1)
     |> Enum.reject(&is_nil/1)

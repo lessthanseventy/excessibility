@@ -94,7 +94,7 @@ defmodule Excessibility.TelemetryCapture.Enrichers.ChangesetTest do
       changes: changes,
       valid?: valid?,
       errors: errors,
-      action: if(valid?, do: nil, else: :insert)
+      action: if(!valid?, do: :insert)
     }
   end
 end

@@ -227,10 +227,10 @@ defmodule Excessibility.TelemetryCapture.FormatterTest do
 
       # Verify markdown is generated correctly
       assert result =~ "# Test Debug Report: test_from_json"
-      assert result =~ "| 2 | +200ms | handle_event:click | clicked: false→true, status: \"pending\"→\"done\" |"
+      assert result =~ ~s(| 2 | +200ms | handle_event:click | clicked: false→true, status: "pending"→"done" |)
       assert result =~ "### Event 2: handle_event:click (+200ms)"
       assert result =~ "- `clicked`: false → true"
-      assert result =~ "- `status`: \"pending\" → \"done\""
+      assert result =~ ~s(- `status`: "pending" → "done")
     end
   end
 

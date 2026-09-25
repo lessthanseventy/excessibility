@@ -73,7 +73,7 @@ defmodule Excessibility.MCP.Subprocess do
     ]
 
     opts = if cd, do: [{:cd, to_charlist(cd)} | opts], else: opts
-    opts = if env != [], do: [{:env, format_env(env)} | opts], else: opts
+    opts = if env == [], do: opts, else: [{:env, format_env(env)} | opts]
     opts = if stderr_to_stdout?, do: [:stderr_to_stdout | opts], else: opts
 
     {:spawn_executable, find_executable(cmd), opts}

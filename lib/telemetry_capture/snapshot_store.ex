@@ -42,7 +42,7 @@ defmodule Excessibility.TelemetryCapture.SnapshotStore do
     # Own the table by creating it here. `ensure_started/0` is the only creator,
     # so on first start the table does not yet exist; tolerate a pre-existing
     # table (e.g. from a reload) by reusing it rather than crashing.
-    unless :ets.whereis(@table) != :undefined do
+    if :ets.whereis(@table) == :undefined do
       :ets.new(@table, [:named_table, :public, :bag])
     end
 
