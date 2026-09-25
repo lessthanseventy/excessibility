@@ -8,7 +8,7 @@ Elixir modules live in `lib/`, grouped by capability (`excessibility/html`, `exc
 - `mix igniter.install excessibility` – apply the recommended `test/test_helper.exs` config and install Pa11y’s npm dependency inside `assets/`.
 - `mix test` – run the suite; `mix test test/source_test.exs` targets a file while iterating.
 - `mix excessibility` and `mix excessibility.approve` – run Pa11y against snapshots, then promote `.bad` diffs into `baseline/`.
-- `mix format && MIX_ENV=test mix credo --strict` – enforce Styler-backed formatting and linting before committing.
+- `mix format && MIX_ENV=test mix credo --strict` – enforce Quokka-backed formatting and linting before committing (Quokka takes its rules from `.credo.exs`; `mix format --dot-formatter .formatter.agent.exs FILE` formats one file without moving directives or lifting aliases).
 - `mix docs` – regenerate HexDocs prior to publishing.
 
 ## Coding Style & Naming Conventions

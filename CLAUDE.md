@@ -28,7 +28,7 @@ mix test.interactive
 # Run static analysis
 mix credo
 
-# Format code (using Styler)
+# Format code (using Quokka, configured by .credo.exs)
 mix format
 ```
 
@@ -483,7 +483,7 @@ end
 - **ChromicPDF**: Screenshot generation
 - **Mox**: Test mocking
 - **Igniter**: Installer infrastructure
-- **Credo & Styler**: Code quality tools
+- **Credo & Quokka**: Code quality tools
 
 ## Pa11y Integration
 
