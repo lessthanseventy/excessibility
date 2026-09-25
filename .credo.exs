@@ -82,8 +82,8 @@
           # You can customize the priority of any check
           # Priority values are: `low, normal, high, higher`
           #
-          {Credo.Check.Design.AliasUsage,
-           [priority: :low, if_nested_deeper_than: 2, if_called_more_often_than: 1]},
+          # Off: a Quokka-lifted alias captures a bare same-named module (emkguts/quokka#196).
+          {Credo.Check.Design.AliasUsage, false},
           {Credo.Check.Design.TagFIXME, []},
           {Credo.Check.Readability.LargeNumbers, []},
           {Credo.Check.Readability.SinglePipe, []},
