@@ -96,7 +96,7 @@ defmodule Excessibility.MixProject do
       {:mox, "~> 1.1", only: :test},
       {:phoenix, "~> 1.5"},
       {:phoenix_live_view, "~> 0.17 or ~> 1.0"},
-      {:styler, "~> 0.9", only: [:dev, :test], runtime: false},
+      {:quokka, "~> 2.13", only: [:dev, :test], runtime: false},
       # Wallaby is optional - add it to your project if you want Wallaby.Session support.
       # `runtime: false` keeps the modules compiled and on the code path (so the
       # `Wallaby.Session` struct and `Code.ensure_loaded?/1` in `Excessibility.Source`
