@@ -32,7 +32,13 @@ defmodule Excessibility.TelemetryCapture.Analyzers.ComponentRerenderTest do
       timeline = %{
         timeline: [
           %{sequence: 1, event: "mount", component_count: 4, component_ids: [1, 2, 3, 4], changes: %{items: [1]}},
-          %{sequence: 2, event: "render", component_count: 4, component_ids: [1, 2, 3, 4], changes: %{page_title: "new"}},
+          %{
+            sequence: 2,
+            event: "render",
+            component_count: 4,
+            component_ids: [1, 2, 3, 4],
+            changes: %{page_title: "new"}
+          },
           %{sequence: 3, event: "render", component_count: 4, component_ids: [1, 2, 3, 4], changes: %{}},
           %{sequence: 4, event: "render", component_count: 4, component_ids: [1, 2, 3, 4], changes: %{}},
           %{

@@ -261,7 +261,9 @@ defmodule Mix.Tasks.Excessibility do
 
     print_scan_warnings(results)
 
-    if failed != [] do
+    if failed == [] do
+      Mix.shell().info("All #{length(passed)} snapshot(s) passed accessibility checks")
+    else
       Mix.shell().info("### Issues Found\n")
 
       Enum.each(failed, fn {file, axe_result, lv_result} ->
@@ -272,8 +274,6 @@ defmodule Mix.Tasks.Excessibility do
 
       Mix.shell().info("\n#{length(failed)} file(s) with issues, #{length(passed)} passed")
       exit({:shutdown, 1})
-    else
-      Mix.shell().info("All #{length(passed)} snapshot(s) passed accessibility checks")
     end
   end
 
@@ -334,7 +334,7 @@ defmodule Mix.Tasks.Excessibility do
   defp print_axe({:error, reason}), do: Mix.shell().info("  Error: #{format_error(reason)}\n")
 
   defp print_viewport_result(%{viewport: viewport, violations: violations} = result) do
-    unless result_clean?(result) do
+    if !result_clean?(result) do
       Mix.shell().info("  @#{format_viewport(viewport)}:")
       if violations != [], do: format_violations(violations)
       print_clipping(Map.get(result, :clipping))

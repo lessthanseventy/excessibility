@@ -2,6 +2,7 @@ defmodule Excessibility.TelemetryCapture.Enrichers.ComponentTreeTest do
   use ExUnit.Case, async: true
 
   alias Excessibility.TelemetryCapture.Enrichers.ComponentTree
+  alias Phoenix.LiveComponent.CID
 
   describe "name/0" do
     test "returns :component_tree" do
@@ -24,7 +25,7 @@ defmodule Excessibility.TelemetryCapture.Enrichers.ComponentTreeTest do
 
     test "detects CID in assigns (myself pattern)" do
       # Phoenix.LiveComponent.CID is the struct type for component IDs
-      cid = %Phoenix.LiveComponent.CID{cid: 1}
+      cid = %CID{cid: 1}
       assigns = %{myself: cid, items: []}
       result = ComponentTree.enrich(assigns, [])
 
@@ -34,8 +35,8 @@ defmodule Excessibility.TelemetryCapture.Enrichers.ComponentTreeTest do
     end
 
     test "detects multiple CIDs" do
-      cid1 = %Phoenix.LiveComponent.CID{cid: 1}
-      cid2 = %Phoenix.LiveComponent.CID{cid: 2}
+      cid1 = %CID{cid: 1}
+      cid2 = %CID{cid: 2}
       assigns = %{component_a: cid1, component_b: cid2}
       result = ComponentTree.enrich(assigns, [])
 
@@ -45,7 +46,7 @@ defmodule Excessibility.TelemetryCapture.Enrichers.ComponentTreeTest do
     end
 
     test "finds CIDs nested in maps" do
-      cid = %Phoenix.LiveComponent.CID{cid: 42}
+      cid = %CID{cid: 42}
 
       assigns = %{
         user: %{
@@ -64,9 +65,9 @@ defmodule Excessibility.TelemetryCapture.Enrichers.ComponentTreeTest do
 
     test "finds CIDs in lists" do
       cids = [
-        %Phoenix.LiveComponent.CID{cid: 1},
-        %Phoenix.LiveComponent.CID{cid: 2},
-        %Phoenix.LiveComponent.CID{cid: 3}
+        %CID{cid: 1},
+        %CID{cid: 2},
+        %CID{cid: 3}
       ]
 
       assigns = %{components: cids}
@@ -77,7 +78,7 @@ defmodule Excessibility.TelemetryCapture.Enrichers.ComponentTreeTest do
     end
 
     test "calculates component depth" do
-      cid = %Phoenix.LiveComponent.CID{cid: 1}
+      cid = %CID{cid: 1}
 
       assigns = %{
         level1: %{
@@ -93,7 +94,7 @@ defmodule Excessibility.TelemetryCapture.Enrichers.ComponentTreeTest do
     end
 
     test "handles deeply nested structures" do
-      cid = %Phoenix.LiveComponent.CID{cid: 99}
+      cid = %CID{cid: 99}
 
       assigns = %{
         a: %{

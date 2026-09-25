@@ -201,7 +201,7 @@ defmodule Excessibility.Digest do
       # Struct detection is not available from sizes alone, so we only
       # distinguish list (via list_sizes) from everything else, defaulting to
       # "scalar" when we cannot tell.
-      kind: if(cardinality != nil, do: "list", else: "scalar"),
+      kind: if(cardinality == nil, do: "scalar", else: "list"),
       cardinality: cardinality,
       term_bytes: bytes,
       # No enricher emits a bounded per-assign nesting depth today (the `state`

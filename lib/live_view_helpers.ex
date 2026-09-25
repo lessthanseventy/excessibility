@@ -4,6 +4,8 @@ defmodule Excessibility.LiveViewHelpers do
   capture snapshots when `@tag capture_snapshots: true` is used.
   """
 
+  alias Phoenix.LiveViewTest.View
+
   @doc """
   Wraps Phoenix.LiveViewTest.live/2 to capture initial render.
   """
@@ -121,9 +123,8 @@ defmodule Excessibility.LiveViewHelpers do
   end
 
   # Helper function to extract view from element or return as-is if already a view (runtime)
-  def extract_view_runtime(%Phoenix.LiveViewTest.Element{proxy: {ref, topic, _}}),
-    do: %Phoenix.LiveViewTest.View{proxy: {ref, topic, nil}}
+  def extract_view_runtime(%Phoenix.LiveViewTest.Element{proxy: {ref, topic, _}}), do: %View{proxy: {ref, topic, nil}}
 
-  def extract_view_runtime(%Phoenix.LiveViewTest.View{} = view), do: view
+  def extract_view_runtime(%View{} = view), do: view
   def extract_view_runtime(_), do: nil
 end

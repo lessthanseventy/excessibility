@@ -24,7 +24,7 @@ defmodule Excessibility.HTMLTest do
   end
 
   test "prefixes static paths for href/src" do
-    content = "<img src=\"/images/foo.png\"><link href=\"/styles.css\">"
+    content = ~s(<img src="/images/foo.png"><link href="/styles.css">)
     result = HTML.wrap(content)
 
     assert result =~ "file://"

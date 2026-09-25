@@ -1,6 +1,7 @@
 defmodule Excessibility.TelemetryCapture.RegistryTest do
   use ExUnit.Case, async: false
 
+  alias Excessibility.TelemetryCapture.Enrichers.AssignSizes
   alias Excessibility.TelemetryCapture.Registry
 
   # Clean up custom config after each test
@@ -21,7 +22,7 @@ defmodule Excessibility.TelemetryCapture.RegistryTest do
 
     test "includes built-in enrichers" do
       enrichers = Registry.discover_enrichers()
-      assert Excessibility.TelemetryCapture.Enrichers.AssignSizes in enrichers
+      assert AssignSizes in enrichers
     end
 
     test "includes custom enrichers from config" do
@@ -141,7 +142,7 @@ defmodule Excessibility.TelemetryCapture.RegistryTest do
     end
 
     test "finds built-in enricher by name" do
-      assert Registry.get_enricher(:assign_sizes) == Excessibility.TelemetryCapture.Enrichers.AssignSizes
+      assert Registry.get_enricher(:assign_sizes) == AssignSizes
     end
 
     test "finds custom enricher by name" do

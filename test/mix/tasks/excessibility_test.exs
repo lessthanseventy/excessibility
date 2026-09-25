@@ -285,7 +285,8 @@ defmodule Mix.Tasks.ExcessibilityTest do
 
       output =
         capture_io(fn ->
-          assert catch_exit(Excessibility.run(["--viewports", "1440x900,320x800", "--check-clipping"])) == {:shutdown, 1}
+          assert catch_exit(Excessibility.run(["--viewports", "1440x900,320x800", "--check-clipping"])) ==
+                   {:shutdown, 1}
         end)
 
       assert output =~ "### Issues Found"

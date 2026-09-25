@@ -1,6 +1,8 @@
 defmodule Excessibility.LiveViewBehaviourTest do
   use ExUnit.Case, async: true
 
+  alias Phoenix.LiveViewTest.View
+
   defmodule ProxyServer do
     @moduledoc false
     use GenServer
@@ -21,7 +23,7 @@ defmodule Excessibility.LiveViewBehaviourTest do
   test "render_tree/1 renders from a LiveViewTest.View" do
     {:ok, proxy} = ProxyServer.start_link("<html><div>View</div></html>")
 
-    view = %Phoenix.LiveViewTest.View{
+    view = %View{
       proxy: {nil, "topic", proxy},
       target: "target"
     }
@@ -56,7 +58,7 @@ defmodule Excessibility.LiveViewBehaviourTest do
       {:ok, channel} = FakeChannel.start_link(%{socket: %{assigns: %{current_user: "andrew"}}})
       {:ok, proxy} = ProxyServer.start_link("<html></html>")
 
-      view = %Phoenix.LiveViewTest.View{
+      view = %View{
         pid: channel,
         proxy: {nil, "topic", proxy},
         target: "target"
@@ -70,7 +72,7 @@ defmodule Excessibility.LiveViewBehaviourTest do
       {:ok, channel} = FakeChannel.start_link(:opaque_state)
       {:ok, proxy} = ProxyServer.start_link("<html></html>")
 
-      view = %Phoenix.LiveViewTest.View{
+      view = %View{
         pid: channel,
         proxy: {nil, "topic", proxy},
         target: "target"
@@ -85,7 +87,7 @@ defmodule Excessibility.LiveViewBehaviourTest do
       {:ok, proxy} = ProxyServer.start_link("<html></html>")
       GenServer.stop(channel)
 
-      view = %Phoenix.LiveViewTest.View{
+      view = %View{
         pid: channel,
         proxy: {nil, "topic", proxy},
         target: "target"

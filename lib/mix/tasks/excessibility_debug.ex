@@ -468,10 +468,10 @@ defmodule Mix.Tasks.Excessibility.Debug do
         analysis_markdown = Formatter.format_analysis_results(analysis_results, opts)
 
         combined =
-          if analysis_markdown != "" do
-            base_markdown <> "\n\n---\n\n# Analysis Results\n\n" <> analysis_markdown
-          else
+          if analysis_markdown == "" do
             base_markdown
+          else
+            base_markdown <> "\n\n---\n\n# Analysis Results\n\n" <> analysis_markdown
           end
 
         {combined, analysis_results}

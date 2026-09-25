@@ -144,13 +144,13 @@ defmodule Excessibility.TelemetryCapture do
   # simply carry `plan: nil`. When plan capture is disabled we add no `:plan` key
   # at all, keeping the default record shape unchanged.
   defp maybe_attach_plan(record, metadata, mode) do
-    if mode != :disabled do
+    if mode == :disabled do
+      record
+    else
       plan =
         if Excessibility.QueryEvidence.select?(record), do: capture_plan(record, metadata, mode)
 
       Map.put(record, :plan, plan)
-    else
-      record
     end
   end
 

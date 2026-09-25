@@ -1,6 +1,7 @@
 defmodule Excessibility.TelemetryCapture.IntegrationTest do
   use ExUnit.Case
 
+  alias Excessibility.TelemetryCapture.Analyzer
   alias Excessibility.TelemetryCapture.Registry
 
   describe "enricher discovery" do
@@ -147,8 +148,6 @@ defmodule Excessibility.TelemetryCapture.IntegrationTest do
 
   describe "analyzer dependencies" do
     test "analyzers can declare dependencies" do
-      alias Excessibility.TelemetryCapture.Analyzer
-
       for analyzer <- Registry.discover_analyzers() do
         deps = Analyzer.get_dependencies(analyzer)
         assert is_list(deps), "#{analyzer.name()} dependencies should be a list"
@@ -156,8 +155,6 @@ defmodule Excessibility.TelemetryCapture.IntegrationTest do
     end
 
     test "sort_by_dependencies preserves all analyzers" do
-      alias Excessibility.TelemetryCapture.Analyzer
-
       analyzers = Registry.discover_analyzers()
       sorted = Analyzer.sort_by_dependencies(analyzers)
 

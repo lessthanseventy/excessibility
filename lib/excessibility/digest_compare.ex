@@ -146,10 +146,10 @@ defmodule Excessibility.DigestCompare do
   end
 
   defp shared_keys(base_agg, head_agg) do
-    MapSet.intersection(
-      base_agg |> Map.keys() |> MapSet.new(),
-      head_agg |> Map.keys() |> MapSet.new()
-    )
+    base_agg
+    |> Map.keys()
+    |> MapSet.new()
+    |> MapSet.intersection(head_agg |> Map.keys() |> MapSet.new())
   end
 
   defp query_diffs(base_agg, head_agg, shared) do

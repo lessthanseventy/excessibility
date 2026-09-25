@@ -34,8 +34,10 @@ defmodule Excessibility.MCP.Registry do
       Registry.get_resource_for_uri("snapshot://test.html")
   """
 
+  alias Excessibility.MCP.Resource
+
   @tool_behaviour Excessibility.MCP.Tool
-  @resource_behaviour Excessibility.MCP.Resource
+  @resource_behaviour Resource
   @prompt_behaviour Excessibility.MCP.Prompt
 
   # Discovery below runs when THIS module compiles, so Mix must be told to
@@ -154,8 +156,6 @@ defmodule Excessibility.MCP.Registry do
   Returns nil if no matching resource found.
   """
   def get_resource_for_uri(uri) do
-    alias Excessibility.MCP.Resource
-
     Enum.find(discover_resources(), fn resource ->
       Resource.matches_uri?(resource, uri)
     end)

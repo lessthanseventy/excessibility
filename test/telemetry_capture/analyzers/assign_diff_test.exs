@@ -53,7 +53,12 @@ defmodule Excessibility.TelemetryCapture.Analyzers.AssignDiffTest do
             assign_sizes: %{current_user: 6000, filter: 100},
             changes: %{current_user: %{}}
           },
-          %{sequence: 5, event: "render", assign_sizes: %{current_user: 6000, filter: 100}, changes: %{current_user: %{}}}
+          %{
+            sequence: 5,
+            event: "render",
+            assign_sizes: %{current_user: 6000, filter: 100},
+            changes: %{current_user: %{}}
+          }
         ]
       }
 
