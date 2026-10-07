@@ -25,6 +25,10 @@ Excessibility helps you test your Phoenix apps for accessibility (WCAG complianc
 5. **Review the blast radius** with `mix excessibility.review` to see which accessibility issues a change newly introduced (JSON output for CI via `--format json`)
 6. **In CI**, axe-core reports accessibility violations alongside your test failures
 
+> **Want to see it in action?** [`demo/`](demo/) is a runnable Phoenix app whose
+> pages deliberately trip common accessibility issues (all six LiveView-specific
+> rules) and performance issues (N+1 queries, memory growth, message floods).
+
 ## LiveView-Aware Rules
 
 axe-core can't catch accessibility issues that depend on Phoenix-specific
