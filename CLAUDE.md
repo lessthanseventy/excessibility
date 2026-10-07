@@ -488,3 +488,10 @@ end
 ## Pa11y Integration
 
 Pa11y is installed via npm in the `assets/` directory by the installer. The `mix excessibility` task runs Pa11y against generated snapshots. Default config ignores LiveView-specific false positives (e.g., forms without submit buttons that use `phx-submit`).
+
+## Git: linear history
+
+Rebase and fast-forward — never a merge commit. Bring a branch up to date by rebasing it onto the
+default branch, not by merging that in. A change bigger than one review is a stack of small PRs, each
+on the last (`gh stack` where the repo is on GitHub). Rewriting history that is already pushed or
+shared is the human's call — ask first.
