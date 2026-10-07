@@ -19,3 +19,10 @@ Tests use ExUnit plus Mox; set expectations in `test/test_helper.exs` and call `
 
 ## Commit & Pull Request Guidelines
 Write imperative commit subjects (`add snapshot pruning flag`, `document igniter flow`) and keep scope narrow so changelog entries stay meaningful. PRs should describe the why, mention Pa11y or snapshot updates, and link to any docs that need review. Confirm `mix test`, `mix excessibility`, and `mix format --check-formatted` locally before requesting review, and include terminal output or screenshots when touching the snapshot pipeline.
+
+## Git: linear history
+
+Rebase and fast-forward — never a merge commit. Bring a branch up to date by rebasing it onto the
+default branch, not by merging that in. A change bigger than one review is a stack of small PRs, each
+on the last (`gh stack` where the repo is on GitHub). Rewriting history that is already pushed or
+shared is the human's call — ask first.
