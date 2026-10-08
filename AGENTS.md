@@ -12,7 +12,7 @@ Elixir modules live in `lib/`, grouped by capability (`excessibility/html`, `exc
 - `mix docs` – regenerate HexDocs prior to publishing.
 
 ## Coding Style & Naming Conventions
-Favor idiomatic Elixir: two-space indentation, snake_case functions, PascalCase modules (e.g., `Excessibility.SystemMock`). Keep module files focused—public API modules wrap lower-level helpers. Run `mix format` to enforce `.formatter.exs` rules (Styler plugin) and keep imports/aliases sorted. Snapshot filenames should read like `MyModule/my_test/step.good.html` so reviewers can trace origins quickly.
+Favor idiomatic Elixir: two-space indentation, snake_case functions, PascalCase modules (e.g., `Excessibility.SystemMock`). Keep module files focused—public API modules wrap lower-level helpers. Run `mix format` to enforce `.formatter.exs` rules (Quokka plugin) and keep imports/aliases sorted. Snapshot filenames should read like `MyModule/my_test/step.good.html` so reviewers can trace origins quickly.
 
 ## Testing Guidelines
 Tests use ExUnit plus Mox; set expectations in `test/test_helper.exs` and call `html_snapshot/4` (or related helpers) inside Conn, LiveView, or Wallaby cases. When snapshots change, inspect the `.good/.bad` pair, approve intentional diffs via `mix excessibility.approve`, and rerun `mix test` to ensure baselines match. Include regression tests whenever you add options to `Excessibility.Snapshot` or new mix tasks so Pa11y behavior stays predictable.
