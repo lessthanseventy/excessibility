@@ -485,6 +485,10 @@ end
 - **Igniter**: Installer infrastructure
 - **Credo & Quokka**: Code quality tools
 
+## Companion Package
+
+[excessibility_storybook](https://github.com/lessthanseventy/excessibility_storybook) is a separate repo: exploratory a11y pages (contrast matrix, sounds like, focus order, stress views) inside phoenix_storybook. Not a CI gate. Excessibility does not depend on it.
+
 ## Pa11y Integration
 
 Pa11y is installed via npm in the `assets/` directory by the installer. The `mix excessibility` task runs Pa11y against generated snapshots. Default config ignores LiveView-specific false positives (e.g., forms without submit buttons that use `phx-submit`).

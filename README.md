@@ -34,6 +34,15 @@ Excessibility helps you test your Phoenix apps for accessibility (WCAG complianc
 - Mockable system/browser calls for CI
 - axe-core accessibility checking with sensible LiveView defaults
 
+## While you build: excessibility_storybook
+
+Snapshot checks run in your tests. For looking at components as you build them, the companion
+package [excessibility_storybook](https://github.com/lessthanseventy/excessibility_storybook) adds
+pages to [phoenix_storybook](https://github.com/phenixdigital/phoenix_storybook): a contrast matrix
+for your theme, what each component sounds like to a screen reader, its focus order, and how it
+holds up at 320px, 200% text and WCAG text spacing. It's a separate dev-only dependency, so
+Excessibility doesn't pull in storybook.
+
 ## Installation
 
 Add to `mix.exs`:
