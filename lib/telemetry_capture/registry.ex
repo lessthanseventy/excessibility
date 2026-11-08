@@ -134,15 +134,17 @@ defmodule Excessibility.TelemetryCapture.Registry do
 
   @doc """
   Parses a comma-separated string of analyzer names into the names of known
-  analyzers. Unknown names are dropped.
+  analyzers, or returns the names that match no analyzer.
   """
-  @spec analyzer_names_from_string(String.t()) :: [atom()]
+  @spec analyzer_names_from_string(String.t()) :: {:ok, [atom()]} | {:error, [String.t()]}
   def analyzer_names_from_string(names_str) do
     known = Map.new(discover_analyzers(), &{Atom.to_string(&1.name()), &1.name()})
+    names = String.split(names_str, ",")
 
-    names_str
-    |> String.split(",")
-    |> Enum.flat_map(fn name -> List.wrap(Map.get(known, name)) end)
+    case Enum.reject(names, &Map.has_key?(known, &1)) do
+      [] -> {:ok, Enum.map(names, &Map.fetch!(known, &1))}
+      unknown -> {:error, unknown}
+    end
   end
 
   @doc """

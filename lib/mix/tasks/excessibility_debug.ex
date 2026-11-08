@@ -706,8 +706,10 @@ defmodule Mix.Tasks.Excessibility.Debug do
         []
 
       profile = Keyword.get(opts, :profile) ->
-        profile_name = Enum.find(Profiles.list(), &(Atom.to_string(&1) == profile))
-        Profiles.get(profile_name) || []
+        case Enum.find(Profiles.list(), &(Atom.to_string(&1) == profile)) do
+          nil -> Mix.raise("Unknown profile #{profile}. Known: #{Enum.join(Profiles.list(), ", ")}")
+          profile_name -> Profiles.get(profile_name)
+        end
 
       analyze = Keyword.get(opts, :analyze) ->
         case analyze do
@@ -715,7 +717,10 @@ defmodule Mix.Tasks.Excessibility.Debug do
             Enum.map(Registry.get_all_analyzers(), & &1.name())
 
           names_str ->
-            Registry.analyzer_names_from_string(names_str)
+            case Registry.analyzer_names_from_string(names_str) do
+              {:ok, names} -> names
+              {:error, unknown} -> Mix.raise("Unknown analyzers: #{Enum.join(unknown, ", ")}")
+            end
         end
 
       true ->

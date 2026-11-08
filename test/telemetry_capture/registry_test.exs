@@ -152,6 +152,18 @@ defmodule Excessibility.TelemetryCapture.RegistryTest do
     end
   end
 
+  describe "analyzer_names_from_string/1" do
+    test "returns the names of known analyzers" do
+      assert {:ok, [:memory, :performance]} =
+               Registry.analyzer_names_from_string("memory,performance")
+    end
+
+    test "returns the unknown names instead of dropping them" do
+      assert {:error, ["nope", "neither"]} =
+               Registry.analyzer_names_from_string("memory,nope,neither")
+    end
+  end
+
   describe "resolve_enrichers/1" do
     test "returns enrichers needed by given analyzer names" do
       enrichers = Registry.resolve_enrichers([:memory, :performance])
