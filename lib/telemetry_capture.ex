@@ -6,16 +6,13 @@ defmodule Excessibility.TelemetryCapture do
   snapshots when LiveView events occur, with no test code changes required.
   """
 
-  alias Excessibility.TelemetryCapture.Enrichers.EctoQueries
-  alias Excessibility.TelemetryCapture.Formatter
-  alias Excessibility.TelemetryCapture.Registry
+  alias Excessibility.TelemetryCapture.EctoCapture
   alias Excessibility.TelemetryCapture.SnapshotStore
-  alias Excessibility.TelemetryCapture.Timeline
+  alias Excessibility.TelemetryCapture.Writer
 
   require Logger
 
   @ecto_handler_id "excessibility-ecto-capture"
-  @ecto_process_key :excessibility_ecto_queries
 
   @doc """
   Attaches telemetry handlers for automatic snapshot capture.
@@ -81,164 +78,19 @@ defmodule Excessibility.TelemetryCapture do
       :ok
   end
 
-  defp configured_repos do
+  @doc false
+  @spec configured_repos() :: [module()]
+  def configured_repos do
     Application.get_env(:excessibility, :ecto_repos, [])
   end
 
-  @doc """
-  The Ecto `[..., :query]` telemetry events for the configured `:ecto_repos`.
-  """
-  def ecto_query_events do
-    Enum.map(configured_repos(), &query_event/1)
-  end
+  defdelegate ecto_query_events, to: EctoCapture
 
-  # An Ecto repo emits queries at `telemetry_prefix ++ [:query]`. The prefix
-  # defaults to the repo module's segments as atoms (MyApp.Repo -> [:my_app,
-  # :repo]); a repo that overrides `:telemetry_prefix` is honored.
-  defp query_event(repo) do
-    prefix =
-      case repo_telemetry_prefix(repo) do
-        nil -> repo |> Module.split() |> Enum.map(&(&1 |> Macro.underscore() |> String.to_atom()))
-        prefix -> prefix
-      end
+  defdelegate handle_ecto_query(arg1, measurements, metadata, arg4), to: EctoCapture
 
-    prefix ++ [:query]
-  end
+  defdelegate drain_plan_warnings, to: EctoCapture
 
-  defp repo_telemetry_prefix(repo) do
-    if function_exported?(repo, :config, 0), do: repo.config()[:telemetry_prefix]
-  rescue
-    _ -> nil
-  end
-
-  @in_explain_key :excessibility_in_explain
-  @plan_warnings_key :excessibility_plan_warnings
-
-  @doc false
-  # Public only so the plan-capture tests can drive it directly; not part of the
-  # supported API. Records an Ecto query and, when plan capture is enabled and the
-  # query is a SELECT, attaches value-free plan evidence via a crash-isolated,
-  # re-entrancy-guarded EXPLAIN.
-  def handle_ecto_query(_event, measurements, metadata, _config) do
-    # Re-entrancy guard FIRST: while we run our own EXPLAIN, its `[:ecto, :query]`
-    # telemetry fires in this same process. That event must NOT be recorded — it
-    # is not a query the code under test ran, and recording it would both pollute
-    # the timeline and (if it too were a SELECT) recurse. Return immediately.
-    if Process.get(@in_explain_key) do
-      :ok
-    else
-      # Read the plan-capture mode ONCE per query and thread it down the whole
-      # attach path, so env/config is read a single time and any downgrade
-      # warning fires at most once per query (not once per helper hop).
-      record =
-        measurements
-        |> EctoQueries.build_query_record(metadata)
-        |> maybe_attach_plan(metadata, plan_capture_mode())
-
-      Process.put(@ecto_process_key, [record | Process.get(@ecto_process_key, [])])
-    end
-  end
-
-  # Attach a value-free `:plan` when plan capture is enabled. SELECTs get an
-  # EXPLAIN run; non-SELECTs are never executed as EXPLAIN (privacy + safety) and
-  # simply carry `plan: nil`. When plan capture is disabled we add no `:plan` key
-  # at all, keeping the default record shape unchanged.
-  defp maybe_attach_plan(record, metadata, mode) do
-    if mode == :disabled do
-      record
-    else
-      plan =
-        if Excessibility.QueryEvidence.select?(record), do: capture_plan(record, metadata, mode)
-
-      Map.put(record, :plan, plan)
-    end
-  end
-
-  defp capture_plan(record, metadata, mode) do
-    repo = Map.get(record, :repo)
-    sql = Map.get(record, :query, "")
-    # Params are read transiently for EXPLAIN only and are NEVER stored on the
-    # record (privacy).
-    params = Map.get(metadata, :params, [])
-
-    if repo_queryable?(repo) do
-      run_explain(repo, sql, params, mode)
-    end
-  end
-
-  defp repo_queryable?(repo) do
-    is_atom(repo) and not is_nil(repo) and Code.ensure_loaded?(repo) and
-      (function_exported?(repo, :query, 3) or function_exported?(repo, :query, 2))
-  end
-
-  # Run EXPLAIN under the re-entrancy flag, tolerating any failure. The flag is
-  # ALWAYS cleared in `after`, even if the repo call raises or exits, so a single
-  # bad EXPLAIN can never wedge capture for the rest of the process.
-  defp run_explain(repo, sql, params, mode) do
-    Process.put(@in_explain_key, true)
-
-    try do
-      explain_sql = explain_sql_for(mode, sql)
-      {:ok, result} = repo_query(repo, explain_sql, params)
-      decoded = result.rows |> List.first() |> List.first()
-      Excessibility.Dialect.resolve().parse_plan(decoded)
-    rescue
-      error ->
-        add_plan_warning("EXPLAIN failed for #{inspect(repo)}: #{Exception.message(error)}")
-        nil
-    catch
-      kind, reason ->
-        add_plan_warning("EXPLAIN #{kind} for #{inspect(repo)}: #{inspect(reason)}")
-        nil
-    after
-      Process.delete(@in_explain_key)
-    end
-  end
-
-  defp repo_query(repo, sql, params) do
-    if function_exported?(repo, :query, 3) do
-      repo.query(sql, params, [])
-    else
-      repo.query(sql, params)
-    end
-  end
-
-  # The dialect owns EXPLAIN syntax. For `:explain_analyze` we prefix the
-  # ANALYZE variant, which is double-gated (env + :query_plan_allow_analyze) and
-  # only ever reached for SELECTs. NOTE: EXPLAIN ANALYZE *executes* the statement,
-  # so it should only be run inside a DB sandbox; a dialect-level ANALYZE builder
-  # can replace this local helper later.
-  defp explain_sql_for(:explain_analyze, sql), do: analyze_explain_sql(sql)
-  defp explain_sql_for(_mode, sql), do: Excessibility.Dialect.resolve().explain_sql(sql)
-
-  # SELECT-only + sandbox caveat: see `explain_sql_for/2`. Postgres-shaped.
-  defp analyze_explain_sql(sql), do: "EXPLAIN (ANALYZE, FORMAT JSON) " <> sql
-
-  defp add_plan_warning(message) do
-    Process.put(@plan_warnings_key, [message | Process.get(@plan_warnings_key, [])])
-  end
-
-  @doc """
-  Returns and clears any plan-capture warnings accumulated in the current
-  process (oldest first), so a caller can surface them in the digest. Returns
-  `[]` when none.
-  """
-  def drain_plan_warnings do
-    warnings = @plan_warnings_key |> Process.get([]) |> Enum.reverse()
-    Process.delete(@plan_warnings_key)
-    warnings
-  end
-
-  @doc """
-  Returns and clears the Ecto queries accumulated in the current process
-  since the last flush, oldest first. Called at each captured event so
-  queries are attributed to the event that ran them.
-  """
-  def flush_ecto_queries do
-    queries = @ecto_process_key |> Process.get([]) |> Enum.reverse()
-    Process.delete(@ecto_process_key)
-    queries
-  end
+  defdelegate flush_ecto_queries, to: EctoCapture
 
   @handle_info_hook_id :excessibility_handle_info
 
@@ -449,136 +301,14 @@ defmodule Excessibility.TelemetryCapture do
     end
   end
 
-  @doc """
-  Writes captured snapshots to timeline.json.
-
-  Note: HTML snapshot files are NOT generated from telemetry capture.
-  For real accessibility testing, use `html_snapshot(view)` in your tests
-  to capture actual rendered HTML.
-
-  Runs in the `on_exit` installed by `use Excessibility`, so a failure
-  here is logged rather than raised — instrumentation must not fail the
-  test it observes.
-  """
-  def write_snapshots(test_name) do
-    snapshots = get_snapshots()
-
-    if snapshots != [] do
-      output_path =
-        Application.get_env(
-          :excessibility,
-          :excessibility_output_path,
-          "test/excessibility"
-        )
-
-      File.mkdir_p!(output_path)
-
-      # Generate and write timeline.json with selective enrichment
-      enrichers = resolve_enrichers_from_env()
-      timeline = Timeline.build_timeline(snapshots, test_name, enrichers: enrichers)
-      timeline_json = Formatter.format_json(timeline)
-      timeline_path = Path.join(output_path, "timeline.json")
-      File.write!(timeline_path, timeline_json)
-
-      IO.puts("📊 Excessibility: Wrote timeline.json with #{length(snapshots)} events")
-
-      # Build and write the value-free digest.json from the same in-memory
-      # timeline. Digest.build is crash-isolated; the outer rescue is a backstop.
-      #
-      # Plan-capture warnings are accumulated (drain_plan_warnings/0) in the
-      # LiveView process that ran the EXPLAIN, then stashed on each ETS snapshot
-      # at capture time (store_snapshot/7). Here we aggregate them across all
-      # snapshots and thread them into the digest's `capture.warnings`.
-      effective_plan = plan_capture_mode()
-      requested_plan = requested_plan_mode()
-
-      digest =
-        Excessibility.Digest.build(timeline,
-          ecto_configured?: configured_repos() != [],
-          enrichers_run: enricher_names(enrichers),
-          plan_capture: effective_plan,
-          fixtures: fixtures(),
-          warnings:
-            aggregate_plan_warnings(snapshots) ++
-              analyze_downgrade_digest_warnings(requested_plan, effective_plan)
-        )
-
-      File.write!(Path.join(output_path, "digest.json"), Formatter.format_json(digest))
-      IO.puts("🔒 Excessibility: Wrote digest.json (value-free)")
-    end
-  rescue
-    error ->
-      Logger.warning(
-        "Excessibility: Failed to write timeline for #{inspect(test_name)}: #{Exception.format(:error, error, __STACKTRACE__)}"
-      )
-
-      :ok
-  end
-
-  # Flatten every snapshot's stashed plan-capture warnings (in event order) into
-  # a single list for the digest. Snapshots predating this field simply carry no
-  # `:plan_warnings` key and contribute nothing.
-  defp aggregate_plan_warnings(snapshots) do
-    Enum.flat_map(snapshots, &Map.get(&1, :plan_warnings, []))
-  end
-
-  # Resolve which enrichers to run based on EXCESSIBILITY_ANALYZERS env var
-  defp resolve_enrichers_from_env do
-    case System.get_env("EXCESSIBILITY_ANALYZERS") do
-      nil ->
-        # No analyzer selection - use all enrichers
-        :all
-
-      "" ->
-        # Empty string means no analyzers - use no enrichers
-        []
-
-      analyzers_str ->
-        # Parse analyzer names and resolve their enrichers
-        case Registry.analyzer_names_from_string(analyzers_str) do
-          {:ok, analyzer_names} ->
-            Registry.resolve_enrichers(analyzer_names)
-
-          {:error, unknown} ->
-            raise ArgumentError,
-                  "EXCESSIBILITY_ANALYZERS names unknown analyzers: #{Enum.join(unknown, ", ")}"
-        end
-    end
-  end
-
-  # Resolve the `enrichers` value passed to `build_timeline` (`:all`, `[]`, or a
-  # list of enricher names/modules) into a plain list of enricher name atoms for
-  # the digest's `capture.enrichers_run`. Defensive: never raises.
-  defp enricher_names(:all) do
-    Enum.map(Registry.discover_enrichers(), & &1.name())
-  rescue
-    _ -> []
-  end
-
-  defp enricher_names(enrichers) when is_list(enrichers) do
-    Enum.map(enrichers, &enricher_name/1)
-  rescue
-    _ -> []
-  end
-
-  defp enricher_names(_), do: []
-
-  # A name atom (e.g. `:ecto_queries`) passes through; an enricher module is
-  # resolved to its `name/0`.
-  defp enricher_name(mod) when is_atom(mod) do
-    if Code.ensure_loaded?(mod) and function_exported?(mod, :name, 0) do
-      mod.name()
-    else
-      mod
-    end
-  end
-
-  defp enricher_name(other), do: other
+  defdelegate write_snapshots(test_name), to: Writer
 
   # The configured query-plan capture mode, reported into the digest. Task 10/11
   # will actually run EXPLAIN; here it only surfaces intent. `:explain_analyze`
   # requires an explicit opt-in flag, otherwise it downgrades to `:explain`.
-  defp plan_capture_mode do
+  @doc false
+  @spec plan_capture_mode() :: :explain | :explain_analyze | nil
+  def plan_capture_mode do
     case System.get_env("EXCESSIBILITY_QUERY_PLAN") do
       "explain" ->
         :explain
@@ -595,30 +325,6 @@ defmodule Excessibility.TelemetryCapture do
         :disabled
     end
   end
-
-  # The plan mode the run *asked* for, before the ANALYZE gate is applied. Kept
-  # distinct from the effective mode so the digest can surface requested vs
-  # effective (a downgrade) rather than silently reporting only `:explain`.
-  defp requested_plan_mode do
-    case System.get_env("EXCESSIBILITY_QUERY_PLAN") do
-      "explain" -> :explain
-      mode when mode in ["explain_analyze", "analyze"] -> :explain_analyze
-      _ -> :disabled
-    end
-  end
-
-  # A single value-free warning describing the ANALYZE→EXPLAIN downgrade, added
-  # to the digest's `capture.warnings` exactly once per run (write_snapshots/1
-  # runs once per capture). This carries the requested/effective modes into the
-  # value-free capture metadata.
-  defp analyze_downgrade_digest_warnings(:explain_analyze, :explain) do
-    [
-      "EXPLAIN ANALYZE requested but :query_plan_allow_analyze is not enabled; " <>
-        "effective plan mode downgraded to EXPLAIN (no data-touching plan capture)"
-    ]
-  end
-
-  defp analyze_downgrade_digest_warnings(_requested, _effective), do: []
 
   @downgrade_warned_key {__MODULE__, :analyze_downgrade_warned}
 
@@ -638,33 +344,5 @@ defmodule Excessibility.TelemetryCapture do
     end
   end
 
-  @doc false
-  # Test seam: clears the run-level downgrade-warning flag so a test can assert
-  # the warn-once behavior deterministically.
-  def reset_analyze_downgrade_warning, do: :persistent_term.erase(@downgrade_warned_key)
-
-  # Fixtures for the digest coverage block, from both channels: the
-  # `EXCESSIBILITY_FIXTURES` env JSON (precedence, string keys kept) falls back
-  # to `config :excessibility, :fixtures`, then `%{}`. Never crashes the run.
-  defp fixtures do
-    case System.get_env("EXCESSIBILITY_FIXTURES") do
-      blank when blank in [nil, ""] ->
-        config_fixtures()
-
-      json ->
-        case Jason.decode(json) do
-          {:ok, map} when is_map(map) ->
-            map
-
-          _ ->
-            Logger.warning("Excessibility: EXCESSIBILITY_FIXTURES is not a JSON object; ignoring it.")
-
-            config_fixtures()
-        end
-    end
-  end
-
-  defp config_fixtures do
-    Application.get_env(:excessibility, :fixtures, %{})
-  end
+  defdelegate reset_analyze_downgrade_warning, to: EctoCapture
 end
