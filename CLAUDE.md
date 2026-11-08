@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Excessibility** is an Elixir library for accessibility snapshot testing in Phoenix applications. It captures HTML snapshots during tests and runs them through Pa11y for WCAG compliance checking.
+**Excessibility** is an Elixir library for accessibility snapshot testing in Phoenix applications. It captures HTML snapshots during tests and runs them through axe-core (via Playwright) for WCAG compliance checking.
 
 ## Development Commands
 
@@ -43,22 +43,23 @@ open doc/index.html
 
 ### Accessibility Testing
 ```bash
-# Run Pa11y on all existing snapshots
+# Run axe-core on all existing snapshots
 mix excessibility
 
-# Run specific test + Pa11y on new snapshots
+# Run specific test + axe-core on new snapshots
 mix excessibility test/my_test.exs
 mix excessibility test/my_test.exs:42
 mix excessibility --only a11y
 
-# Approve pending diffs interactively
-mix excessibility.approve
+# Lock the current snapshots as the baseline
+mix excessibility.baseline
 
-# Approve all diffs as good (keep baseline)
-mix excessibility.approve --keep good
+# Resolve pending diffs against the baseline interactively
+mix excessibility.snapshot.compare
 
-# Approve all diffs as bad (accept new versions)
-mix excessibility.approve --keep bad
+# Resolve all diffs as good (keep baseline) or bad (accept new versions)
+mix excessibility.snapshot.compare --keep good
+mix excessibility.snapshot.compare --keep bad
 ```
 
 ## Claude Workflow for Accessibility
@@ -77,7 +78,7 @@ defmodule MyAppWeb.PageLiveTest do
   test "page is accessible", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/")
 
-    # Capture snapshot for Pa11y
+    # Capture snapshot for axe-core
     html_snapshot(view)
 
     # Continue with assertions...
@@ -93,7 +94,7 @@ mix test test/my_app_web/live/page_live_test.exs
 
 This creates HTML files in `test/excessibility/html_snapshots/`.
 
-### 3. Run Pa11y Accessibility Check
+### 3. Run the axe-core Accessibility Check
 
 ```bash
 # Check all existing snapshots
@@ -105,7 +106,7 @@ mix excessibility test/my_test.exs:42
 mix excessibility --only a11y
 ```
 
-Pa11y will report WCAG violations. Common issues:
+axe-core will report WCAG violations. Common issues:
 - Missing form labels
 - Low color contrast
 - Missing alt text
@@ -113,7 +114,7 @@ Pa11y will report WCAG violations. Common issues:
 
 ### 4. Fix Issues and Re-test
 
-After fixing accessibility issues, re-run tests and Pa11y to verify.
+After fixing accessibility issues, re-run tests and axe-core to verify.
 
 ### Timeline Analysis (for debugging)
 
@@ -301,7 +302,7 @@ The library follows this flow when a test calls `html_snapshot/2`:
    - `Phoenix.LiveViewTest.Element` - LiveView elements
 3. **HTML Wrapping** (`Excessibility.HTML`): Wraps partial HTML in complete document structure:
    - Extracts `<head>` from Phoenix endpoint
-   - Prefixes static asset paths with `file://` for local Pa11y access
+   - Prefixes static asset paths with `file://` so Playwright can load them from disk
    - Removes `<script>` tags (can't execute in static snapshots)
 4. **Snapshot Management** (`Excessibility.Snapshot`): Handles file I/O and diffing:
    - Writes snapshots to `test/excessibility/html_snapshots/`
@@ -333,23 +334,43 @@ Application.get_env(:excessibility, :system_mod, Excessibility.System)
 - **`Excessibility.System`**: System command wrapper (implements `SystemBehaviour`)
 - **Behaviors**: `SystemBehaviour`, `BrowserBehaviour` for mockable dependencies
 - **Mix Tasks**:
-  - `Mix.Tasks.Excessibility` - Run Pa11y on snapshots
-  - `Mix.Tasks.Excessibility.Approve` - Interactive diff approval
-  - `Mix.Tasks.Excessibility.Install` - Configure project, install Pa11y via npm
+  - `Mix.Tasks.Excessibility` - Run axe-core on snapshots (optionally running `mix test` first)
+  - `Mix.Tasks.Excessibility.Baseline` - Lock current snapshots as the baseline
+  - `Mix.Tasks.Excessibility.Snapshot.Compare` - Diff snapshots against the baseline, resolve with `--keep good|bad`
+  - `Mix.Tasks.Excessibility.Snapshots` - List, clean or open snapshots
+  - `Mix.Tasks.Excessibility.Review` - Blast-radius review of a change vs the baseline (`--format json` for CI)
+  - `Mix.Tasks.Excessibility.Check` - Run axe-core on a URL
+  - `Mix.Tasks.Excessibility.Debug` - Run tests with telemetry capture; writes `timeline.json`, `digest.json`, `benchmark.json`
+  - `Mix.Tasks.Excessibility.Latest` - Print the most recent debug report
+  - `Mix.Tasks.Excessibility.Package` - Bundle a debug run for sharing
+  - `Mix.Tasks.Excessibility.Digest.Compare` - Structural diff of two `digest.json` files
+  - `Mix.Tasks.Excessibility.Install` - Igniter installer: config, npm install of Playwright + axe-core, Claude skills
 
 ### Configuration Points
 
-All configuration in `test/test_helper.exs` or `config/test.exs`:
+All configuration in `test/test_helper.exs` or `config/test.exs`. The complete table, with defaults, is
+the Configuration section of `docs/library-api.md`; keep the two in sync when adding a key.
 
 - `:endpoint` - Phoenix endpoint module (required)
 - `:system_mod` - System command module (default: `Excessibility.System`)
 - `:browser_mod` - Browser module (default: `Wallaby.Browser`)
 - `:live_view_mod` - LiveView module (default: `Excessibility.LiveView`)
 - `:excessibility_output_path` - Base directory (default: `"test/excessibility"`)
-- `:pa11y_path` - Path to Pa11y executable (auto-detected)
+- `:scanner_mod` - Module implementing `Excessibility.ScannerBehaviour` (default: `Excessibility.Scanner`)
+- `:axe_runner_path` - Path to `axe-runner.js` (default: auto-detected)
+- `:axe_disable_rules` - axe rule ids to skip (default: `[]`)
 - `:playwright_path` - Path to an existing Playwright installation to reuse (default: bundled copy in `assets/`)
 - `:node_modules_path` - Path to a host `node_modules` providing `playwright` and `@axe-core/playwright` (default: bundled copy in `assets/`)
-- `:pa11y_config` - Path to pa11y.json (default: `"pa11y.json"`)
+- `:viewports` - `{width, height}` tuples to scan and screenshot at (default: `[]`, one default-size pass)
+- `:screenshots` - `mix excessibility` saves a PNG beside each snapshot (default: `false`)
+- `:check_clipping` / `:clipping_ratio` - Flag interactive elements clipped at narrow widths (default: `false` / `0.9`)
+- `:lv_rules_enabled?` / `:lv_rules_disabled` - LiveView-aware rules on/off, and rule ids to skip (default: `true` / `[]`)
+- `:cross_snapshot_enabled?` - Run the cross-snapshot sequence checks in `mix excessibility` (default: `true`)
+- `:review_judge` - `Excessibility.Review.Judge` implementation (default: `Excessibility.Review.Judge.Heuristic`)
+- `:review_judge_completion` - `fn prompt -> {:ok, text} end` for `Excessibility.Review.Judge.LLM`; unset falls back to the heuristic judge
+- `:custom_mcp_tools` / `:custom_mcp_resources` / `:custom_mcp_prompts` - Extra MCP modules merged into the server registry (default: `[]`)
+- `:slow_event_ms` - Absolute ceiling for a "very slow event" performance finding (default: `1000`)
+- `:digest_min_assign_delta_bytes`, `:benchmark_min_abs_ms`, `:benchmark_min_rel_factor` - Noise floors for digest compare and benchmark outliers (default: `64`, `1.0`, `1.5`)
 - `:head_render_path` - Route for `<head>` extraction (default: `"/"`)
 - `:ecto_repos` - Repos to capture query telemetry from for N+1/query analysis (default: `[]`, e.g. `[MyApp.Repo]`)
 - `:custom_enrichers` - List of custom enricher modules (default: `[]`)
@@ -489,9 +510,9 @@ end
 
 [excessibility_storybook](https://github.com/lessthanseventy/excessibility_storybook) is a separate repo: exploratory a11y pages (contrast matrix, sounds like, focus order, stress views) inside phoenix_storybook. Not a CI gate. Excessibility does not depend on it.
 
-## Pa11y Integration
+## axe-core Integration
 
-Pa11y is installed via npm in the `assets/` directory by the installer. The `mix excessibility` task runs Pa11y against generated snapshots. Default config ignores LiveView-specific false positives (e.g., forms without submit buttons that use `phx-submit`).
+The installer runs `npm install` in `assets/`, which pulls Playwright and `@axe-core/playwright`; `assets/axe-runner.js` drives a headless Chromium over each snapshot. `mix excessibility` runs it against generated snapshots. Scanner tests are tagged `browser: true` and are excluded automatically when `assets/node_modules/playwright` is absent.
 
 ## Git: linear history
 
