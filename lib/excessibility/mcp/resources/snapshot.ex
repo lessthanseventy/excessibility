@@ -58,10 +58,7 @@ defmodule Excessibility.MCP.Resources.Snapshot do
     String.contains?(path, ".good.html") or String.contains?(path, ".bad.html")
   end
 
-  defp get_snapshots_dir do
-    base_path = Application.get_env(:excessibility, :excessibility_output_path, "test/excessibility")
-    Path.join(base_path, "html_snapshots")
-  end
+  defp get_snapshots_dir, do: Excessibility.Paths.snapshots_dir()
 
   defp snapshot_to_resource(path) do
     filename = Path.basename(path)

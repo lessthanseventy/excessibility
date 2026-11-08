@@ -5,6 +5,8 @@ defmodule Excessibility.Debug.BenchmarkRun do
   through `Excessibility.Benchmark`.
   """
 
+  import Excessibility.Paths
+
   alias Excessibility.TelemetryCapture.Formatter
   alias Mix.Tasks.Excessibility.Debug
 
@@ -94,8 +96,4 @@ defmodule Excessibility.Debug.BenchmarkRun do
   defp view_key(nil), do: "unknown"
   defp view_key(view) when is_binary(view), do: view
   defp view_key(view), do: view |> to_string() |> String.replace_prefix("Elixir.", "")
-
-  defp output_path do
-    Application.get_env(:excessibility, :excessibility_output_path, "test/excessibility")
-  end
 end

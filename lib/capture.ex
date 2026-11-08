@@ -113,12 +113,7 @@ defmodule Excessibility.Capture do
         :ok
 
       timeline ->
-        output_path =
-          Application.get_env(
-            :excessibility,
-            :excessibility_output_path,
-            "test/excessibility"
-          )
+        output_path = Excessibility.Paths.output_path()
 
         timelines_path = Path.join(output_path, "timelines")
         File.mkdir_p!(timelines_path)

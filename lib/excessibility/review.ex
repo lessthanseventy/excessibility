@@ -31,6 +31,8 @@ defmodule Excessibility.Review do
   `mix test` + baseline, with no worktree gymnastics.
   """
 
+  import Excessibility.Paths
+
   alias Excessibility.LiveViewRules
   alias Excessibility.Review.Behavioral
   alias Excessibility.Review.Judge
@@ -304,8 +306,8 @@ defmodule Excessibility.Review do
   # ── Snapshot loading ───────────────────────────────────────────────
 
   defp matched_pairs(_opts) do
-    current_dir = Path.join(output_path(), "html_snapshots")
-    baseline_dir = Path.join(output_path(), "baseline")
+    current_dir = snapshots_dir()
+    baseline_dir = baseline_dir()
 
     current_dir
     |> Path.join("*.html")
@@ -322,9 +324,5 @@ defmodule Excessibility.Review do
           []
       end
     end)
-  end
-
-  defp output_path do
-    Application.get_env(:excessibility, :excessibility_output_path, "test/excessibility")
   end
 end

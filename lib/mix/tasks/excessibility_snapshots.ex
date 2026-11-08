@@ -18,6 +18,8 @@ defmodule Mix.Tasks.Excessibility.Snapshots do
 
   use Mix.Task
 
+  import Excessibility.Paths
+
   @requirements ["app.config"]
 
   @impl Mix.Task
@@ -35,9 +37,9 @@ defmodule Mix.Tasks.Excessibility.Snapshots do
     files = snapshot_files()
 
     if files == [] do
-      Mix.shell().info("No snapshots found in #{snapshot_dir()}")
+      Mix.shell().info("No snapshots found in #{snapshots_dir()}")
     else
-      Mix.shell().info("#{length(files)} snapshot(s) in #{snapshot_dir()}\n")
+      Mix.shell().info("#{length(files)} snapshot(s) in #{snapshots_dir()}\n")
 
       Enum.each(files, fn file ->
         %{size: size} = File.stat!(file)
@@ -65,7 +67,7 @@ defmodule Mix.Tasks.Excessibility.Snapshots do
       if String.contains?(name, "/") do
         name
       else
-        Path.join(snapshot_dir(), name)
+        Path.join(snapshots_dir(), name)
       end
 
     if File.exists?(path) do
@@ -83,18 +85,11 @@ defmodule Mix.Tasks.Excessibility.Snapshots do
   end
 
   defp snapshot_files do
-    snapshot_dir()
+    snapshots_dir()
     |> Path.join("*.html")
     |> Path.wildcard()
     |> Enum.reject(&String.ends_with?(&1, [".bad.html", ".good.html"]))
     |> Enum.sort()
-  end
-
-  defp snapshot_dir do
-    output_path =
-      Application.get_env(:excessibility, :excessibility_output_path, "test/excessibility")
-
-    Path.join(output_path, "html_snapshots")
   end
 
   defp format_size(bytes) when bytes < 1024, do: "#{bytes} B"

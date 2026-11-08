@@ -19,6 +19,8 @@ defmodule Mix.Tasks.Excessibility.Baseline do
   """
   use Mix.Task
 
+  import Excessibility.Paths
+
   @requirements ["app.config"]
 
   @impl true
@@ -50,17 +52,5 @@ defmodule Mix.Tasks.Excessibility.Baseline do
   defp ensure_directories! do
     File.mkdir_p!(snapshots_dir())
     File.mkdir_p!(baseline_dir())
-  end
-
-  defp snapshots_dir do
-    Path.join(output_path(), "html_snapshots")
-  end
-
-  defp baseline_dir do
-    Path.join(output_path(), "baseline")
-  end
-
-  defp output_path do
-    Application.get_env(:excessibility, :excessibility_output_path, "test/excessibility")
   end
 end

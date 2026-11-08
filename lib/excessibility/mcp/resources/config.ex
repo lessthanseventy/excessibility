@@ -32,8 +32,7 @@ defmodule Excessibility.MCP.Resources.Config do
   @impl true
   def read("config://excessibility") do
     config = %{
-      "excessibility_output_path" =>
-        Application.get_env(:excessibility, :excessibility_output_path, "test/excessibility"),
+      "excessibility_output_path" => Excessibility.Paths.output_path(),
       "endpoint" => inspect(Application.get_env(:excessibility, :endpoint)),
       "axe_runner_path" => Application.get_env(:excessibility, :axe_runner_path),
       "axe_disable_rules" => Application.get_env(:excessibility, :axe_disable_rules, []),
