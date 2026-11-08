@@ -38,9 +38,9 @@ jobs:
         id: version
         run: |
           VERSION=$(grep '@version "' mix.exs | sed 's/.*@version "\([^"]*\)".*/\1/')
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          MAJOR_MINOR=$(echo $VERSION | cut -d. -f1,2)
-          echo "major_minor=$MAJOR_MINOR" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          MAJOR_MINOR=$(echo "$VERSION" | cut -d. -f1,2)
+          echo "major_minor=$MAJOR_MINOR" >> "$GITHUB_OUTPUT"
           echo "Version from mix.exs: $VERSION"
 
       - name: Check README version
