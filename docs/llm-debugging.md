@@ -150,7 +150,7 @@ end
 - **`timeline.json`** — the full local diagnosis. It carries real (filtered) assigns, raw SQL, bind-value-free query text, memory sizes and diffs. It is meant for **local debugging only**. It can contain application data and is **not safe to upload** to CI logs, artifact stores, or a model.
 - **`digest.json`** — a **value-free, safe-by-construction** runtime-evidence artifact derived from the same in-memory timeline. It is built by explicit construction from an allowlist — it never copies an assigns map, a raw query, params, or bind values. This is the artifact you can attach to a PR, store as a CI artifact, or hand to a reviewer or model.
 
-Both are written during capture in `Excessibility.TelemetryCapture.write_snapshots/1`. The digest builder is `Excessibility.Digest`.
+Both are written during capture by `Excessibility.TelemetryCapture`. The digest builder is `Excessibility.Digest`.
 
 Position this as **supplemental** input for debugging and code-aware review. It is a compact, trustworthy record of what a LiveView actually did — query shapes, plan shapes, assign growth, callback sequence and coverage — that a reviewer or tool can interpret **alongside the source code**. It is *not* a universal performance verdict and it does *not* replace source-aware review or profiling.
 

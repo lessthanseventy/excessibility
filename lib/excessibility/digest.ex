@@ -1,8 +1,7 @@
 defmodule Excessibility.Digest do
   @moduledoc """
-  Builds the value-free `digest.json` runtime-evidence artifact from an
-  in-memory timeline map (the shape `Excessibility.TelemetryCapture.Timeline.build_timeline/3`
-  returns).
+  Builds the value-free `digest.json` runtime-evidence artifact from the
+  in-memory timeline map `Excessibility.TelemetryCapture` writes as `timeline.json`.
 
   The digest is **safe by construction**: every field is built by explicit
   construction from allowlisted inputs. It never copies an assigns map, a raw

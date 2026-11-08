@@ -4,6 +4,22 @@ defmodule Excessibility.MixProject do
   @source_url "https://github.com/lessthanseventy/excessibility"
   @version "0.20.0"
 
+  @internal_modules [
+    Excessibility.Capture,
+    Excessibility.Debug.BenchmarkRun,
+    Excessibility.Debug.Report,
+    Excessibility.DigestCompare.Aggregate,
+    Excessibility.DigestCompare.Notes,
+    Excessibility.Scanner.Runner,
+    Excessibility.TelemetryCapture.Diff,
+    Excessibility.TelemetryCapture.EctoCapture,
+    Excessibility.TelemetryCapture.Filter,
+    Excessibility.TelemetryCapture.Formatter,
+    Excessibility.TelemetryCapture.SnapshotStore,
+    Excessibility.TelemetryCapture.Timeline,
+    Excessibility.TelemetryCapture.Writer
+  ]
+
   def project do
     [
       app: :excessibility,
@@ -33,23 +49,47 @@ defmodule Excessibility.MixProject do
         "LICENSE.md"
       ],
       groups_for_modules: [
-        Core: [
+        "Accessibility snapshots": [
           Excessibility,
           Excessibility.Scanner,
           Excessibility.Snapshot,
+          Excessibility.SnapshotDiff,
           Excessibility.HTML,
-          Excessibility.Source
+          Excessibility.Source,
+          Excessibility.LiveView,
+          Excessibility.LiveViewHelpers,
+          Excessibility.Paths
         ],
+        "LiveView rules": ~r/Excessibility\.LiveViewRules/,
+        Review: ~r/Excessibility\.Review/,
+        "Telemetry capture": [
+          Excessibility.TelemetryCapture,
+          Excessibility.TelemetryCapture.Analyzer,
+          Excessibility.TelemetryCapture.Enricher,
+          Excessibility.TelemetryCapture.Profiles,
+          Excessibility.TelemetryCapture.Registry
+        ],
+        Analyzers: ~r/Excessibility\.TelemetryCapture\.Analyzers\./,
+        Enrichers: ~r/Excessibility\.TelemetryCapture\.Enrichers\./,
+        "Digest and benchmark": [
+          Excessibility.Digest,
+          Excessibility.DigestCompare,
+          Excessibility.Benchmark,
+          Excessibility.QueryEvidence,
+          Excessibility.QueryPlan,
+          Excessibility.SQLFingerprint,
+          Excessibility.Dialect
+        ],
+        "MCP server": ~r/Excessibility\.MCP/,
         Behaviours: [
           Excessibility.SystemBehaviour,
           Excessibility.BrowserBehaviour,
-          Excessibility.ScannerBehaviour
+          Excessibility.ScannerBehaviour,
+          Excessibility.System
         ],
-        Implementations: [
-          Excessibility.System,
-          Excessibility.LiveView
-        ]
-      ]
+        "Mix tasks": ~r/Mix\.Tasks\./
+      ],
+      filter_modules: &public_module?/2
     ]
   end
 
@@ -99,7 +139,7 @@ defmodule Excessibility.MixProject do
       {:postgrex, "~> 0.17", only: :test},
       {:ex_doc, "~> 0.18", only: :dev, runtime: false},
       {:floki, "~> 0.30"},
-      {:igniter, "~> 0.7", runtime: false},
+      {:igniter, "~> 0.7", optional: true, runtime: false},
       {:jason, "~> 1.4"},
       {:mix_test_interactive, "~> 6.0", only: :dev, runtime: false},
       {:mox, "~> 1.1", only: :test},
@@ -116,5 +156,11 @@ defmodule Excessibility.MixProject do
       # and never needs a live driver.
       {:wallaby, "~> 0.25", optional: true, only: :test, runtime: false}
     ]
+  end
+
+  defp public_module?(mod, _meta) do
+    name = inspect(mod)
+
+    mod not in @internal_modules and not String.contains?(name, ".Dialect.")
   end
 end
