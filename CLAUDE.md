@@ -143,7 +143,7 @@ This generates `timeline.json` with event flow, memory usage, and pattern analys
 
 ### Runtime Evidence Digest (`digest.json`)
 
-Every `mix excessibility.debug` capture writes **two** artifacts (both in `Excessibility.TelemetryCapture.write_snapshots/1`):
+Every `mix excessibility.debug` capture writes **two** artifacts (both from `Excessibility.TelemetryCapture`):
 
 - **`timeline.json`** - the full local diagnosis. Contains filtered assigns, raw SQL, memory sizes/diffs. **Local debugging only** - it may contain application data and is **NOT safe to upload** to CI/artifacts/models.
 - **`digest.json`** - a **value-free, safe-by-construction** artifact built by `Excessibility.Digest`. Built by explicit construction from an allowlist (never copy-then-scrub), so it is safe for CI, artifact stores, and model input. Position it as **supplemental** input for debugging and code-aware review - not a universal performance verdict and not a replacement for source-aware review.
