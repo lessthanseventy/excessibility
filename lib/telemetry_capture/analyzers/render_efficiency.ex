@@ -8,8 +8,8 @@ defmodule Excessibility.TelemetryCapture.Analyzers.RenderEfficiency do
   timeline event: LiveView captures a `handle_event` and its resulting
   `render` as two events, so the render's own diff-vs-previous is empty even
   though the interaction genuinely changed state. Counting that render as
-  wasted would flag every `render_click`/`render_submit` in a healthy test
-  (issue #142). The first render in a view (the initial paint) is never
+  wasted would flag every `render_click`/`render_submit` in a healthy test.
+  The first render in a view (the initial paint) is never
   wasted.
 
   ## Thresholds
@@ -41,7 +41,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.RenderEfficiency do
   alias Excessibility.TelemetryCapture.Analyzer
 
   # A "50% of renders were wasted" claim over four samples is a statement
-  # about sample size, not the code (issue #142). The percentage-based
+  # about sample size, not the code. The percentage-based
   # critical needs enough renders to mean something; the absolute
   # "3+ wasted renders" warning stands on its own.
   @min_render_sample 5
@@ -56,7 +56,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.RenderEfficiency do
   def analyze(%{timeline: timeline}, _opts) do
     # Wasted renders are detected per view: a journey test interleaves
     # LiveViews, and "changed since the last render" is only meaningful
-    # within one process (issue #142).
+    # within one process.
     per_view_wasted =
       timeline
       |> Analyzer.group_by_view()

@@ -9,7 +9,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.MessageFlooding do
   >
   > This analyzer reads `handle_info:*` timeline events. Phoenix LiveView emits
   > no `handle_info` telemetry, so those events are only captured when you opt
-  > into the `Excessibility.TelemetryCapture` `on_mount` hook (issue #147) —
+  > into the `Excessibility.TelemetryCapture` `on_mount` hook —
   > e.g. `live_session :default, on_mount: [Excessibility.TelemetryCapture]`.
   > Because that wiring is opt-in, the analyzer is **not** in the default set
   > (a default-on analyzer with no hook would imply coverage while staying
@@ -42,7 +42,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.MessageFlooding do
   @total_threshold 20
 
   def name, do: :message_flooding
-  # Opt-in: needs the (opt-in) TelemetryCapture on_mount hook to have data (#147).
+  # Opt-in: needs the (opt-in) TelemetryCapture on_mount hook to have data.
   def default_enabled?, do: false
   def requires_enrichers, do: []
 

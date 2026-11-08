@@ -29,7 +29,7 @@ defmodule Excessibility.QueryPlan do
   # the cap is a safety valve so a pathological plan cannot bloat the digest.
   # Truncation is deterministic (first N in depth-first order) and the number of
   # dropped nodes is surfaced as `nodes_omitted` so truncation is never silent
-  # (issue #167). The structural fingerprint always hashes the *full* tree, so a
+  # The structural fingerprint always hashes the *full* tree, so a
   # truncated summary still groups and compares stably.
   @max_nodes 100
 
@@ -39,7 +39,7 @@ defmodule Excessibility.QueryPlan do
 
   A query fingerprint can fire many times in one journey; each occurrence carries
   its own plan summary, and a *later* occurrence can do far more row work than the
-  first (issue #167). Selecting only the first occurrence's plan discards that
+  first. Selecting only the first occurrence's plan discards that
   magnitude before comparison ever runs, so aggregation keeps the **maximum**
   comparable row work per structural node path: estimated/actual rows, loops and
   `rows_touched` are maxed position-by-position across occurrences that share a
@@ -75,7 +75,7 @@ defmodule Excessibility.QueryPlan do
   A parameterized query can pick different plans by selectivity, so one SQL
   fingerprint legitimately carries several plan structures across a journey.
   `aggregate/1` collapses them to the single heaviest representative, which
-  discards any non-dominant variant that changed or regressed (issue #173). This
+  discards any non-dominant variant that changed or regressed. This
   keeps them all: occurrences are grouped by structural fingerprint, each group
   is merged by keeping the **maximum** comparable row work per node path (the
   same `merge_summary/2` used by `aggregate/1`, so the heaviest instance of each
@@ -169,7 +169,7 @@ defmodule Excessibility.QueryPlan do
     # pathological or partition-heavy plan can carry many distinct relations, so
     # the sorted unique set is capped and the drop count surfaced as
     # `relations_omitted` — no unbounded structural array without visible
-    # omission metadata (issue #174).
+    # omission metadata.
     all_relations = tree |> Enum.map(&elem(&1, 1)) |> Enum.reject(&is_nil/1) |> Enum.uniq() |> Enum.sort()
     relations = Enum.take(all_relations, @max_nodes)
 
@@ -197,7 +197,7 @@ defmodule Excessibility.QueryPlan do
   # order. Estimated rows are always kept (plain EXPLAIN); actual rows, loops
   # and rows_touched are only present when the node carries ANALYZE data. This
   # is what preserves a large child scan beneath a one-row root — a magnitude
-  # the structural fingerprint alone discards (issue #157). Bounded by the same
+  # the structural fingerprint alone discards. Bounded by the same
   # @max_nodes / `nodes_omitted` contract as the `nodes` label list.
   defp node_rows(plan) do
     plan

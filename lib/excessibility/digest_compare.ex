@@ -23,7 +23,7 @@ defmodule Excessibility.DigestCompare do
     incompleteness is made explicit — a forced `plans` entry carrying per-side
     `base_variants_omitted` / `head_variants_omitted` counts, plus a
     `coverage.notes` entry — so a bounded comparison never renders "no change"
-    for a structure it could not see (issue #183).
+    for a structure it could not see.
   - Assign deltas are diffed only when the `assign_sizes` enricher ran on both
     sides; other enricher differences are scope-noted.
   - A `schema` mismatch adds a prominent note.
@@ -94,8 +94,8 @@ defmodule Excessibility.DigestCompare do
   # Fold events into %{{view, callback} => %{queries, plans, assigns}} where
   # per-fingerprint counts sum, per-fingerprint plans accumulate the full set of
   # distinct structural variants (keyed by plan fingerprint, max row work per
-  # node path kept per structure — so neither a later heavier occurrence (#167)
-  # nor a non-dominant variant (#173) is discarded), and per-assign
+  # node path kept per structure — so neither a later heavier occurrence
+  # nor a non-dominant variant is discarded), and per-assign
   # term_bytes/cardinality take the max — all order-independent so the aggregate
   # is deterministic.
   defp aggregate(digest) do
@@ -204,19 +204,19 @@ defmodule Excessibility.DigestCompare do
     |> Enum.sort_by(fn %{view: v, callback: c, fingerprint: fp} -> {v, c, fp} end)
   end
 
-  # One SQL fingerprint carries a *set* of structural plan variants per side
-  # (issue #173). A plan change is expressed at the variant level:
+  # One SQL fingerprint carries a *set* of structural plan variants per side.
+  # A plan change is expressed at the variant level:
   #   * a structure appearing only in head/base is an added/removed variant, and
   #   * a structure present on both sides can still do more work (rows/loops),
-  #     reported as a numeric `variant_delta` — the #157 case, where a stable
+  #     reported as a numeric `variant_delta` — where a stable
   #     shape scanning thousands more rows must not read as "no change".
-  # Collapsing to a single heaviest representative discarded any non-dominant
+  # Collapsing to a single heaviest representative would drop any non-dominant
   # variant that changed; keeping the whole set is what makes that visible.
   #
   # That set is itself bounded (`@max_plan_variants` in `QueryEvidence`), so a
   # side can carry variants it never emitted. When the dropped variant is the one
   # that changed, the retained sets match and every delta above is empty — yet the
-  # comparison is *incomplete*, not equal (issue #183). We therefore force an
+  # comparison is *incomplete*, not equal. We therefore force an
   # entry whenever either side omitted variants and surface the per-side counts
   # (`base_variants_omitted` / `head_variants_omitted`), so a bounded comparison
   # can never render "no change" for a structure it could not see.
@@ -401,7 +401,7 @@ defmodule Excessibility.DigestCompare do
   # Total plan variants the digest bound dropped on one side, across every
   # {view, callback} and SQL fingerprint — including fingerprints present on only
   # one side, which `plan_diffs/3` (intersection-only) never reaches. Used solely
-  # to surface incompleteness as a coverage note (issue #183).
+  # to surface incompleteness as a coverage note.
   defp total_omitted(agg) do
     agg
     |> Map.values()
@@ -487,7 +487,7 @@ defmodule Excessibility.DigestCompare do
   # The digest bounds each SQL fingerprint's plan-variant set, so a side can drop
   # structures it never emitted. A bounded comparison that cannot see a structure
   # must not stay silent about it — surface per-side counts and state plainly that
-  # those variants were never compared (issue #183). Only meaningful when plans
+  # those variants were never compared. Only meaningful when plans
   # were actually comparable; otherwise the scope difference is already noted.
   defp omission_note(notes, %{comparable?: false}), do: notes
   defp omission_note(notes, %{base: 0, head: 0}), do: notes
@@ -526,10 +526,10 @@ defmodule Excessibility.DigestCompare do
 
   # Fold one shape's plan variants into the {sql_fp => %{variants, omitted}}
   # accumulator. Accepts both the current `:plans` list and a legacy single
-  # `:plan` (wrapped), so reloaded pre-#173 digests still compare. Variants key
+  # `:plan` (wrapped), so reloaded older digests still compare. Variants key
   # by plan fingerprint; occurrences of the same structure across events keep the
   # max comparable row work per node position (a later, heavier occurrence is not
-  # discarded — issue #167), independent of event order.
+  # discarded), independent of event order.
   defp merge_plan_variants(pacc, fp, shape) do
     variants = plan_variants_of(shape)
     omitted = get(shape, :variants_omitted, 0) || 0

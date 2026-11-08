@@ -30,7 +30,7 @@ defmodule Excessibility.TelemetryCapture.Enrichers.CollectionSize do
 
   # Library structs whose internals are machinery, not app state. Stopping
   # here keeps changeset internals and timestamp microsecond tuples out of the
-  # tracked list paths even when assign filtering is disabled (issue #142).
+  # tracked list paths even when assign filtering is disabled.
   @opaque_structs [Date, Time, DateTime, NaiveDateTime, Decimal, Ecto.Changeset]
 
   def enrich(assigns, _opts) do

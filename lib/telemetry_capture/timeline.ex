@@ -122,7 +122,7 @@ defmodule Excessibility.TelemetryCapture.Timeline do
         timestamp: snapshot.timestamp,
         # A JSON-safe epoch-ms time: `timestamp` serializes to a struct-map
         # that does not round-trip back into a %DateTime{}, so time-based
-        # analyzers (message_flooding) need a plain number to diff (issue #147).
+        # analyzers (message_flooding) need a plain number to diff.
         timestamp_ms: DateTime.to_unix(snapshot.timestamp, :millisecond),
         view_module: snapshot.view_module,
         key_state: key_state,

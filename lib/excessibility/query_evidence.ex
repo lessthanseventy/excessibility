@@ -2,7 +2,7 @@ defmodule Excessibility.QueryEvidence do
   @moduledoc """
   Fingerprint-based query grouping shared by the `ecto_query_analysis` analyzer
   (which wraps it in severity) and `Excessibility.Digest` (which emits it raw).
-  Tolerates string values from reloaded `timeline.json` (issue #151).
+  Tolerates string values from reloaded `timeline.json`.
   """
 
   @default_min_repetitions 3
@@ -10,7 +10,7 @@ defmodule Excessibility.QueryEvidence do
   # Upper bound on the number of distinct structural plan variants kept per query
   # fingerprint. A parameterized query can pick different plans by selectivity, so
   # one SQL fingerprint legitimately carries several structures; the cap keeps the
-  # public digest bounded while `variants_omitted` records any truncation (#173).
+  # public digest bounded while `variants_omitted` records any truncation.
   @max_plan_variants 8
 
   def shapes(queries) do
@@ -64,8 +64,8 @@ defmodule Excessibility.QueryEvidence do
 
   # A query fingerprint can fire many times, and occurrences can differ two ways:
   # a *later* occurrence of one structure can do more row work than the first
-  # (issue #167), and a parameterized query can pick a *different* structure by
-  # selectivity (issue #173). So we keep the bounded **set** of distinct plan
+  # and a parameterized query can pick a *different* structure by
+  # selectivity. So we keep the bounded **set** of distinct plan
   # variants — the heaviest instance of each structure — rather than one
   # representative. `:plans`/`:variants_omitted` are attached only when at least
   # one occurrence carried a plan; the common no-plan case keeps a clean shape.
@@ -85,7 +85,7 @@ defmodule Excessibility.QueryEvidence do
 
   # Reloaded pre-feature `timeline.json` records lack a `:fingerprint` key but
   # still carry the raw `:query` (or `:source`), so recompute a stable
-  # fingerprint on the fly to keep distinct old queries distinct (issue #154).
+  # fingerprint on the fly to keep distinct old queries distinct.
   defp fingerprint_of(q) do
     Map.get(q, :fingerprint) ||
       Excessibility.SQLFingerprint.fingerprint(Map.get(q, :query, Map.get(q, :source, "")))

@@ -45,7 +45,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.DataGrowth do
 
   alias Excessibility.TelemetryCapture.Analyzer
 
-  # A list going from empty to a single element is normal (issue #142): an
+  # A list going from empty to a single element is normal: an
   # unbounded ratio off a zero baseline (`0 → 1 = ∞x`) isn't a useful
   # severity input. A from-zero list only warns once it reaches a size worth
   # a second look; a genuinely large from-zero list still trips the
@@ -63,7 +63,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.DataGrowth do
   def analyze(%{timeline: timeline}, _opts) do
     # Track each list's size within a single view; a journey test interleaves
     # LiveViews, so a path that goes `0 → 1` in one view with unrelated events
-    # between must not be compared across the gap (issue #142).
+    # between must not be compared across the gap.
     findings =
       timeline
       |> Analyzer.group_by_view()
@@ -150,7 +150,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.DataGrowth do
   end
 
   # A from-zero list (`:infinity` multiplier) only warns once it has grown to
-  # a size worth a second look — `0 → 1` is just an item appearing (#142).
+  # a size worth a second look — `0 → 1` is just an item appearing.
   defp warning_growth?(:infinity, last_size), do: last_size >= @appeared_min
   defp warning_growth?(growth_multiplier, _last_size), do: growth_multiplier >= 3
 

@@ -30,7 +30,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EctoQueryAnalysis do
 
   # Conservative floor: real Phoenix mounts with nested preloads routinely run
   # more than a handful of queries, so an absolute count only signals a problem
-  # well above that (issue #151). The shape-based N+1 detector carries the
+  # well above that. The shape-based N+1 detector carries the
   # precise signal; this is a coarse backstop for genuinely high volume.
   @excessive_query_threshold 10
   @excessive_critical_threshold 20
@@ -81,7 +81,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EctoQueryAnalysis do
   # Two different SELECTs on the same table are distinct N+1 candidates, and
   # identical SELECTs group together even across bind-arity differences. The
   # shared `QueryEvidence.repeated/2` also tolerates string `operation` values
-  # from a reloaded `timeline.json` (issue #151).
+  # from a reloaded `timeline.json`.
   defp detect_n_plus_one(event, queries) when length(queries) >= @n_plus_one_threshold do
     queries
     |> Excessibility.QueryEvidence.repeated(min_repetitions: @n_plus_one_threshold)

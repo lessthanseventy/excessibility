@@ -69,7 +69,7 @@ defmodule Excessibility.TelemetryCapture.Analyzer do
   unrelated processes. Analyzers that compare *consecutive* events (memory
   growth, render efficiency) must not treat a `UserLoginLive` mount sitting
   next to a `MarketplaceLive.Index` render as a transition — that's an
-  artifact of the interleaving, not the code (issue #142).
+  artifact of the interleaving, not the code.
 
   Events are grouped by `:view_module`; groups appear in first-seen order
   and events keep their relative order within a group. Events without a
