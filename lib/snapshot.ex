@@ -173,13 +173,15 @@ defmodule Excessibility.Snapshot do
 
       scanner_mod = Application.get_env(:excessibility, :scanner_mod, Excessibility.Scanner)
       viewports = screenshot_viewports(opts)
-
-      scan_opts =
-        if viewports == [], do: [screenshot: screenshot_path], else: [screenshot: screenshot_path, viewports: viewports]
-
       purge_screenshots(screenshot_path)
 
-      case scanner_mod.scan(file_url, scan_opts) do
+      shot =
+        case viewports do
+          [] -> scanner_mod.scan(file_url, screenshot: screenshot_path)
+          _ -> scanner_mod.scan_viewports(file_url, viewports, screenshot: screenshot_path)
+        end
+
+      case shot do
         {:ok, _} -> log_written(screenshot_paths(screenshot_path, viewports), path)
         {:error, reason} -> Logger.error("Screenshot failed: #{inspect(reason)}")
       end

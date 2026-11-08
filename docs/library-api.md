@@ -88,8 +88,7 @@ clipping, which axe has no rule for:
 
 ```elixir
 {:ok, report} =
-  Excessibility.Scanner.scan("https://example.com",
-    viewports: [{1440, 900}, {320, 800}],
+  Excessibility.Scanner.scan_viewports("https://example.com", [{1440, 900}, {320, 800}],
     check_clipping: true
   )
 

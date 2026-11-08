@@ -233,10 +233,12 @@ defmodule Mix.Tasks.Excessibility do
   defp screenshot_opts(_file, false), do: []
   defp screenshot_opts(file, true), do: [screenshot: String.replace_suffix(file, ".html", ".png")]
 
+  defp axe_scan(url, [], opts), do: Excessibility.Scanner.scan(url, opts)
+  defp axe_scan(url, viewports, opts), do: Excessibility.Scanner.scan_viewports(url, viewports, opts)
+
   defp run_axe(files, %{viewports: viewports, check_clipping?: check_clipping?, screenshots?: screenshots?}) do
     disable_rules = Application.get_env(:excessibility, :axe_disable_rules, [])
     scan_opts = if disable_rules == [], do: [], else: [disable_rules: disable_rules]
-    scan_opts = if viewports == [], do: scan_opts, else: [{:viewports, viewports} | scan_opts]
     scan_opts = if check_clipping?, do: [{:check_clipping, true} | clipping_ratio_opts()] ++ scan_opts, else: scan_opts
     lv_rules_enabled? = Application.get_env(:excessibility, :lv_rules_enabled?, true)
     lv_disabled = Application.get_env(:excessibility, :lv_rules_disabled, [])
@@ -247,7 +249,7 @@ defmodule Mix.Tasks.Excessibility do
     results =
       Enum.map(files, fn file ->
         file_url = "file://" <> Path.expand(file)
-        axe_result = Excessibility.Scanner.scan(file_url, screenshot_opts(file, screenshots?) ++ scan_opts)
+        axe_result = axe_scan(file_url, viewports, screenshot_opts(file, screenshots?) ++ scan_opts)
 
         lv_findings =
           if lv_rules_enabled? do
