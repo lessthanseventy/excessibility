@@ -3,6 +3,8 @@ defmodule Mix.Tasks.Excessibility.DebugTest do
 
   import ExUnit.CaptureIO
 
+  alias Excessibility.Debug.BenchmarkRun
+  alias Excessibility.Debug.Report
   alias Mix.Tasks.Excessibility.Debug, as: DebugTask
 
   # `run/1` shells out to `mix test`, so we unit-test the `--format digest`
@@ -25,14 +27,14 @@ defmodule Mix.Tasks.Excessibility.DebugTest do
     digest = ~s({\n  "schema": "excessibility.digest/v1",\n  "capture": {\n    "status": "ok"\n  }\n})
     File.write!(@digest_path, digest)
 
-    output = capture_io(fn -> DebugTask.output_digest(%{}) end)
+    output = capture_io(fn -> Report.output_digest(%{}) end)
 
     assert output =~ "excessibility.digest/v1"
     assert output =~ ~s("status": "ok")
   end
 
   test "explains when no digest.json was produced" do
-    output = capture_io(fn -> DebugTask.output_digest(%{}) end)
+    output = capture_io(fn -> Report.output_digest(%{}) end)
 
     assert output =~ "No digest.json was produced"
     assert output =~ "LiveView telemetry"
@@ -91,14 +93,14 @@ defmodule Mix.Tasks.Excessibility.DebugTest do
     end
 
     test "extracts per-(view, callback) durations keyed by view/callback" do
-      sample = DebugTask.collect_sample(timeline_fixture())
+      sample = BenchmarkRun.collect_sample(timeline_fixture())
 
       assert sample["MyAppWeb.PageLive/mount"] == 12.0
       assert sample["MyAppWeb.PageLive/handle_event:save"] == 30.0
     end
 
     test "aggregates per-fingerprint query durations" do
-      sample = DebugTask.collect_sample(timeline_fixture())
+      sample = BenchmarkRun.collect_sample(timeline_fixture())
 
       # two aaa queries summed, one bbb query
       assert sample["query:sha256:aaa"] == 5.0
@@ -112,12 +114,12 @@ defmodule Mix.Tasks.Excessibility.DebugTest do
         ]
       }
 
-      assert DebugTask.collect_sample(timeline)["V/render"] == 7.0
+      assert BenchmarkRun.collect_sample(timeline)["V/render"] == 7.0
     end
 
     test "handles an empty/missing timeline gracefully" do
-      assert DebugTask.collect_sample(%{}) == %{}
-      assert DebugTask.collect_sample(%{timeline: []}) == %{}
+      assert BenchmarkRun.collect_sample(%{}) == %{}
+      assert BenchmarkRun.collect_sample(%{timeline: []}) == %{}
     end
   end
 end
