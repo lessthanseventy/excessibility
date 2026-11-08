@@ -79,8 +79,7 @@ defmodule Excessibility.Review.BehavioralTest do
     end
 
     test "a filtered timeline does not crash the default analyzer set" do
-      # Regression: memory analyzer read event.total_memory directly and raised
-      # KeyError, so review emitted no result at all.
+      # Analyzers must tolerate events without total_memory instead of raising KeyError.
       result = Behavioral.analyze(ecto_only_timeline(), [])
       assert is_list(result.findings)
     end

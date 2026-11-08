@@ -83,7 +83,7 @@ defmodule Excessibility.QueryEvidence do
     end
   end
 
-  # Reloaded pre-feature `timeline.json` records lack a `:fingerprint` key but
+  # Reloaded `timeline.json` records from older captures lack a `:fingerprint` key but
   # still carry the raw `:query` (or `:source`), so recompute a stable
   # fingerprint on the fly to keep distinct old queries distinct.
   defp fingerprint_of(q) do

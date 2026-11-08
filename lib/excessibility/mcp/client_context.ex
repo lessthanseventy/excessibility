@@ -8,7 +8,7 @@ defmodule Excessibility.MCP.ClientContext do
 
   The client's working directory is determined in this order:
   1. `MCP_CLIENT_CWD` environment variable (set by the mcp-server wrapper script)
-  2. Explicit `cwd` parameter passed to the tool (for backward compatibility)
+  2. Explicit `cwd` parameter passed to the tool
   3. Current working directory (fallback)
   """
 
@@ -16,7 +16,7 @@ defmodule Excessibility.MCP.ClientContext do
   Gets the client's working directory.
 
   ## Options
-    * `:cwd` - Explicit working directory override (for backward compatibility)
+    * `:cwd` - Explicit working directory override
 
   ## Examples
 
@@ -30,7 +30,7 @@ defmodule Excessibility.MCP.ClientContext do
     explicit_cwd = Keyword.get(opts, :cwd)
 
     cond do
-      # Explicit cwd parameter takes precedence (backward compat)
+      # Explicit cwd parameter takes precedence
       explicit_cwd && File.dir?(explicit_cwd) ->
         explicit_cwd
 

@@ -271,7 +271,7 @@ defmodule Excessibility.TelemetryCapture.FilterTest do
       assert {:ok, _json} = Jason.encode(result)
     end
 
-    test "filters lists of structs without crashing (regression test for #50)" do
+    test "filters lists of structs without crashing" do
       # Bug: filter_functions crashed with Protocol.UndefinedError when processing
       # lists of structs because it tried to enumerate structs directly
       #
@@ -315,7 +315,7 @@ defmodule Excessibility.TelemetryCapture.FilterTest do
       assert {:ok, _json} = Jason.encode(result)
     end
 
-    test "filters functions inside tuples (regression test for #52)" do
+    test "filters functions inside tuples" do
       # Bug: Functions inside tuples (e.g., Ecto.Type internals) slip through
       # filter_functions and crash Jason.encode with "not implemented for Function"
       #

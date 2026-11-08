@@ -660,9 +660,9 @@ defmodule Excessibility.DigestCompareTest do
     assert q.count_changed == [%{fingerprint: "sha256:aaa", base_count: 3, head_count: 10}]
   end
 
-  # --- C1: failed/partial capture must not masquerade as a regression -------
+  # --- failed/partial capture must not masquerade as a regression -------
 
-  test "failed head capture adds a prominent status note (C1)" do
+  test "failed head capture adds a prominent status note" do
     base = digest([event("PageLive", "handle_event:save", shapes: [shape("sha256:aaa", 1)])])
 
     head = %{
@@ -689,7 +689,7 @@ defmodule Excessibility.DigestCompareTest do
     assert {"PageLive", "handle_event:save"} in result.coverage.callbacks_removed
   end
 
-  test "failed base capture adds a prominent status note (C1)" do
+  test "failed base capture adds a prominent status note" do
     base = %{
       schema: "excessibility.digest/v1",
       capture: %{status: "failed", ecto_configured: true, plan_capture: "disabled"},
@@ -706,9 +706,9 @@ defmodule Excessibility.DigestCompareTest do
            )
   end
 
-  # --- I2: plan aggregation must be order-independent -----------------------
+  # --- plan aggregation must be order-independent -----------------------
 
-  test "plan merge is order-independent for same fp with different plans (I2)" do
+  test "plan merge is order-independent for same fp with different plans" do
     base =
       digest(
         [

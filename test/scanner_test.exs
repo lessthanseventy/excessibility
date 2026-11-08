@@ -324,7 +324,7 @@ defmodule Excessibility.ScannerTest do
       {:ok, report} = Scanner.scan("file://#{path}", viewport: {320, 800}, check_clipping: true)
       assert [%{selector: _}] = report.clipping.clipped
 
-      # At a 0.1 threshold the 23%-visible button is no longer flagged,
+      # At a 0.1 threshold the 23%-visible button is not flagged,
       # but the page-level overflow is still reported.
       {:ok, lenient} =
         Scanner.scan("file://#{path}",

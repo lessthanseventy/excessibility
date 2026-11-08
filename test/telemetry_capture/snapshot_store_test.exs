@@ -4,13 +4,12 @@ defmodule Excessibility.TelemetryCapture.SnapshotStoreTest do
   alias Excessibility.TelemetryCapture
   alias Excessibility.TelemetryCapture.SnapshotStore
 
-  # Regression for the flaky ETS race: the snapshot table used to be owned by
-  # whichever process first called attach/0, so that process exiting destroyed
-  # the table out from under other tests still writing to it
+  # The snapshot table must outlive whichever process called attach/0, or it
+  # vanishes under other tests still writing to it
   # (ArgumentError: the table identifier does not refer to an existing ETS table).
   test "snapshot table survives the process that attached exiting" do
-    # Attach from a short-lived process, then let it die. Under the old ownership
-    # the table was created by (and owned by) this task, so it would vanish here.
+    # Attach from a short-lived process, then let it die; a table owned by that
+    # task would vanish here.
     task = Task.async(fn -> TelemetryCapture.attach() end)
     Task.await(task)
     refute Process.alive?(task.pid)
