@@ -333,9 +333,8 @@ defmodule Excessibility.TelemetryCapture do
 
   def handle_event([:phoenix, :live_view, :handle_event, :stop], measurements, metadata, _config) do
     event_name =
-      try do
-        get_in(metadata, [:params, "event"]) || "event"
-      rescue
+      case metadata do
+        %{params: %{"event" => event}} when not is_nil(event) -> event
         _ -> "event"
       end
 
@@ -386,14 +385,14 @@ defmodule Excessibility.TelemetryCapture do
 
     assigns
     |> Map.drop([:flash, :__changed__, :__temp__])
-    |> Enum.filter(fn {k, _v} -> !String.starts_with?(to_string(k), "_") end)
+    |> Enum.filter(fn {k, _v} -> not String.starts_with?(to_string(k), "_") end)
     |> Map.new()
   end
 
   defp extract_view_module(socket, metadata) do
     cond do
-      is_struct(socket) && Map.has_key?(socket, :view) -> socket.view
-      is_map(metadata) && Map.has_key?(metadata, :view) -> metadata[:view]
+      is_struct(socket) and Map.has_key?(socket, :view) -> socket.view
+      is_map(metadata) and Map.has_key?(metadata, :view) -> metadata.view
       true -> :unknown
     end
   end
@@ -536,10 +535,7 @@ defmodule Excessibility.TelemetryCapture do
 
       analyzers_str ->
         # Parse analyzer names and resolve their enrichers
-        analyzer_names =
-          analyzers_str
-          |> String.split(",")
-          |> Enum.map(&String.to_atom/1)
+        analyzer_names = Registry.analyzer_names_from_string(analyzers_str)
 
         Registry.resolve_enrichers(analyzer_names)
     end

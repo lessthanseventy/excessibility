@@ -133,6 +133,19 @@ defmodule Excessibility.TelemetryCapture.Registry do
   end
 
   @doc """
+  Parses a comma-separated string of analyzer names into the names of known
+  analyzers. Unknown names are dropped.
+  """
+  @spec analyzer_names_from_string(String.t()) :: [atom()]
+  def analyzer_names_from_string(names_str) do
+    known = Map.new(discover_analyzers(), &{Atom.to_string(&1.name()), &1.name()})
+
+    names_str
+    |> String.split(",")
+    |> Enum.flat_map(fn name -> List.wrap(Map.get(known, name)) end)
+  end
+
+  @doc """
   Resolves which enrichers are needed for a set of analyzer names.
 
   Returns deduplicated list of enricher names.

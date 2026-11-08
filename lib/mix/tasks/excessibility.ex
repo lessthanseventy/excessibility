@@ -334,7 +334,7 @@ defmodule Mix.Tasks.Excessibility do
   defp print_axe({:error, reason}), do: Mix.shell().info("  Error: #{format_error(reason)}\n")
 
   defp print_viewport_result(%{viewport: viewport, violations: violations} = result) do
-    if !result_clean?(result) do
+    if not result_clean?(result) do
       Mix.shell().info("  @#{format_viewport(viewport)}:")
       if violations != [], do: format_violations(violations)
       print_clipping(Map.get(result, :clipping))
