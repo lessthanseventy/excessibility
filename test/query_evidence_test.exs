@@ -31,7 +31,7 @@ defmodule Excessibility.QueryEvidenceTest do
     assert rep.severity == :advisory
   end
 
-  test "select?/1 tolerates string operations from reloaded json (issue #151)" do
+  test "select?/1 tolerates string operations from reloaded json" do
     assert QueryEvidence.select?(%{operation: "select"})
     assert QueryEvidence.select?(%{operation: :select})
   end
@@ -47,7 +47,7 @@ defmodule Excessibility.QueryEvidenceTest do
     refute Map.has_key?(shape, :plan)
   end
 
-  test "shapes/1 preserves every distinct structural plan variant under one fingerprint (#173)" do
+  test "shapes/1 preserves every distinct structural plan variant under one fingerprint" do
     heavy = %{fingerprint: "sha256:A", nodes: ["Seq Scan"], relations: ["a"], node_rows: []}
     light = %{fingerprint: "sha256:B", nodes: ["Index Scan"], relations: ["b"], node_rows: []}
 
@@ -81,7 +81,7 @@ defmodule Excessibility.QueryEvidenceTest do
     refute Map.has_key?(shape, :variants_omitted)
   end
 
-  test "shapes/1 aggregates plan row work across every occurrence, not just the first (#167)" do
+  test "shapes/1 aggregates plan row work across every occurrence, not just the first" do
     node = fn touched ->
       %{
         node: "Seq Scan",

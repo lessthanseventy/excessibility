@@ -47,7 +47,7 @@ defmodule Excessibility.LiveViewRules.Rules.PhxClickOnNonInteractiveTest do
   describe "ignores phx-click-away (dismissal, not activation)" do
     # phx-click-away fires when the user clicks *elsewhere* — the element is not
     # a click target, so it does not need to be keyboard-focusable. Keyboard
-    # dismissal is click_away_without_escape's concern. See issue #110.
+    # dismissal is click_away_without_escape's concern.
     test "div with only phx-click-away" do
       html = ~s(<div phx-click-away="close">Panel</div>)
       assert [] = findings(html)

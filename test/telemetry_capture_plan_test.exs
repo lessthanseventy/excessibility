@@ -208,7 +208,7 @@ defmodule Excessibility.TelemetryCapturePlanTest do
     assert Map.get(record, :plan) == nil
   end
 
-  test "ANALYZE downgrade warns once per run, not once per query (#159)" do
+  test "ANALYZE downgrade warns once per run, not once per query" do
     System.put_env("EXCESSIBILITY_QUERY_PLAN", "explain_analyze")
     prev = Application.get_env(:excessibility, :query_plan_allow_analyze)
     Application.put_env(:excessibility, :query_plan_allow_analyze, false)

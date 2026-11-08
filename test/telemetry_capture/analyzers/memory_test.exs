@@ -49,8 +49,8 @@ defmodule Excessibility.TelemetryCapture.Analyzers.MemoryTest do
     end
 
     test "detects large growth between events" do
-      # 10x growth from event 1 to 2, above the absolute floor (issue #142:
-      # a ratio off a tiny heap is noise, so sizes must clear a few hundred KB)
+      # 10x growth from event 1 to 2, above the absolute floor
+      # (a ratio off a tiny heap is noise, so sizes must clear a few hundred KB)
       timeline = build_timeline([300_000, 3_000_000, 3_300_000])
       result = Memory.analyze(timeline, [])
 
@@ -60,7 +60,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.MemoryTest do
     end
 
     test "detects memory leak pattern" do
-      # 3+ consecutive increases past the absolute floor (issue #142)
+      # 3+ consecutive increases past the absolute floor
       timeline = build_timeline([300_000, 600_000, 1_200_000, 2_400_000, 4_800_000])
       result = Memory.analyze(timeline, [])
 
@@ -68,7 +68,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.MemoryTest do
       assert Enum.any?(result.findings, &String.contains?(&1.message, "leak"))
     end
 
-    test "a flat plateau at a large size is not growth (issue #146)" do
+    test "a flat plateau at a large size is not growth" do
       # A run of small events that jumps once to ~300 KB and then holds steady.
       # The jump (events 10->11) is a real finding; the flat 300 KB -> 300 KB
       # transition must not be reported as "grew 1.0x" just because 300 KB is a

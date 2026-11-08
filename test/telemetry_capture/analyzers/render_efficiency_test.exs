@@ -46,7 +46,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.RenderEfficiencyTest do
     test "detects wasted render with no changes" do
       # 6 renders repainting identical state. The first is the initial paint
       # (never wasted); the other 5 are wasted — enough samples for the
-      # percentage-based critical (issue #142: a % claim over a couple of
+      # percentage-based critical (a % claim over a couple of
       # renders is sample-size noise).
       timeline =
         build_timeline([
@@ -66,7 +66,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.RenderEfficiencyTest do
       assert result.stats.wasted_render_count == 5
     end
 
-    test "a render following a real state change is not wasted (issue #142)" do
+    test "a render following a real state change is not wasted" do
       # LiveView captures a handle_event and its render as two events, so the
       # render's own diff is empty even though the interaction changed state.
       timeline =
@@ -86,7 +86,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.RenderEfficiencyTest do
     end
 
     test "critical when >30% wasted" do
-      # 6 renders, 3 wasted = 50%, above the minimum sample size (issue #142)
+      # 6 renders, 3 wasted = 50%, above the minimum sample size
       timeline =
         build_timeline([
           %{event: "render", changes: %{a: {1, 2}}},

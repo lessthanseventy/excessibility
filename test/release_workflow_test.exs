@@ -1,6 +1,6 @@
 defmodule Excessibility.ReleaseWorkflowTest do
   @moduledoc """
-  Issue #187: static guards over the deliberate, human-gated release path. These
+  Static guards over the deliberate, human-gated release path. These
   assert `release.yml` keeps its safety invariants and that the CHANGELOG stays
   well-formed, so a future edit that quietly drops a guard fails loudly in CI
   rather than at (or after) a release.
@@ -13,7 +13,7 @@ defmodule Excessibility.ReleaseWorkflowTest do
   @changelog File.read!("CHANGELOG.md")
   @mix_exs File.read!("mix.exs")
 
-  describe "release.yml safety guards (#187)" do
+  describe "release.yml safety guards" do
     test "refuses any dispatch ref except the default branch" do
       assert @release_yml =~ ~s("$GITHUB_REF" != "refs/heads/main"),
              "release.yml must refuse to run for any ref other than refs/heads/main"
@@ -101,7 +101,7 @@ defmodule Excessibility.ReleaseWorkflowTest do
     end
   end
 
-  describe "CHANGELOG well-formedness (#187)" do
+  describe "CHANGELOG well-formedness" do
     test "keeps an [Unreleased] section for in-flight work" do
       assert @changelog =~ ~r/^## \[Unreleased\]/m
     end

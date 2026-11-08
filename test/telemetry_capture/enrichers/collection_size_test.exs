@@ -21,7 +21,7 @@ defmodule Excessibility.TelemetryCapture.Enrichers.CollectionSizeTest do
       assert Map.has_key?(result, :total_list_items)
     end
 
-    test "stops at opaque library structs instead of counting their internals (issue #142)" do
+    test "stops at opaque library structs instead of counting their internals" do
       # A Phoenix form's changeset carries Ecto machinery (types, mappings,
       # validations) and schema timestamps carry microsecond tuples — none of
       # which is actionable app state. The traversal must treat these as leaves.

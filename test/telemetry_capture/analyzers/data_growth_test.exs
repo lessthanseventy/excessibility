@@ -237,7 +237,6 @@ defmodule Excessibility.TelemetryCapture.Analyzers.DataGrowthTest do
     end
 
     test "handles list growing from zero without ArithmeticError" do
-      # Reproduces GitHub issue #58
       timeline = %{
         timeline: [
           %{sequence: 1, event: "mount", list_sizes: %{products: 0}},

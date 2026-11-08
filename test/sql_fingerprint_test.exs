@@ -135,7 +135,7 @@ defmodule Excessibility.SQLFingerprintTest do
                SQLFingerprint.fingerprint("SELECT /* hint */ * FROM users WHERE id = $1")
     end
 
-    # --- #166: dollar tags are case-sensitive in Postgres ---
+    # --- dollar tags are case-sensitive in Postgres ---
 
     test "mixed-case dollar tag: inner lowercase tag does not close an uppercase-tagged literal" do
       # The literal is delimited by $TAG$ … $TAG$ (case-sensitive). A lowercase

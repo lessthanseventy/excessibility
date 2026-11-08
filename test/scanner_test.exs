@@ -127,7 +127,7 @@ defmodule Excessibility.ScannerTest do
     test "warns 'failed to load' when a linked stylesheet is missing" do
       # Under file:// Chromium attaches a non-null empty CSSStyleSheet to a
       # <link> whose file doesn't exist, so this must classify via the
-      # failed network request, not link.sheet (issue #137).
+      # failed network request, not link.sheet.
       path =
         write_tmp_html("""
         <html lang="en"><head><title>Test</title>

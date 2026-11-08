@@ -36,7 +36,7 @@ defmodule Excessibility.LiveViewRules.Rules.ToggleMissingAriaStateTest do
   describe "does not flag dismissers" do
     # A hide-only action is a dismiss, not a disclosure toggle. aria-expanded
     # belongs on the control that *shows* the target, not on a close button —
-    # its value would be permanently wrong here. See issue #110.
+    # its value would be permanently wrong here.
     test "hide-only close button" do
       html = ~s(<button phx-click='#{js("hide", "#disconnected")}' aria-label="close">x</button>)
       assert [] = findings(html)

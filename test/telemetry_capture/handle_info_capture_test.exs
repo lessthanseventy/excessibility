@@ -1,6 +1,6 @@
 defmodule Excessibility.TelemetryCapture.HandleInfoCaptureTest do
   @moduledoc """
-  Issue #147: the opt-in `on_mount` hook records `handle_info` messages (which
+  The opt-in `on_mount` hook records `handle_info` messages (which
   have no LiveView telemetry) so `message_flooding` can fire. The full capture
   path is exercised end-to-end against a real LiveView in the demo app; here we
   pin the production-safety guarantee — the hook does nothing unless telemetry

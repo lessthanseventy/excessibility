@@ -6,7 +6,7 @@ defmodule Excessibility.TelemetryCapture.AttributionTest do
   emitting process's dictionary and are attributed to the NEXT captured `:stop`
   event (which calls `flush_ecto_queries/0` and stamps them onto that event's
   snapshot). `mount.start` additionally flushes/discards the accumulator so a
-  test's pre-mount `setup` seeds never bleed onto `mount` (issue #151).
+  test's pre-mount `setup` seeds never bleed onto `mount`.
 
   These tests drive the telemetry events IN ORDER within a single process and
   assert, for each scenario, that a query lands on the EXPECTED callback's
@@ -123,7 +123,7 @@ defmodule Excessibility.TelemetryCapture.AttributionTest do
     end
   end
 
-  # --- scenario 1: pre-mount setup seeds do NOT attach to mount (#151) --------
+  # --- scenario 1: pre-mount setup seeds do NOT attach to mount --------
 
   test "pre-mount setup seed queries do not attach to mount" do
     # Simulate `setup` seeds running in the (static-mount) process BEFORE the

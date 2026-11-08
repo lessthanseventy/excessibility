@@ -201,7 +201,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.StateMachineTest do
       assert result.findings == []
     end
 
-    test "does not report phantom transitions across interleaved views (issue #142)" do
+    test "does not report phantom transitions across interleaved views" do
       # An Index render followed by a Login mount is two different processes;
       # diffing their key sets would report keys added/removed and unstable
       # state that never happened. Grouping by view removes the phantom.

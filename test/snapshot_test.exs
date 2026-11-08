@@ -100,7 +100,7 @@ defmodule Excessibility.SnapshotTest do
     end
   end
 
-  describe "screenshot viewports (#196)" do
+  describe "screenshot viewports" do
     setup do
       Application.put_env(:excessibility, :scanner_mod, Excessibility.ScannerMock)
 

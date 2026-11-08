@@ -51,7 +51,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EctoQueryAnalysisTest do
 
     test "detects excessive queries per event" do
       # Distinct sources so the N+1 detector stays quiet and we exercise the
-      # count detector in isolation. Threshold is conservative (issue #151).
+      # count detector in isolation. Threshold is conservative.
       queries =
         for i <- 1..12,
             do: %{
@@ -83,7 +83,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EctoQueryAnalysisTest do
 
     test "does not flag a moderate query count below the conservative threshold" do
       # A healthy view doing ~8 queries across distinct sources must stay silent
-      # (issue #151: the old threshold of 5 fired on every real mount).
+      # (a threshold of 5 would fire on every real mount).
       queries =
         for i <- 1..8,
             do: %{
@@ -230,7 +230,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EctoQueryAnalysisTest do
     test "detects N+1 when operation values are strings (JSON --timeline round-trip)" do
       # `mix excessibility.review --timeline` loads with Jason.decode(keys: :atoms),
       # which atomises keys but leaves values as strings. The N+1 detector must
-      # still fire — issue #151.
+      # still fire.
       queries =
         for _ <- 1..15,
             do: %{

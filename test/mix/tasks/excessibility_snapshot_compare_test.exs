@@ -41,7 +41,7 @@ defmodule Mix.Tasks.Excessibility.Snapshot.CompareTest do
   end
 
   # Under capture_io stdin is not a TTY, which is exactly the CI/agent
-  # situation from issue #134: prompting would read :eof. The task must
+  # situation: prompting would read :eof. The task must
   # refuse with guidance instead of crashing in parse_choice/1 — and
   # since it refuses before writing .good/.bad pairs, nothing leaks.
   test "refuses to prompt when stdin is not interactive" do

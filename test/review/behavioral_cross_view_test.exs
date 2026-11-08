@@ -1,11 +1,10 @@
 defmodule Excessibility.Review.BehavioralCrossViewTest do
   @moduledoc """
-  Regression for issue #142: behavioral analyzers must not raise serious
-  findings on a healthy journey timeline that interleaves several
-  LiveViews. The fixture is the numbers-only 12-event timeline from the
-  issue (a MarketplaceLive.Index journey with UserLoginLive mounts
-  interleaved), which previously produced 5 :serious findings purely from
-  cross-view adjacency and small-sample ratios.
+  Behavioral analyzers must not raise serious findings on a healthy journey
+  timeline that interleaves several LiveViews. The fixture is a numbers-only
+  12-event timeline (a MarketplaceLive.Index journey with UserLoginLive mounts
+  interleaved) whose only candidate findings come from cross-view adjacency
+  and small-sample ratios.
   """
   use ExUnit.Case, async: true
 

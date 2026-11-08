@@ -16,7 +16,7 @@ Code.require_file("test/support/scanner_stub.ex", File.cwd!())
 # where one test's teardown deleted the table mid-run of another).
 Excessibility.TelemetryCapture.SnapshotStore.ensure_started()
 
-# The real-Postgrex privacy regression (#175) needs a live database. When
+# The real-Postgrex privacy regression needs a live database. When
 # DATABASE_URL is set (CI's disposable Postgres, or a local dev DB), start a
 # real repo so the `:database`-tagged test runs against genuine adapter
 # telemetry. Otherwise exclude that tag so `mix test` stays green with no DB.
@@ -44,7 +44,7 @@ else
   # Exclude by tag *value* (`database: true`), not the bare atom. An atom filter
   # matches the tag key regardless of value, so a DB-free companion guard
   # colocated in a `@moduletag :database` module could not opt back in with
-  # `@tag database: false` — it stayed silently excluded (issue #186).
+  # `@tag database: false`.
   ExUnit.start(exclude: [database: true])
 end
 

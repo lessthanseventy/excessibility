@@ -224,7 +224,6 @@ defmodule Excessibility.TelemetryCapture.Analyzers.PerformanceTest do
     end
 
     test "handles zero duration without FunctionClauseError" do
-      # Reproduces GitHub issue #60
       timeline = %{
         timeline: [
           %{sequence: 1, event: "mount", event_duration_ms: 0},

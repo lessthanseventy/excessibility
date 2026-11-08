@@ -148,7 +148,7 @@ defmodule Mix.Tasks.ExcessibilityTest do
     end
   end
 
-  describe "cross-snapshot diffing (#104)" do
+  describe "cross-snapshot diffing" do
     setup :setup_passing_mock
 
     # A filter interaction that drops a table row — content changes with no
@@ -199,7 +199,7 @@ defmodule Mix.Tasks.ExcessibilityTest do
     end
   end
 
-  describe "multiple viewports (#122)" do
+  describe "multiple viewports" do
     setup do
       on_exit(fn -> Application.delete_env(:excessibility, :viewports) end)
       :ok
@@ -247,7 +247,7 @@ defmodule Mix.Tasks.ExcessibilityTest do
     end
   end
 
-  describe "own-flag argument stripping (#196)" do
+  describe "own-flag argument stripping" do
     setup do
       on_exit(fn -> Application.delete_env(:excessibility, :viewports) end)
       :ok
@@ -273,7 +273,7 @@ defmodule Mix.Tasks.ExcessibilityTest do
     end
   end
 
-  describe "clipping detection (#122 follow-up)" do
+  describe "clipping detection" do
     setup do
       on_exit(fn -> Application.delete_env(:excessibility, :check_clipping) end)
       :ok
@@ -323,7 +323,7 @@ defmodule Mix.Tasks.ExcessibilityTest do
     end
   end
 
-  describe "screenshots (#196)" do
+  describe "screenshots" do
     setup do
       on_exit(fn -> Application.delete_env(:excessibility, :screenshots) end)
       :ok
