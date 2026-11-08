@@ -49,7 +49,7 @@ defmodule Excessibility.TelemetryCaptureRealPostgresTest do
   @estring_sql "SELECT E'a\\'b -- not a comment canary_175_estr@example.com' AS estr_note, 90909090 AS num"
 
   setup do
-    :ets.whereis(:excessibility_snapshots) != :undefined &&
+    :ets.whereis(:excessibility_snapshots) != :undefined and
       :ets.delete_all_objects(:excessibility_snapshots)
 
     File.rm_rf!(@output_path)
@@ -64,7 +64,7 @@ defmodule Excessibility.TelemetryCaptureRealPostgresTest do
       Application.delete_env(:excessibility, :ecto_repos)
       System.delete_env("EXCESSIBILITY_FIXTURES")
 
-      :ets.whereis(:excessibility_snapshots) != :undefined &&
+      :ets.whereis(:excessibility_snapshots) != :undefined and
         :ets.delete_all_objects(:excessibility_snapshots)
 
       File.rm_rf!(@output_path)

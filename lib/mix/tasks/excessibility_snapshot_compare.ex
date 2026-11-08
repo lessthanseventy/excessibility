@@ -53,7 +53,7 @@ defmodule Mix.Tasks.Excessibility.Snapshot.Compare do
         nil -> nil
         "good" -> :good
         "bad" -> :bad
-        other -> raise ArgumentError, "Unknown --keep value #{inspect(other)}. Use good or bad."
+        other -> Mix.raise("Unknown --keep value #{inspect(other)}. Use good or bad.")
       end
 
     ensure_directories!()

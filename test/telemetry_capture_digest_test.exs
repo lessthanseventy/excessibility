@@ -13,7 +13,7 @@ defmodule Excessibility.TelemetryCaptureDigestTest do
   @secret_sql "SELECT id FROM accounts WHERE api_token = 'LEAK_CANARY_9f3b2c' AND ssn = '078-05-1120' AND id = 424242"
 
   setup do
-    :ets.whereis(:excessibility_snapshots) != :undefined &&
+    :ets.whereis(:excessibility_snapshots) != :undefined and
       :ets.delete_all_objects(:excessibility_snapshots)
 
     File.rm_rf!(@output_path)
@@ -21,7 +21,7 @@ defmodule Excessibility.TelemetryCaptureDigestTest do
     on_exit(fn ->
       TelemetryCapture.detach()
 
-      :ets.whereis(:excessibility_snapshots) != :undefined &&
+      :ets.whereis(:excessibility_snapshots) != :undefined and
         :ets.delete_all_objects(:excessibility_snapshots)
 
       File.rm_rf!(@output_path)

@@ -216,8 +216,8 @@ defmodule Mix.Tasks.Excessibility.Debug do
         [filter_ecto: false, filter_phoenix: false]
       else
         [
-          filter_ecto: !Keyword.get(opts, :no_filter_ecto, false),
-          filter_phoenix: !Keyword.get(opts, :no_filter_phoenix, false)
+          filter_ecto: not Keyword.get(opts, :no_filter_ecto, false),
+          filter_phoenix: not Keyword.get(opts, :no_filter_phoenix, false)
         ]
       end
 
@@ -706,7 +706,8 @@ defmodule Mix.Tasks.Excessibility.Debug do
         []
 
       profile = Keyword.get(opts, :profile) ->
-        Profiles.get(String.to_atom(profile)) || []
+        profile_name = Enum.find(Profiles.list(), &(Atom.to_string(&1) == profile))
+        Profiles.get(profile_name) || []
 
       analyze = Keyword.get(opts, :analyze) ->
         case analyze do
@@ -714,9 +715,7 @@ defmodule Mix.Tasks.Excessibility.Debug do
             Enum.map(Registry.get_all_analyzers(), & &1.name())
 
           names_str ->
-            names_str
-            |> String.split(",")
-            |> Enum.map(&String.to_atom/1)
+            Registry.analyzer_names_from_string(names_str)
         end
 
       true ->

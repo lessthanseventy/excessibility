@@ -13,7 +13,7 @@ defmodule Excessibility.TelemetryCaptureIntegrationTest do
 
   setup do
     # Clean up any existing snapshots
-    :ets.whereis(:excessibility_snapshots) != :undefined &&
+    :ets.whereis(:excessibility_snapshots) != :undefined and
       :ets.delete_all_objects(:excessibility_snapshots)
 
     output_path = "test/excessibility"
