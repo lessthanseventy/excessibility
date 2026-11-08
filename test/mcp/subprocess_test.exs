@@ -19,7 +19,7 @@ defmodule Excessibility.MCP.SubprocessTest do
       # Use a freshly created dir and compare by identity (device + inode) rather
       # than by textual path: macOS resolves symlinked roots like /tmp to
       # /private/tmp, so `pwd` in the subprocess prints the physical path and a
-      # string compare would spuriously fail (issue #183).
+      # string compare would spuriously fail.
       dir = Path.join(System.tmp_dir!(), "subprocess_cd_#{System.unique_integer([:positive])}")
       File.mkdir_p!(dir)
       on_exit(fn -> File.rm_rf!(dir) end)

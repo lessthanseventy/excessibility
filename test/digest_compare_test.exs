@@ -149,7 +149,7 @@ defmodule Excessibility.DigestCompareTest do
     assert p.variant_deltas == []
   end
 
-  test "stable plan fingerprint with changed actual rows still produces a plan delta (#157)" do
+  test "stable plan fingerprint with changed actual rows still produces a plan delta" do
     base =
       digest(
         [
@@ -192,7 +192,7 @@ defmodule Excessibility.DigestCompareTest do
     assert d.estimated_rows_delta == 0
   end
 
-  test "node-level actual-row change under a stable fingerprint surfaces as a node delta (#157)" do
+  test "node-level actual-row change under a stable fingerprint surfaces as a node delta" do
     plan = fn child_actual ->
       %{
         fingerprint: "sha256:plan",
@@ -247,7 +247,7 @@ defmodule Excessibility.DigestCompareTest do
     assert node.rows_touched_delta == 9_990
   end
 
-  test "later same-fingerprint occurrence that grows produces a plan delta end-to-end (#167)" do
+  test "later same-fingerprint occurrence that grows produces a plan delta end-to-end" do
     # An EXPLAIN ANALYZE plan whose child Seq Scan touches `child_actual` rows.
     explain = fn child_actual ->
       [
@@ -325,7 +325,7 @@ defmodule Excessibility.DigestCompareTest do
     assert DigestCompare.diff(base, head).plans == []
   end
 
-  test "a changed non-dominant plan variant is reported even when a heavier variant is unchanged (#173)" do
+  test "a changed non-dominant plan variant is reported even when a heavier variant is unchanged" do
     heavy = %{fingerprint: "sha256:A", estimated_rows: 10_000, node_rows: []}
     light_b = %{fingerprint: "sha256:B", estimated_rows: 5, node_rows: []}
     light_c = %{fingerprint: "sha256:C", estimated_rows: 5, node_rows: []}
@@ -356,7 +356,7 @@ defmodule Excessibility.DigestCompareTest do
     assert p.variant_deltas == []
   end
 
-  test "a bound-omitted plan variant that changed is surfaced, never read as equal (#183)" do
+  test "a bound-omitted plan variant that changed is surfaced, never read as equal" do
     # Both sides capture 9 distinct structural variants under one SQL fingerprint.
     # Eight are identical; the ninth differs and is exactly the one the bound
     # (@max_plan_variants == 8) drops. The retained sets match, so without the
@@ -391,7 +391,7 @@ defmodule Excessibility.DigestCompareTest do
     assert Enum.any?(result.coverage.notes, &String.contains?(&1, "omitted"))
   end
 
-  test "a bound-omitted variant on a query present on only one side is surfaced as a coverage note (#183)" do
+  test "a bound-omitted variant on a query present on only one side is surfaced as a coverage note" do
     # `plan_diffs/3` only iterates the intersection of SQL fingerprints, so a
     # fingerprint present on just one side never reaches a plans entry. Its
     # omission must still surface via coverage.
@@ -430,7 +430,7 @@ defmodule Excessibility.DigestCompareTest do
     assert Enum.any?(result.coverage.notes, &String.contains?(&1, "2"))
   end
 
-  test "plan omission is not noted when plans are not comparable (#183)" do
+  test "plan omission is not noted when plans are not comparable" do
     # If plan capture modes differ, plans are suppressed and the scope difference
     # is already noted; an omission note would be misleading noise.
     base =
@@ -506,7 +506,7 @@ defmodule Excessibility.DigestCompareTest do
     assert a.head_cardinality == 90
   end
 
-  test "tiny byte-only assign deltas are suppressed by default (#159)" do
+  test "tiny byte-only assign deltas are suppressed by default" do
     # Two unchanged runs whose per-assign term_bytes jitter by a byte or two
     # with identical cardinality must not produce assign deltas.
     base =
@@ -522,7 +522,7 @@ defmodule Excessibility.DigestCompareTest do
     assert DigestCompare.diff(base, head).assigns == []
   end
 
-  test "a cardinality change is never suppressed even with a tiny byte delta (#159)" do
+  test "a cardinality change is never suppressed even with a tiny byte delta" do
     base = digest([event("PageLive", "handle_event:save", assigns: [assign("items", 1_000, 5)])])
     head = digest([event("PageLive", "handle_event:save", assigns: [assign("items", 1_001, 6)])])
 
@@ -532,7 +532,7 @@ defmodule Excessibility.DigestCompareTest do
     assert a.head_cardinality == 6
   end
 
-  test "a large byte-only delta is still reported (#159)" do
+  test "a large byte-only delta is still reported" do
     base = digest([event("PageLive", "handle_event:save", assigns: [assign("blob", 1_000, nil)])])
     head = digest([event("PageLive", "handle_event:save", assigns: [assign("blob", 20_000, nil)])])
 

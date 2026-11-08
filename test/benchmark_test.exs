@@ -130,7 +130,7 @@ defmodule Excessibility.BenchmarkTest do
     end
   end
 
-  describe "summarize/2 effect-size gating (#159)" do
+  describe "summarize/2 effect-size gating" do
     # Sub-millisecond scheduler/timer jitter clears the MAD threshold but is not
     # an actionable effect. warm = [0.60,0.62,0.62,0.64,0.90]: median 0.62,
     # mad 0.02, threshold 0.74; 0.90 > 0.74 statistically but only +0.28 ms.

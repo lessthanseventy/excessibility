@@ -60,7 +60,7 @@ defmodule Excessibility.LiveViewRules.Rules.ClickAwayWithoutEscapeTest do
     end
   end
 
-  describe "phx-key case-sensitivity (issue #110)" do
+  describe "phx-key case-sensitivity" do
     # phx-key matches KeyboardEvent.key literally, so "escape" (lowercase)
     # silently never fires. Still a finding, but with a targeted message.
     test "miscased escape with a keydown handler is flagged with a capitalization hint" do

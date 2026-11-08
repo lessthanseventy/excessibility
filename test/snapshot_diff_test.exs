@@ -59,7 +59,7 @@ defmodule Excessibility.SnapshotDiffTest do
     end
   end
 
-  describe "live_region_findings/3 — content change without aria-live (issue #104)" do
+  describe "live_region_findings/3 — content change without aria-live" do
     test "flags a significant content change outside any live region" do
       assert [finding] = findings(@table_two, @table_one)
       assert finding.rule == :content_change_without_live_region
@@ -120,7 +120,7 @@ defmodule Excessibility.SnapshotDiffTest do
     end
   end
 
-  describe "scan_sequence/2 — same-view identity guard (issue #191)" do
+  describe "scan_sequence/2 — same-view identity guard" do
     # Wrap a body in a LiveView main root carrying a per-mount id, the way a
     # captured LiveView snapshot looks. A fresh `live/2` mount gets a new id;
     # an in-place patch keeps the same id.
@@ -143,7 +143,7 @@ defmodule Excessibility.SnapshotDiffTest do
       assert finding.rule == :content_change_without_live_region
     end
 
-    test "treats LiveView->non-LiveView (root presence differs) as a navigation (#193)" do
+    test "treats LiveView->non-LiveView (root presence differs) as a navigation" do
       # A LiveView cannot patch into a dead controller render, so a rooted
       # snapshot followed by an unrooted one is a page change, not a patch.
       live = lv("phx-AAA", @table_two)
@@ -172,7 +172,7 @@ defmodule Excessibility.SnapshotDiffTest do
     end
   end
 
-  describe "navigation-scale changes — dead-render navigations (issue #193, Case A)" do
+  describe "navigation-scale changes — dead-render navigations" do
     # A page whose whole <body> subtree differs in structure from the next,
     # the way a LiveView -> controller (dead render) transition looks: no
     # shared LiveView root, divergent top-level markup, disjoint text.
@@ -243,7 +243,7 @@ defmodule Excessibility.SnapshotDiffTest do
     end
   end
 
-  describe "user-input controls — typed content is not a status message (issue #193, Case B)" do
+  describe "user-input controls — typed content is not a status message" do
     test "does not flag a changed <textarea> value" do
       before = ~s(<html><body><form><textarea id="event_description">Draft one</textarea></form></body></html>)
       later = ~s(<html><body><form><textarea id="event_description">Draft two edited</textarea></form></body></html>)
@@ -300,7 +300,7 @@ defmodule Excessibility.SnapshotDiffTest do
       assert [] = SnapshotDiff.scan_files([p1, p2])
     end
 
-    test "skips paired files whose LiveView root id changed (issue #191)", %{dir: dir} do
+    test "skips paired files whose LiveView root id changed", %{dir: dir} do
       body_a = ~s(<div data-phx-main id="phx-AAA"><main><h1>Dashboard</h1></main></div>)
       body_b = ~s(<div data-phx-main id="phx-BBB"><main><h1>Events</h1>#{@table_one}</main></div>)
       p1 = write_snap(dir, "j_1.html", "journey test", 1, body_a)

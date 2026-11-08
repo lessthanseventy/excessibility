@@ -33,7 +33,7 @@ defmodule Excessibility.ReviewTest do
     test "content changed outside a live region is not flagged by default (fixtures differ across runs)" do
       # The baseline and current snapshots come from independent `mix test`
       # runs, so text deltas usually mean different fixture data, not a
-      # template change — see issue #139. The region is still reported.
+      # template change. The region is still reported.
       change = Review.review_pair("orders", @table_two, @table_one)
 
       assert change.region_count == 1
@@ -75,7 +75,7 @@ defmodule Excessibility.ReviewTest do
     test "a pre-existing violation whose selector differs only by an embedded record id is not new" do
       # Phoenix idiomatically derives DOM ids from record ids
       # (`id={"row-#{@row.id}"}`), and fixture ids shift between the baseline
-      # run and the current run — see issue #140. Same rule, same markup
+      # run and the current run. Same rule, same markup
       # pattern, different trailing id must not read as a new finding.
       baseline = ~s(<div><span id="row-2" phx-click="a">one</span></div>)
       current = ~s(<div><span id="row-7" phx-click="a">one</span></div>)

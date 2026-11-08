@@ -100,7 +100,7 @@ defmodule Mix.Tasks.Excessibility.Digest.CompareTest do
     assert output =~ "handle_event:delete"
   end
 
-  test "markdown surfaces bound-omitted plan variants as not-compared (#183)", ctx do
+  test "markdown surfaces bound-omitted plan variants as not-compared", ctx do
     plan_shape = fn ->
       %{
         schema: "excessibility.digest/v1",

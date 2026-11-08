@@ -110,7 +110,7 @@ defmodule Excessibility.QueryPlanTest do
   end
 
   # A root that returns one row but scans thousands beneath it — the primary
-  # reason to capture plans rather than trust the query count (issue #157).
+  # reason to capture plans rather than trust the query count.
   defp small_root_big_child(child_extra \\ %{}) do
     [
       %{
@@ -215,7 +215,7 @@ defmodule Excessibility.QueryPlanTest do
     [%{"Plan" => plan}]
   end
 
-  describe "bounded structural arrays (#167)" do
+  describe "bounded structural arrays" do
     test "bounds nodes and node_rows to @max_nodes and reports the omitted count" do
       s = QueryPlan.summarize(deep_plan(150))
 
@@ -224,7 +224,7 @@ defmodule Excessibility.QueryPlanTest do
       assert s.nodes_omitted == 50
     end
 
-    test "bounds relations to @max_nodes and reports relations_omitted (#174)" do
+    test "bounds relations to @max_nodes and reports relations_omitted" do
       s = QueryPlan.summarize(deep_plan_unique_relations(150))
 
       assert length(s.relations) == 100
@@ -236,7 +236,7 @@ defmodule Excessibility.QueryPlanTest do
                0..149 |> Enum.map(&"rel_#{String.pad_leading(Integer.to_string(&1), 4, "0")}") |> Enum.take(100)
     end
 
-    test "small plans report zero relations_omitted (#174)" do
+    test "small plans report zero relations_omitted" do
       s = QueryPlan.summarize(deep_plan_unique_relations(3))
 
       assert length(s.relations) == 3
@@ -259,7 +259,7 @@ defmodule Excessibility.QueryPlanTest do
     end
   end
 
-  describe "aggregate/1 (#167)" do
+  describe "aggregate/1" do
     test "a single occurrence is returned unchanged" do
       s = QueryPlan.summarize(small_root_big_child(%{"Actual Rows" => 5, "Actual Loops" => 1}))
       assert QueryPlan.aggregate([s]) == s
@@ -307,7 +307,7 @@ defmodule Excessibility.QueryPlanTest do
     end
   end
 
-  describe "aggregate_variants/1 (#173)" do
+  describe "aggregate_variants/1" do
     test "empty list yields no variants" do
       assert QueryPlan.aggregate_variants([]) == []
     end

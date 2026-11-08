@@ -1,6 +1,6 @@
 defmodule Excessibility.DatabaseTagFilterTest do
   @moduledoc """
-  Issue #186: `test_helper.exs` excludes database-integration tests without
+  `test_helper.exs` excludes database-integration tests without
   `DATABASE_URL`. It must exclude by tag *value* (`database: true`) so a DB-free
   companion guard colocated in a `@moduletag :database` module can opt back in
   with `@tag database: false`. An atom filter (`exclude: [:database]`) matches the
@@ -11,7 +11,7 @@ defmodule Excessibility.DatabaseTagFilterTest do
   """
   use ExUnit.Case, async: true
 
-  describe "value-scoped :database exclusion (#186)" do
+  describe "value-scoped :database exclusion" do
     test "database: true is excluded, but database: false and untagged tests run" do
       exclude = [database: true]
 
@@ -20,8 +20,8 @@ defmodule Excessibility.DatabaseTagFilterTest do
       assert :ok = ExUnit.Filters.eval([], exclude, %{}, [])
     end
 
-    test "the old atom filter would have wrongly excluded database: false (regression witness)" do
-      # This is the bug #186 fixes: an atom filter ignores the tag value, so a
+    test "an atom filter wrongly excludes database: false" do
+      # An atom filter ignores the tag value, so a
       # `@tag database: false` override is excluded just like a real DB test.
       assert {:excluded, _} = ExUnit.Filters.eval([], [:database], %{database: false}, [])
     end

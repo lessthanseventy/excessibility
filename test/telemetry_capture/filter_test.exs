@@ -371,7 +371,7 @@ defmodule Excessibility.TelemetryCapture.FilterTest do
     end
   end
 
-  describe "opaque library structs (issue #142)" do
+  describe "opaque library structs" do
     test "prunes Ecto.Changeset and DateTime to scalar leaves instead of exploding them" do
       changeset = %Ecto.Changeset{
         data: %{},

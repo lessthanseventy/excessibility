@@ -196,7 +196,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EventPatternTest do
       end
     end
 
-    test "mounts of different interleaved views are not consecutive duplicates (issue #142)" do
+    test "mounts of different interleaved views are not consecutive duplicates" do
       # One Index mount next to two Login mounts is not "3 consecutive mounts"
       # of one view — grouping by view keeps the counts honest.
       timeline = %{
@@ -213,7 +213,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EventPatternTest do
              "expected no consecutive-duplicate finding across views, got: #{inspect(result.findings)}"
     end
 
-    test "consecutive mounts are not flagged as unnecessary re-renders (issue #142)" do
+    test "consecutive mounts are not flagged as unnecessary re-renders" do
       # Repeated mounts come from LiveViewTest's disconnected+connected mount
       # and re-navigation — a capture artifact, not render churn.
       timeline = %{

@@ -1,9 +1,8 @@
 defmodule Excessibility.TelemetryCaptureRealPostgresTest do
   @moduledoc """
-  Issue #175: the committed #166 privacy regression builds the query metadata by
-  hand (`EctoQueries.build_query_record/2`), so it never crosses the real
-  Ecto/Postgrex adapter boundary that produces that metadata in production — the
-  suite could stay green while that boundary regressed.
+  The hand-built privacy regression (`EctoQueries.build_query_record/2`) never
+  crosses the real Ecto/Postgrex adapter boundary that produces query metadata
+  in production, so the suite could stay green while that boundary regressed.
 
   This test executes the reported SQL shapes through a **real repo** against a
   disposable PostgreSQL database, captures the genuine
@@ -13,7 +12,7 @@ defmodule Excessibility.TelemetryCaptureRealPostgresTest do
   Runs only when `DATABASE_URL` is set (CI's Postgres service, or a local dev
   DB); `test_helper.exs` excludes the `database: true` tag otherwise.
 
-  Issue #185 additionally guards the *timing* privacy criterion from #175: the
+  It also guards the *timing* privacy criterion: the
   captured event carries a native `duration` measurement, and neither it nor any
   derived millisecond value may reach the value-free digest. A distinctive
   duration canary plus a recursive scan that rejects numeric values under
@@ -29,9 +28,9 @@ defmodule Excessibility.TelemetryCaptureRealPostgresTest do
   @output_path "test/excessibility"
   @digest_path "test/excessibility/digest.json"
 
-  # A distinctive, generic native-time duration canary (issue #185). Large and
+  # A distinctive, generic native-time duration canary. Large and
   # unmistakable so both it and its derived-millisecond value are trivially
-  # detectable in the raw digest; nothing like the previous ambiguous `50`.
+  # detectable in the raw digest.
   @duration_canary 424_242_424_000_000
 
   # Timing-shaped key matcher for the recursive digest scan: exact timing words,
@@ -40,8 +39,8 @@ defmodule Excessibility.TelemetryCaptureRealPostgresTest do
   @timing_key_regex ~r/^(duration|timing|elapsed|latency)$|_(ms|us|ns|time|duration|latency|elapsed|seconds)$/
 
   # A valid Postgres dollar-quoted literal whose outer tag is uppercase and whose
-  # body contains a lowercase look-alike tag plus a secret email — the #166 case,
-  # now produced by the adapter rather than hand-built.
+  # body contains a lowercase look-alike tag plus a secret email, produced by
+  # the adapter rather than hand-built.
   @dollar_sql "SELECT $TAG$prefix $tag$ request_email=canary_175@example.com $TAG$ AS dollar_note"
 
   # A valid escaped E-string: `\\'` is an escaped quote (so the string does not
@@ -109,7 +108,7 @@ defmodule Excessibility.TelemetryCaptureRealPostgresTest do
     refute raw =~ "not a comment"
     refute raw =~ "90909090"
 
-    # No timing value survives (issue #185): neither the injected native
+    # No timing value survives: neither the injected native
     # measurement nor its derived millisecond value appears in the raw artifact,
     # and no numeric value sits under any timing-shaped key anywhere in the tree.
     derived_ms = System.convert_time_unit(@duration_canary, :native, :millisecond)
@@ -133,13 +132,13 @@ defmodule Excessibility.TelemetryCaptureRealPostgresTest do
     assert digest["coverage"]["fixtures"]["accounts"] == 4242
   end
 
-  # A DB-free companion (issue #186 lets `@tag database: false` opt back in even
+  # A DB-free companion (`@tag database: false` opts back in even
   # with no `DATABASE_URL`, so this runs in the ordinary suite). It proves the
   # timing-canary guard actually bites: a clean digest yields no violation, but a
   # representative numeric timing value copied into an event or query block is
   # caught — so the guard cannot silently pass if timing ever leaks.
   @tag database: false
-  test "timing-canary scan rejects a numeric value under a timing-shaped key (#185/#186)" do
+  test "timing-canary scan rejects a numeric value under a timing-shaped key" do
     clean = %{
       "capture" => %{"timing" => "non_comparable", "capture_version" => "0.19.0"},
       "coverage" => %{"fixtures" => %{"accounts" => 4242}},

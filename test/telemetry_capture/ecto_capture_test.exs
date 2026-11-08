@@ -1,6 +1,6 @@
 defmodule Excessibility.TelemetryCapture.EctoCaptureTest do
   @moduledoc """
-  Issue #147: the Ecto capture layer must actually record queries so
+  The Ecto capture layer must actually record queries so
   `ecto_query_analysis` can fire. These exercise the real telemetry path —
   the same `[..., :query]` event Ecto emits — end to end, without a database.
   """
@@ -79,7 +79,7 @@ defmodule Excessibility.TelemetryCapture.EctoCaptureTest do
   end
 
   test "queries that ran before mount (test setup) are not attributed to it" do
-    # Issue #151: seed INSERTs from a test's setup block run before the LiveView
+    # Seed INSERTs from a test's setup block run before the LiveView
     # exists and accumulate in the process dictionary. Starting a mount must
     # reset the accumulator so those queries don't flush onto mount.
     Application.put_env(:excessibility, :ecto_repos, [PrefixedRepo])

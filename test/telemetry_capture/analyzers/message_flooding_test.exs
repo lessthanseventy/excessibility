@@ -10,7 +10,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.MessageFloodingTest do
   end
 
   describe "default_enabled?/0" do
-    test "returns false — opt-in until handle_info capture lands (issue #147)" do
+    test "returns false — opt-in until handle_info capture is wired" do
       assert MessageFlooding.default_enabled?() == false
     end
   end
@@ -49,7 +49,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.MessageFloodingTest do
       assert finding.message =~ "tick"
     end
 
-    test "uses the JSON-safe timestamp_ms without crashing (issue #147)" do
+    test "uses the JSON-safe timestamp_ms without crashing" do
       # A timeline loaded from timeline.json has no %DateTime{} — timestamps
       # serialize to a struct-map that doesn't round-trip. The numeric
       # timestamp_ms is what survives, and the sliding window must use it.

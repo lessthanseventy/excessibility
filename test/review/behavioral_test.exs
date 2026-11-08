@@ -57,7 +57,7 @@ defmodule Excessibility.Review.BehavioralTest do
     assert Behavioral.findings(%{}, analyzers: [QuietAnalyzer]) == []
   end
 
-  describe "resilience to analyzer-filtered timelines (#158)" do
+  describe "resilience to analyzer-filtered timelines" do
     # A timeline as produced by `mix excessibility.debug --analyze=ecto_query_analysis`:
     # ecto fields are present, but the memory/duration enricher fields are not.
     defp ecto_only_timeline do

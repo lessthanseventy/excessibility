@@ -159,7 +159,7 @@ defmodule Mix.Tasks.Excessibility.ReviewTest do
     assert output =~ "orders.html"
   end
 
-  describe "behavioral findings gating (issue #142)" do
+  describe "behavioral findings gating" do
     # A single-view timeline with a genuine serious memory finding (10x+ growth
     # past the absolute floor), so the exit behavior is exercised for real.
     @serious_timeline ~s({
@@ -206,7 +206,7 @@ defmodule Mix.Tasks.Excessibility.ReviewTest do
     end
   end
 
-  describe "JSON output (issue #143)" do
+  describe "JSON output" do
     test "--format json emits a single parseable object with the report shape" do
       write_pair("editor.html", "<div>Save</div>", ~s(<div phx-click="save">Save</div>))
 
@@ -288,8 +288,8 @@ defmodule Mix.Tasks.Excessibility.ReviewTest do
       :ok
     end
 
-    # The reproduction from issue #131: a visible button losing its text is
-    # a new `button-name` critical, which must put the view in :block and
+    # A visible button losing its text is a new `button-name` critical,
+    # which must put the view in :block and
     # make the default --fail-on block exit non-zero.
     test "blocks on a newly introduced critical axe violation" do
       write_pair(

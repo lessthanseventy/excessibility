@@ -24,7 +24,7 @@ defmodule Integration.TelemetryAnalysisTest do
 
     test "analyzers detect issues in timeline" do
       # Create timeline with deliberate memory bloat above the absolute floor
-      # (issue #142: a ratio off a tiny heap is noise, so sizes must be large)
+      # (a ratio off a tiny heap is noise, so sizes must be large)
       snapshots =
         Enum.map(1..5, fn i ->
           size = if i == 3, do: 600_000, else: 1000
@@ -69,7 +69,7 @@ defmodule Integration.TelemetryAnalysisTest do
 
     test "complete flow: snapshots -> timeline -> analysis -> markdown" do
       # Build snapshots with a memory leak pattern above the absolute floor
-      # (issue #142: leaks of ordinary-sized heaps aren't worth flagging)
+      # (leaks of ordinary-sized heaps aren't worth flagging)
       snapshots =
         [300_000, 600_000, 1_200_000, 2_400_000, 4_800_000]
         |> Enum.with_index(1)

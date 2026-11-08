@@ -73,7 +73,7 @@ defmodule Excessibility.TelemetryCaptureDigestTest do
     refute raw =~ "424242"
   end
 
-  test "mixed-case dollar-quoted literal does not leak into the emitted digest (#166)" do
+  test "mixed-case dollar-quoted literal does not leak into the emitted digest" do
     TelemetryCapture.attach()
 
     # A valid Postgres dollar-quoted literal whose outer tag is uppercase and
