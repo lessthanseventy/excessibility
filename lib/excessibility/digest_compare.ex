@@ -44,6 +44,9 @@ defmodule Excessibility.DigestCompare do
   order.
   """
 
+  alias Excessibility.DigestCompare.Aggregate
+  alias Excessibility.DigestCompare.Notes
+
   @schema "excessibility.digest.compare/v1"
   @assign_enricher "assign_sizes"
 
@@ -63,8 +66,8 @@ defmodule Excessibility.DigestCompare do
       MapSet.member?(base_scope.enrichers, @assign_enricher) and
         MapSet.member?(head_scope.enrichers, @assign_enricher)
 
-    base_agg = aggregate(base)
-    head_agg = aggregate(head)
+    base_agg = Aggregate.aggregate(base)
+    head_agg = Aggregate.aggregate(head)
     shared = shared_keys(base_agg, head_agg)
 
     %{
@@ -89,60 +92,6 @@ defmodule Excessibility.DigestCompare do
       enrichers: cap |> get(:enrichers_run, []) |> MapSet.new(&to_string/1),
       has_events?: Map.has_key?(digest, :events) or Map.has_key?(digest, "events")
     }
-  end
-
-  # Fold events into %{{view, callback} => %{queries, plans, assigns}} where
-  # per-fingerprint counts sum, per-fingerprint plans accumulate the full set of
-  # distinct structural variants (keyed by plan fingerprint, max row work per
-  # node path kept per structure — so neither a later heavier occurrence
-  # nor a non-dominant variant is discarded), and per-assign
-  # term_bytes/cardinality take the max — all order-independent so the aggregate
-  # is deterministic.
-  defp aggregate(digest) do
-    digest
-    |> get(:events, [])
-    |> Enum.reduce(%{}, fn ev, acc ->
-      key = {view_str(get(ev, :view)), to_string(get(ev, :callback))}
-      agg = Map.get(acc, key, %{queries: %{}, plans: %{}, assigns: %{}})
-      Map.put(acc, key, merge_event(agg, ev))
-    end)
-  end
-
-  defp merge_event(agg, ev) do
-    shapes = ev |> get(:queries, %{}) |> get(:shapes, [])
-
-    {queries, plans} =
-      Enum.reduce(shapes, {agg.queries, agg.plans}, fn s, {qacc, pacc} ->
-        fp = to_string(get(s, :fingerprint))
-        count = get(s, :count, 0) || 0
-        qacc = Map.update(qacc, fp, count, &(&1 + count))
-        pacc = merge_plan_variants(pacc, fp, s)
-        {qacc, pacc}
-      end)
-
-    assigns =
-      ev
-      |> get(:assigns, %{})
-      |> get(:shapes, [])
-      |> Enum.reduce(agg.assigns, fn a, aacc ->
-        name = to_string(get(a, :name))
-        term_bytes = get(a, :term_bytes, 0) || 0
-        cardinality = get(a, :cardinality)
-
-        Map.update(
-          aacc,
-          name,
-          %{term_bytes: term_bytes, cardinality: cardinality},
-          fn ex ->
-            %{
-              term_bytes: max(ex.term_bytes, term_bytes),
-              cardinality: max_cardinality(ex.cardinality, cardinality)
-            }
-          end
-        )
-      end)
-
-    %{queries: queries, plans: plans, assigns: assigns}
   end
 
   defp shared_keys(base_agg, head_agg) do
@@ -386,7 +335,7 @@ defmodule Excessibility.DigestCompare do
     }
 
     %{
-      notes: notes(base_scope, head_scope, omission),
+      notes: Notes.notes(base_scope, head_scope, omission),
       views_added: head_views |> MapSet.difference(base_views) |> Enum.sort(),
       views_removed: base_views |> MapSet.difference(head_views) |> Enum.sort(),
       callbacks_added: head_keys |> MapSet.difference(base_keys) |> Enum.sort(),
@@ -410,226 +359,22 @@ defmodule Excessibility.DigestCompare do
     |> Enum.sum()
   end
 
-  # Measurement-scope notes: each describes a *difference in what was measured*,
-  # so a scope change is never mistaken for a regression. Sorted + deduped for
-  # determinism.
-  defp notes(base, head, omission) do
-    []
-    |> status_note(base, head)
-    |> non_digest_note(base, head)
-    |> schema_note(base, head)
-    |> ecto_note(base, head)
-    |> plan_note(base, head)
-    |> omission_note(omission)
-    |> enricher_note(base, head)
-    |> Enum.uniq()
-    |> Enum.sort()
-  end
-
-  # A failed/partial capture yields empty events, so every delta below is a
-  # measurement artifact rather than a real change. Surface that prominently
-  # for either side.
-  defp status_note(notes, base, head) do
-    notes
-    |> maybe_status_note(head.status, "head")
-    |> maybe_status_note(base.status, "base")
-  end
-
-  defp maybe_status_note(notes, "ok", _side), do: notes
-
-  defp maybe_status_note(notes, status, side) do
-    [
-      "#{side} capture did not complete (status: #{status}) — coverage/query deltas below are unreliable"
-      | notes
-    ]
-  end
-
-  # Valid JSON that is not a digest (no events on either side) produces no
-  # meaningful structural deltas; flag it so the empty result is not read as
-  # "no changes".
-  defp non_digest_note(notes, base, head) do
-    if not base.has_events? and not head.has_events? do
-      ["input does not look like an excessibility digest (no events)" | notes]
-    else
-      notes
-    end
-  end
-
-  defp schema_note(notes, base, head) do
-    if base.schema == head.schema do
-      notes
-    else
-      ["schema mismatch (base: #{base.schema}, head: #{head.schema})" | notes]
-    end
-  end
-
-  defp ecto_note(notes, base, head) do
-    cond do
-      base.ecto_configured == head.ecto_configured ->
-        notes
-
-      not base.ecto_configured ->
-        ["base did not measure queries (ecto not configured)" | notes]
-
-      true ->
-        ["head did not measure queries (ecto not configured)" | notes]
-    end
-  end
-
-  defp plan_note(notes, base, head) do
-    if base.ecto_configured and head.ecto_configured and base.plan_capture != head.plan_capture do
-      ["plan capture differs (base: #{base.plan_capture}, head: #{head.plan_capture})" | notes]
-    else
-      notes
-    end
-  end
-
-  # The digest bounds each SQL fingerprint's plan-variant set, so a side can drop
-  # structures it never emitted. A bounded comparison that cannot see a structure
-  # must not stay silent about it — surface per-side counts and state plainly that
-  # those variants were never compared. Only meaningful when plans
-  # were actually comparable; otherwise the scope difference is already noted.
-  defp omission_note(notes, %{comparable?: false}), do: notes
-  defp omission_note(notes, %{base: 0, head: 0}), do: notes
-
-  defp omission_note(notes, %{base: base, head: head}) do
-    notes
-    |> maybe_omission_note(head, "head")
-    |> maybe_omission_note(base, "base")
-  end
-
-  defp maybe_omission_note(notes, 0, _side), do: notes
-
-  defp maybe_omission_note(notes, count, side) do
-    [
-      "#{side} omitted #{count} bounded plan variant(s) that were not compared (digest bound)"
-      | notes
-    ]
-  end
-
-  defp enricher_note(notes, base, head) do
-    base_only = base.enrichers |> MapSet.difference(head.enrichers) |> Enum.sort()
-    head_only = head.enrichers |> MapSet.difference(base.enrichers) |> Enum.sort()
-
-    if base_only == [] and head_only == [] do
-      notes
-    else
-      [
-        "enrichers differ (base only: #{fmt_list(base_only)}; head only: #{fmt_list(head_only)})"
-        | notes
-      ]
-    end
-  end
-
-  defp fmt_list([]), do: "none"
-  defp fmt_list(list), do: Enum.join(list, ", ")
-
-  # Fold one shape's plan variants into the {sql_fp => %{variants, omitted}}
-  # accumulator. Accepts both the current `:plans` list and a legacy single
-  # `:plan` (wrapped), so reloaded older digests still compare. Variants key
-  # by plan fingerprint; occurrences of the same structure across events keep the
-  # max comparable row work per node position (a later, heavier occurrence is not
-  # discarded), independent of event order.
-  defp merge_plan_variants(pacc, fp, shape) do
-    variants = plan_variants_of(shape)
-    omitted = get(shape, :variants_omitted, 0) || 0
-
-    if variants == [] and omitted == 0 do
-      pacc
-    else
-      entry = Map.get(pacc, fp, %{variants: %{}, omitted: 0})
-
-      merged =
-        Enum.reduce(variants, entry.variants, fn plan, vacc ->
-          pfp = to_string(get(plan, :fingerprint))
-          Map.update(vacc, pfp, plan, &merge_plan(&1, plan))
-        end)
-
-      Map.put(pacc, fp, %{variants: merged, omitted: max(entry.omitted, omitted)})
-    end
-  end
-
-  defp plan_variants_of(shape) do
-    case get(shape, :plans) do
-      plans when is_list(plans) ->
-        plans
-
-      _ ->
-        case get(shape, :plan) do
-          nil -> []
-          plan -> [plan]
-        end
-    end
-  end
-
-  # Two instances of the same structure (same plan fingerprint): keep the max
-  # comparable row work per node position, so a variant's reported magnitude is
-  # its worst observed instance.
-  defp merge_plan(existing, candidate) do
-    %{
-      fingerprint: get(existing, :fingerprint),
-      estimated_rows: max_num(get(existing, :estimated_rows), get(candidate, :estimated_rows)),
-      actual_rows: max_num(get(existing, :actual_rows), get(candidate, :actual_rows)),
-      loops: max_num(get(existing, :loops), get(candidate, :loops)),
-      node_rows: merge_node_rows(get(existing, :node_rows) || [], get(candidate, :node_rows) || [])
-    }
-  end
-
-  # Zip by position (stable node identity under a shared structural fingerprint)
-  # and keep the max comparable row work per node. Tolerant of length drift.
-  defp merge_node_rows(existing, candidate) do
-    count = max(length(existing), length(candidate))
-
-    Enum.map(0..(count - 1)//1, fn i ->
-      merge_node(Enum.at(existing, i), Enum.at(candidate, i))
-    end)
-  end
-
-  defp merge_node(nil, node), do: node
-  defp merge_node(node, nil), do: node
-
-  defp merge_node(a, b) do
-    %{
-      node: get(a, :node) || get(b, :node),
-      relation: get(a, :relation) || get(b, :relation),
-      depth: get(a, :depth),
-      estimated_rows: max_num(get(a, :estimated_rows), get(b, :estimated_rows)),
-      actual_rows: max_num(get(a, :actual_rows), get(b, :actual_rows)),
-      loops: max_num(get(a, :loops), get(b, :loops)),
-      rows_touched: max_num(get(a, :rows_touched), get(b, :rows_touched)),
-      estimate_error: max_num(get(a, :estimate_error), get(b, :estimate_error))
-    }
-  end
-
-  defp max_num(a, b) do
-    cond do
-      is_number(a) and is_number(b) -> max(a, b)
-      is_number(a) -> a
-      is_number(b) -> b
-      true -> nil
-    end
-  end
-
   defp min_assign_delta_bytes do
     Application.get_env(:excessibility, :digest_min_assign_delta_bytes, @default_min_assign_delta_bytes)
   end
 
-  defp max_cardinality(nil, other), do: other
-  defp max_cardinality(other, nil), do: other
-  defp max_cardinality(a, b), do: max(a, b)
-
   defp mapset_keys(map), do: map |> Map.keys() |> MapSet.new()
 
-  defp view_str(nil), do: nil
-  defp view_str(view), do: view |> to_string() |> String.replace_prefix("Elixir.", "")
-  defp get(map, key, default \\ nil)
+  @doc false
+  @spec get(map() | term(), atom(), term()) :: term()
+  def get(map, key, default \\ nil)
 
-  defp get(map, key, default) when is_map(map) and is_atom(key) do
+  def get(map, key, default) when is_map(map) and is_atom(key) do
     case Map.fetch(map, key) do
       {:ok, value} -> value
       :error -> Map.get(map, Atom.to_string(key), default)
     end
   end
 
-  defp get(_map, _key, default), do: default
+  def get(_map, _key, default), do: default
 end
