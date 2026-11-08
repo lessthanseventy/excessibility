@@ -152,8 +152,6 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EventPattern do
     end)
   end
 
-  defp calculate_stats([]), do: %{}
-
   defp calculate_stats(timeline) do
     event_counts = count_events(timeline)
     sequences = extract_sequences(timeline)

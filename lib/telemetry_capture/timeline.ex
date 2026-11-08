@@ -46,7 +46,6 @@ defmodule Excessibility.TelemetryCapture.Timeline do
 
   defp small_value?(value) when is_integer(value), do: true
   defp small_value?(value) when is_atom(value), do: true
-  defp small_value?(value) when is_boolean(value), do: true
 
   defp small_value?(value) when is_binary(value) do
     byte_size(value) <= @small_value_threshold

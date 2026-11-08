@@ -129,7 +129,7 @@ defmodule Excessibility.SQLFingerprint do
   defp word_boundary?(<<>>), do: true
 
   defp word_boundary?(acc) do
-    <<_::binary-size(byte_size(acc) - 1), last>> = acc
+    last = :binary.last(acc)
     last not in ?a..?z and last not in ?A..?Z and last not in ?0..?9 and last != ?_
   end
 

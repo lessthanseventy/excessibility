@@ -31,6 +31,11 @@ jobs:
       matrix:
         elixir: ['1.18', '1.19']
         otp: ['26', '27']
+        include:
+          - elixir: '1.20'
+            otp: '27'
+          - elixir: '1.20'
+            otp: '28'
 
     steps:
       - name: Checkout code
