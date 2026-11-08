@@ -57,7 +57,7 @@ defmodule Excessibility.TelemetryCapture.Enrichers.Staleness do
       cond do
         timestamp_field?(key) and timestamp_value?(value) ->
           age = calculate_age(value, now)
-          [%{key: path_to_atom(current_path), age_seconds: age, field_name: key}]
+          [%{key: Enum.map_join(current_path, ".", &to_string/1), age_seconds: age, field_name: key}]
 
         is_map(value) and not struct?(value) ->
           find_timestamps(value, current_path, now)
@@ -94,10 +94,4 @@ defmodule Excessibility.TelemetryCapture.Enrichers.Staleness do
 
   defp struct?(%_{} = _value), do: true
   defp struct?(_), do: false
-
-  defp path_to_atom(path) do
-    path
-    |> Enum.map_join(".", &to_string/1)
-    |> String.to_atom()
-  end
 end

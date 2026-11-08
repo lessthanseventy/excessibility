@@ -83,11 +83,5 @@ defmodule Excessibility.TelemetryCapture.Enrichers.BinaryContent do
 
   defp find_large_binaries_in_value(_value, _threshold, _path), do: []
 
-  defp path_to_key([single]), do: single
-
-  defp path_to_key(path) do
-    path
-    |> Enum.map_join(".", &to_string/1)
-    |> String.to_atom()
-  end
+  defp path_to_key(path), do: Enum.map_join(path, ".", &to_string/1)
 end

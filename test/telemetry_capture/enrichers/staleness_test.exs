@@ -28,7 +28,7 @@ defmodule Excessibility.TelemetryCapture.Enrichers.StalenessTest do
 
       assert result.stale_data_count == 1
       [stale] = result.stale_fields
-      assert stale.key == :"post.updated_at"
+      assert stale.key == "post.updated_at"
       assert stale.age_seconds >= 7200
     end
 
@@ -102,8 +102,8 @@ defmodule Excessibility.TelemetryCapture.Enrichers.StalenessTest do
 
       assert result.timestamp_fields >= 2
       keys = Enum.map(result.all_timestamps, & &1.key)
-      assert :"user.updated_at" in keys
-      assert :"nested.deep.modified_at" in keys
+      assert "user.updated_at" in keys
+      assert "nested.deep.modified_at" in keys
     end
   end
 end

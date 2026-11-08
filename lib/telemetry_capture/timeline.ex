@@ -11,7 +11,7 @@ defmodule Excessibility.TelemetryCapture.Timeline do
   alias Excessibility.TelemetryCapture.Filter
   alias Excessibility.TelemetryCapture.Registry
 
-  @default_highlight_fields [:current_user, :live_action, :errors, :form]
+  @default_highlight_fields ~w(current_user live_action errors form)
   @small_value_threshold 100
 
   @doc """
@@ -25,10 +25,11 @@ defmodule Excessibility.TelemetryCapture.Timeline do
   """
   def extract_key_state(assigns, highlight_fields \\ @default_highlight_fields) do
     using_defaults? = highlight_fields == @default_highlight_fields
+    highlighted = Enum.map(highlight_fields, &to_string/1)
 
     Enum.reduce(assigns, %{}, fn {key, value}, acc ->
       cond do
-        key in highlight_fields -> Map.put(acc, key, value)
+        to_string(key) in highlighted -> Map.put(acc, key, value)
         is_list(value) -> Map.put(acc, :"#{key}_count", length(value))
         using_defaults? and small_value?(value) -> Map.put(acc, key, value)
         true -> acc
