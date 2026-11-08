@@ -48,8 +48,7 @@ defmodule Excessibility.TelemetryCapture do
   def detach do
     :telemetry.detach("excessibility-capture")
     :telemetry.detach(@ecto_handler_id)
-  rescue
-    _ -> :ok
+    :ok
   end
 
   # Ecto queries fire in the LiveView process while it handles an event, but
