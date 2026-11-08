@@ -74,6 +74,14 @@ jobs:
         if: matrix.elixir == '1.19'
         run: mix deps.unlock --check-unused
 
+      - name: Audit dependencies for security advisories
+        if: matrix.elixir == '1.19'
+        run: mix hex.audit
+
+      - name: Lint workflows
+        if: matrix.elixir == '1.19'
+        uses: raven-actions/actionlint@v2
+
       - name: Check code formatting
         if: matrix.elixir == '1.19'
         run: mix format --check-formatted
