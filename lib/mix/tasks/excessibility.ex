@@ -62,6 +62,8 @@ defmodule Mix.Tasks.Excessibility do
 
   use Mix.Task
 
+  import Excessibility.Paths
+
   @requirements ["app.config"]
 
   @impl Mix.Task
@@ -161,7 +163,7 @@ defmodule Mix.Tasks.Excessibility do
 
     if Enum.empty?(files) do
       Mix.shell().info("""
-      No snapshots found in #{snapshot_dir()}.
+      No snapshots found in #{snapshots_dir()}.
 
       Run your tests first to generate snapshots:
 
@@ -219,7 +221,7 @@ defmodule Mix.Tasks.Excessibility do
   end
 
   defp list_snapshots do
-    snapshot_dir()
+    snapshots_dir()
     |> Path.join("*.html")
     |> Path.wildcard()
     |> Enum.reject(&String.ends_with?(&1, [".bad.html", ".good.html"]))
@@ -398,12 +400,4 @@ defmodule Mix.Tasks.Excessibility do
   defp format_error({:playwright_error, msg}), do: msg
   defp format_error({:invalid_url, reason}), do: "invalid URL (#{reason})"
   defp format_error(other), do: inspect(other)
-
-  defp snapshot_dir do
-    Path.join([output_path(), "html_snapshots"])
-  end
-
-  defp output_path do
-    Application.get_env(:excessibility, :excessibility_output_path, "test/excessibility")
-  end
 end

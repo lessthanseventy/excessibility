@@ -35,12 +35,7 @@ defmodule Mix.Tasks.Excessibility.Latest do
 
     format = Keyword.get(opts, :format, "markdown")
 
-    output_path =
-      Application.get_env(
-        :excessibility,
-        :excessibility_output_path,
-        "test/excessibility"
-      )
+    output_path = Excessibility.Paths.output_path()
 
     file_path =
       case format do

@@ -33,8 +33,7 @@ defmodule Excessibility.MCP.Tools.GetTimeline do
 
   @impl true
   def execute(args, _opts) do
-    base_path = Application.get_env(:excessibility, :excessibility_output_path, "test/excessibility")
-    default_path = ClientContext.client_path(Path.join(base_path, "timeline.json"))
+    default_path = ClientContext.client_path(Path.join(Excessibility.Paths.output_path(), "timeline.json"))
     timeline_path = Map.get(args, "path") || default_path
 
     result =

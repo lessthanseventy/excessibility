@@ -10,12 +10,7 @@ defmodule Excessibility.Debug.Report do
   alias Mix.Tasks.Excessibility.Debug
 
   def gather_snapshots do
-    output_path =
-      Application.get_env(
-        :excessibility,
-        :excessibility_output_path,
-        "test/excessibility"
-      )
+    output_path = Excessibility.Paths.output_path()
 
     snapshots_path = Path.join(output_path, "html_snapshots")
 
@@ -44,12 +39,7 @@ defmodule Excessibility.Debug.Report do
   end
 
   def output_markdown(report_data) do
-    output_path =
-      Application.get_env(
-        :excessibility,
-        :excessibility_output_path,
-        "test/excessibility"
-      )
+    output_path = Excessibility.Paths.output_path()
 
     timeline_path = Path.join(output_path, "timeline.json")
 
@@ -99,13 +89,7 @@ defmodule Excessibility.Debug.Report do
 
     Mix.shell().info(json)
 
-    # Save to file
-    output_path =
-      Application.get_env(
-        :excessibility,
-        :excessibility_output_path,
-        "test/excessibility"
-      )
+    output_path = Excessibility.Paths.output_path()
 
     latest_path = Path.join(output_path, "latest_debug.json")
     File.mkdir_p!(output_path)
@@ -118,12 +102,7 @@ defmodule Excessibility.Debug.Report do
   # and prints it — it never rebuilds the digest.
   @doc false
   def output_digest(_report_data) do
-    output_path =
-      Application.get_env(
-        :excessibility,
-        :excessibility_output_path,
-        "test/excessibility"
-      )
+    output_path = Excessibility.Paths.output_path()
 
     digest_path = Path.join(output_path, "digest.json")
 
@@ -151,12 +130,7 @@ defmodule Excessibility.Debug.Report do
       |> String.replace(~r/[:\-]/, "")
       |> String.slice(0, 15)
 
-    output_path =
-      Application.get_env(
-        :excessibility,
-        :excessibility_output_path,
-        "test/excessibility"
-      )
+    output_path = Excessibility.Paths.output_path()
 
     package_dir = Path.join([output_path, "debug_packages", "#{test_name}_#{timestamp}"])
     File.mkdir_p!(package_dir)

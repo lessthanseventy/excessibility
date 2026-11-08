@@ -152,7 +152,7 @@ defmodule Mix.Tasks.Excessibility.Review do
   end
 
   defp newest_mtime(subdir) do
-    output_path = Application.get_env(:excessibility, :excessibility_output_path, "test/excessibility")
+    output_path = Excessibility.Paths.output_path()
 
     mtimes =
       output_path

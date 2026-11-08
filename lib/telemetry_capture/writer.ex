@@ -26,12 +26,7 @@ defmodule Excessibility.TelemetryCapture.Writer do
     snapshots = TelemetryCapture.get_snapshots()
 
     if snapshots != [] do
-      output_path =
-        Application.get_env(
-          :excessibility,
-          :excessibility_output_path,
-          "test/excessibility"
-        )
+      output_path = Excessibility.Paths.output_path()
 
       File.mkdir_p!(output_path)
 

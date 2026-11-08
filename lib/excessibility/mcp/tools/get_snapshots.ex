@@ -34,8 +34,7 @@ defmodule Excessibility.MCP.Tools.GetSnapshots do
 
   @impl true
   def execute(args, _opts) do
-    base_path = Application.get_env(:excessibility, :excessibility_output_path, "test/excessibility")
-    snapshots_dir = ClientContext.client_path(Path.join(base_path, "html_snapshots"))
+    snapshots_dir = ClientContext.client_path(Excessibility.Paths.snapshots_dir())
     filter = Map.get(args, "filter", "*.html")
     include_content? = Map.get(args, "include_content", false)
 
