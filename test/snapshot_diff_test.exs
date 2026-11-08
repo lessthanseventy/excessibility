@@ -198,7 +198,7 @@ defmodule Excessibility.SnapshotDiffTest do
     end
 
     test "never treats a same-view in-place patch as navigation, even when tiny and fully replaced" do
-      # Regression for the review's CRITICAL: a toast/counter that is the bulk
+      # A toast/counter that is the bulk
       # of a small LiveView and whose text fully changes must stay flagged —
       # identity (same root id) protects it, not text ratios.
       toast_before = lv("phx-AAA", ~s(<div class="toast">Saved</div>))

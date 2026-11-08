@@ -3,18 +3,15 @@ defmodule Excessibility.TelemetryCapture.SnapshotStore do
   Owns the `:excessibility_snapshots` ETS table so its lifetime is decoupled from
   any single test process.
 
-  ETS tables are destroyed when their owner process dies. Previously the table
-  was created by whichever process first called `Excessibility.TelemetryCapture.attach/0`
-  — a test process. When that process finished (or another test's `attach/0` saw
-  the table still owned by a *previous*, mid-teardown test process and therefore
-  skipped creation), the table could vanish out from under a test still writing
-  to it, surfacing intermittently as
+  ETS tables are destroyed when their owner process dies. A table owned by a
+  test process can vanish out from under another test still writing to it,
+  surfacing intermittently as
   `ArgumentError: the table identifier does not refer to an existing ETS table`
   and a missing `timeline.json`.
 
   A dedicated, long-lived owner process holds the table for the whole VM/test run,
-  so its existence no longer depends on test scheduling. The table stays
-  `:public`, so every process reads and writes it exactly as before.
+  so its existence does not depend on test scheduling. The table is
+  `:public`, so every process reads and writes it directly.
   """
   use GenServer
 

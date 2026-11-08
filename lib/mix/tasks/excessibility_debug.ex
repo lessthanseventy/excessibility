@@ -264,7 +264,7 @@ defmodule Mix.Tasks.Excessibility.Debug do
           ] ++ plan_env
       )
 
-    # Print output to console as it was before, but now we also have the string
+    # Echo the output to the console; the string is also returned.
     Mix.shell().info(output)
 
     {output, exit_code}
@@ -277,7 +277,7 @@ defmodule Mix.Tasks.Excessibility.Debug do
   #   neither          -> []           (plan capture stays disabled)
   #   --plan           -> [{"EXCESSIBILITY_QUERY_PLAN", "explain"}]
   #   --plan-analyze   -> [{"EXCESSIBILITY_QUERY_PLAN", "explain_analyze"}]
-  # Both booleans, so plain `--plan test/foo.exs` no longer swallows the test
+  # Both booleans, so plain `--plan test/foo.exs` does not swallow the test
   # path as a value. When both are set, analyze wins.
   @doc false
   def plan_env(opts) do

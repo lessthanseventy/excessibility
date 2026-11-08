@@ -195,7 +195,7 @@ defmodule Excessibility.TelemetryCapture.FormatterTest do
       assert result =~ "- `status`: :pending → :complete"
     end
 
-    test "handles list format from JSON deserialization (regression test for #54)" do
+    test "handles list format from JSON deserialization" do
       # Reproduces the bug: timeline.json has lists, not tuples
       # This simulates what happens when we read timeline.json from disk
       timeline = %{
