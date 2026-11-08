@@ -84,12 +84,16 @@ defmodule Excessibility.TelemetryCapture do
     Application.get_env(:excessibility, :ecto_repos, [])
   end
 
+  @doc false
   defdelegate ecto_query_events, to: EctoCapture
 
+  @doc false
   defdelegate handle_ecto_query(arg1, measurements, metadata, arg4), to: EctoCapture
 
+  @doc false
   defdelegate drain_plan_warnings, to: EctoCapture
 
+  @doc false
   defdelegate flush_ecto_queries, to: EctoCapture
 
   @handle_info_hook_id :excessibility_handle_info
@@ -301,6 +305,7 @@ defmodule Excessibility.TelemetryCapture do
     end
   end
 
+  @doc false
   defdelegate write_snapshots(test_name), to: Writer
 
   # The configured query-plan capture mode, reported into the digest. Task 10/11
@@ -344,5 +349,6 @@ defmodule Excessibility.TelemetryCapture do
     end
   end
 
+  @doc false
   defdelegate reset_analyze_downgrade_warning, to: EctoCapture
 end
