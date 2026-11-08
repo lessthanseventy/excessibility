@@ -118,6 +118,7 @@ defmodule Mix.Tasks.Excessibility.Debug do
 
   alias Excessibility.Debug.BenchmarkRun
   alias Excessibility.Debug.Report
+  alias Excessibility.TelemetryCapture.Profiles
   alias Excessibility.TelemetryCapture.Registry
 
   @impl Mix.Task
@@ -293,32 +294,27 @@ defmodule Mix.Tasks.Excessibility.Debug do
   @doc false
   @spec parse_analyzer_selection(keyword()) :: [atom()] | nil
   def parse_analyzer_selection(opts) do
-    alias Excessibility.TelemetryCapture.Profiles
-
     cond do
-      Keyword.get(opts, :no_analyze) ->
-        []
+      Keyword.get(opts, :no_analyze) -> []
+      profile = Keyword.get(opts, :profile) -> profile_analyzers(profile)
+      analyze = Keyword.get(opts, :analyze) -> named_analyzers(analyze)
+      true -> Enum.map(Registry.get_default_analyzers(), & &1.name())
+    end
+  end
 
-      profile = Keyword.get(opts, :profile) ->
-        case Enum.find(Profiles.list(), &(Atom.to_string(&1) == profile)) do
-          nil -> Mix.raise("Unknown profile #{profile}. Known: #{Enum.join(Profiles.list(), ", ")}")
-          profile_name -> Profiles.get(profile_name)
-        end
+  defp profile_analyzers(profile) do
+    case Enum.find(Profiles.list(), &(Atom.to_string(&1) == profile)) do
+      nil -> Mix.raise("Unknown profile #{profile}. Known: #{Enum.join(Profiles.list(), ", ")}")
+      profile_name -> Profiles.get(profile_name)
+    end
+  end
 
-      analyze = Keyword.get(opts, :analyze) ->
-        case analyze do
-          "all" ->
-            Enum.map(Registry.get_all_analyzers(), & &1.name())
+  defp named_analyzers("all"), do: Enum.map(Registry.get_all_analyzers(), & &1.name())
 
-          names_str ->
-            case Registry.analyzer_names_from_string(names_str) do
-              {:ok, names} -> names
-              {:error, unknown} -> Mix.raise("Unknown analyzers: #{Enum.join(unknown, ", ")}")
-            end
-        end
-
-      true ->
-        Enum.map(Registry.get_default_analyzers(), & &1.name())
+  defp named_analyzers(names_str) do
+    case Registry.analyzer_names_from_string(names_str) do
+      {:ok, names} -> names
+      {:error, unknown} -> Mix.raise("Unknown analyzers: #{Enum.join(unknown, ", ")}")
     end
   end
 end
