@@ -266,6 +266,14 @@ All configuration goes in `test/test_helper.exs` or `config/test.exs`:
 | `:digest_min_assign_delta_bytes` | No | `64` | `mix excessibility.digest.compare` suppresses byte-only assign deltas below this many bytes when the cardinality is unchanged (tiny per-assign jitter is noise); a cardinality change is never suppressed. Set `0` for exact-byte behavior |
 | `:benchmark_min_abs_ms` | No | `1.0` | Benchmark outliers must exceed the median by at least this many ms (kills sub-millisecond scheduler/timer jitter). Set `0.0` with `:benchmark_min_rel_factor` `1.0` to restore pure-statistical flagging |
 | `:benchmark_min_rel_factor` | No | `1.5` | Benchmark outliers must also be at least this multiple of the median (a meaningful relative effect on top of the absolute floor) |
+| `:scanner_mod` | No | `Excessibility.Scanner` | Module implementing `Excessibility.ScannerBehaviour`; swap in a stub to keep unit tests browser-free |
+| `:axe_disable_rules` | No | `[]` | axe rule ids to skip on every scan |
+| `:lv_rules_enabled?` | No | `true` | Run the LiveView-aware rules in `mix excessibility` |
+| `:lv_rules_disabled` | No | `[]` | LiveView rule ids to skip |
+| `:cross_snapshot_enabled?` | No | `true` | Run the cross-snapshot sequence checks (status messages without a live region) in `mix excessibility` |
+| `:review_judge` | No | `Excessibility.Review.Judge.Heuristic` | `Excessibility.Review.Judge` implementation used by `mix excessibility.review` |
+| `:review_judge_completion` | No | unset | `fn prompt -> {:ok, text} end` that `Excessibility.Review.Judge.LLM` calls; unset falls back to the heuristic judge |
+| `:custom_mcp_tools` / `:custom_mcp_resources` / `:custom_mcp_prompts` | No | `[]` | Extra modules merged into the MCP server registry |
 
 ### Runtime digest environment variables
 
