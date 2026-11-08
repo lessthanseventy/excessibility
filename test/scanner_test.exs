@@ -196,7 +196,7 @@ defmodule Excessibility.ScannerTest do
     end
   end
 
-  describe "scan/2 — multiple viewports" do
+  describe "scan_viewports/3" do
     @describetag browser: true
 
     test "returns per-viewport results and actually applies each width" do
@@ -215,7 +215,7 @@ defmodule Excessibility.ScannerTest do
 
       on_exit(fn -> File.rm(path) end)
 
-      {:ok, report} = Scanner.scan("file://#{path}", viewports: [{1440, 900}, {320, 800}])
+      {:ok, report} = Scanner.scan_viewports("file://#{path}", [{1440, 900}, {320, 800}])
 
       assert [wide, narrow] = report.results
       assert wide.viewport == {1440, 900}
@@ -246,10 +246,7 @@ defmodule Excessibility.ScannerTest do
       end)
 
       {:ok, _report} =
-        Scanner.scan("file://#{html_path}",
-          viewports: [{1440, 900}, {320, 800}],
-          screenshot: png_base
-        )
+        Scanner.scan_viewports("file://#{html_path}", [{1440, 900}, {320, 800}], screenshot: png_base)
 
       assert File.exists?(wide_png)
       assert File.exists?(narrow_png)
@@ -289,7 +286,7 @@ defmodule Excessibility.ScannerTest do
       on_exit(fn -> File.rm(path) end)
 
       {:ok, report} =
-        Scanner.scan("file://#{path}", viewports: [{1440, 900}, {320, 800}], check_clipping: true)
+        Scanner.scan_viewports("file://#{path}", [{1440, 900}, {320, 800}], check_clipping: true)
 
       assert [wide, narrow] = report.results
 
@@ -312,7 +309,7 @@ defmodule Excessibility.ScannerTest do
 
       on_exit(fn -> File.rm(path) end)
 
-      {:ok, report} = Scanner.scan("file://#{path}", viewports: [{320, 800}])
+      {:ok, report} = Scanner.scan_viewports("file://#{path}", [{320, 800}])
 
       assert [narrow] = report.results
       assert narrow.clipping == nil

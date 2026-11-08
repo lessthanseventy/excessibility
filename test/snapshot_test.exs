@@ -111,9 +111,9 @@ defmodule Excessibility.SnapshotTest do
     end
 
     test "the :viewports option is forwarded to the screenshot scan" do
-      expect(Excessibility.ScannerMock, :scan, fn _url, opts ->
+      expect(Excessibility.ScannerMock, :scan_viewports, fn _url, viewports, opts ->
         assert Keyword.get(opts, :screenshot) =~ ".png"
-        assert Keyword.get(opts, :viewports) == [{1440, 900}, {320, 800}]
+        assert viewports == [{1440, 900}, {320, 800}]
         {:ok, %{}}
       end)
 
@@ -123,8 +123,8 @@ defmodule Excessibility.SnapshotTest do
     test "the :viewports config is forwarded when no option is given" do
       Application.put_env(:excessibility, :viewports, [{390, 844}])
 
-      expect(Excessibility.ScannerMock, :scan, fn _url, opts ->
-        assert Keyword.get(opts, :viewports) == [{390, 844}]
+      expect(Excessibility.ScannerMock, :scan_viewports, fn _url, viewports, _opts ->
+        assert viewports == [{390, 844}]
         {:ok, %{}}
       end)
 
@@ -134,8 +134,8 @@ defmodule Excessibility.SnapshotTest do
     test "the :viewports option wins over the :viewports config" do
       Application.put_env(:excessibility, :viewports, [{390, 844}])
 
-      expect(Excessibility.ScannerMock, :scan, fn _url, opts ->
-        assert Keyword.get(opts, :viewports) == [{320, 800}]
+      expect(Excessibility.ScannerMock, :scan_viewports, fn _url, viewports, _opts ->
+        assert viewports == [{320, 800}]
         {:ok, %{}}
       end)
 
@@ -143,8 +143,8 @@ defmodule Excessibility.SnapshotTest do
     end
 
     test "invalid viewports are dropped rather than passed through" do
-      expect(Excessibility.ScannerMock, :scan, fn _url, opts ->
-        assert Keyword.get(opts, :viewports) == [{320, 800}]
+      expect(Excessibility.ScannerMock, :scan_viewports, fn _url, viewports, _opts ->
+        assert viewports == [{320, 800}]
         {:ok, %{}}
       end)
 
@@ -162,12 +162,12 @@ defmodule Excessibility.SnapshotTest do
     end
 
     test "every configured viewport's PNG path is logged" do
-      expect(Excessibility.ScannerMock, :scan, fn _url, opts ->
+      expect(Excessibility.ScannerMock, :scan_viewports, fn _url, viewports, opts ->
         # Stand in for the runner's per-viewport suffixing, so the log is
         # checked against files that genuinely exist.
         base = Keyword.fetch!(opts, :screenshot)
 
-        for {w, h} <- Keyword.fetch!(opts, :viewports),
+        for {w, h} <- viewports,
             do: File.write!(String.replace_suffix(base, ".png", ".#{w}x#{h}.png"), "png")
 
         {:ok, %{}}
@@ -192,7 +192,7 @@ defmodule Excessibility.SnapshotTest do
     test "a scan that reports success but writes no PNG is not logged as written" do
       # axe-runner.js swallows screenshot failures by design, so {:ok, _} does
       # not mean a file landed.
-      expect(Excessibility.ScannerMock, :scan, fn _url, _opts -> {:ok, %{}} end)
+      expect(Excessibility.ScannerMock, :scan_viewports, fn _url, _viewports, _opts -> {:ok, %{}} end)
 
       log = capture_log(fn -> snapshot(76, screenshot?: true, viewports: [{320, 800}]) end)
 
@@ -201,7 +201,7 @@ defmodule Excessibility.SnapshotTest do
     end
 
     test "only the widths whose PNG actually landed are claimed" do
-      expect(Excessibility.ScannerMock, :scan, fn _url, opts ->
+      expect(Excessibility.ScannerMock, :scan_viewports, fn _url, _viewports, opts ->
         # Stand in for the runner: the 320x800 capture fails, 1440x900 does not.
         opts |> Keyword.fetch!(:screenshot) |> String.replace_suffix(".png", ".1440x900.png") |> File.write!("png")
         {:ok, %{}}
@@ -222,7 +222,7 @@ defmodule Excessibility.SnapshotTest do
       File.write!(bare, "stale")
       on_exit(fn -> Enum.each(Path.wildcard(Path.join(dir, "*_78.*png")), &File.rm/1) end)
 
-      expect(Excessibility.ScannerMock, :scan, fn _url, _opts -> {:ok, %{}} end)
+      expect(Excessibility.ScannerMock, :scan_viewports, fn _url, _viewports, _opts -> {:ok, %{}} end)
 
       capture_log(fn -> snapshot(78, screenshot?: true, viewports: [{1440, 900}, {390, 844}]) end)
 
@@ -231,7 +231,7 @@ defmodule Excessibility.SnapshotTest do
     end
 
     test "a custom :name without an .html suffix gets the viewport appended, as the runner does" do
-      expect(Excessibility.ScannerMock, :scan, fn _url, opts ->
+      expect(Excessibility.ScannerMock, :scan_viewports, fn _url, _viewports, opts ->
         assert Keyword.fetch!(opts, :screenshot) =~ "landing"
         opts |> Keyword.fetch!(:screenshot) |> Kernel.<>(".320x800.png") |> File.write!("png")
         {:ok, %{}}

@@ -8,4 +8,7 @@ defmodule Excessibility.ScannerStub do
 
   @impl true
   def scan(_url, _opts), do: {:ok, %{violations: []}}
+
+  @impl true
+  def scan_viewports(_url, _viewports, _opts), do: {:ok, %{results: []}}
 end

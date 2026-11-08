@@ -151,13 +151,12 @@ defmodule Excessibility.Scanner do
           fallback: fallback_info()
         }
 
-  @typedoc "Options accepted by `scan/2`."
+  @typedoc "Options accepted by `scan/2` and `scan_viewports/3`."
   @type scan_opts :: [
           timeout: pos_integer(),
           wait_for: String.t(),
           wait_until: :load | :domcontentloaded | :networkidle,
           viewport: {pos_integer(), pos_integer()},
-          viewports: [{pos_integer(), pos_integer()}],
           check_clipping: boolean(),
           clipping_ratio: float(),
           tags: [String.t()],
@@ -179,19 +178,13 @@ defmodule Excessibility.Scanner do
     * `:wait_until` — Playwright wait state: `:load` | `:domcontentloaded` |
       `:networkidle` (default: `:load` for remote, `:domcontentloaded` for file)
     * `:viewport` — `{width, height}` tuple (default: `{1280, 720}`)
-    * `:viewports` — list of `{width, height}` tuples; runs axe once per
-      viewport in a single browser session and returns per-viewport
-      results (see `t:multi_report/0`). WCAG 1.4.10 Reflow only shows up
-      at narrow widths, so `[{1440, 900}, {320, 800}]` is the recommended
-      pair for snapshot scanning. Screenshots are suffixed per viewport
-      (`name.1440x900.png`). Takes precedence over `:viewport`.
     * `:check_clipping` — measure interactive elements (`a`, `button`,
       `input`, `select`, `textarea`, `[phx-click]`, `[role="button"]`)
       whose visible width falls below `:clipping_ratio`, plus page-level
       horizontal overflow. axe has no rule for content that is technically
       in the DOM but slid outside the visible area, yet that is the actual
       user-facing WCAG 1.4.10 failure. Results land in `:clipping` (per
-      viewport with `:viewports`). Default `false`.
+      viewport under `scan_viewports/3`). Default `false`.
     * `:clipping_ratio` — minimum visible-width ratio before an element
       counts as clipped (default: `0.9`)
     * `:tags` — axe-core tag filter (default: `["wcag2a", "wcag2aa"]`)
@@ -207,12 +200,23 @@ defmodule Excessibility.Scanner do
   the `t:scan_error/0` tuples.
   """
   @impl Excessibility.ScannerBehaviour
-  @spec scan(String.t(), scan_opts()) :: {:ok, report() | multi_report()} | {:error, scan_error()}
+  @spec scan(String.t(), scan_opts()) :: {:ok, report()} | {:error, scan_error()}
   def scan(url, opts \\ []) when is_binary(url) do
-    with {:ok, validated_url} <- validate_url(url) do
-      opts = Keyword.merge(@default_opts, opts)
-      do_scan(validated_url, opts)
-    end
+    if Keyword.has_key?(opts, :viewports), do: raise(ArgumentError, "scan/2 scans one viewport: use scan_viewports/3")
+    scanned(url, opts)
+  end
+
+  @doc """
+  Scan a URL at each of `viewports` (`{width, height}` tuples) in one browser session and return
+  the per-viewport results as a `t:multi_report/0`. WCAG 1.4.10 Reflow only shows up at narrow
+  widths, so `[{1440, 900}, {320, 800}]` is the recommended pair for snapshot scanning. A
+  `:screenshot` is suffixed per viewport (`name.1440x900.png`). `opts` are those of `scan/2`.
+  """
+  @impl Excessibility.ScannerBehaviour
+  @spec scan_viewports(String.t(), [{pos_integer(), pos_integer()}], scan_opts()) ::
+          {:ok, multi_report()} | {:error, scan_error()}
+  def scan_viewports(url, [_ | _] = viewports, opts \\ []) when is_binary(url) do
+    scanned(url, Keyword.put(opts, :viewports, viewports))
   end
 
   # ── URL validation ─────────────────────────────────────────────────
@@ -423,6 +427,12 @@ defmodule Excessibility.Scanner do
     case Mix.Project.deps_paths()[:excessibility] do
       nil -> File.cwd!()
       path -> path
+    end
+  end
+
+  defp scanned(url, opts) do
+    with {:ok, validated_url} <- validate_url(url) do
+      do_scan(validated_url, Keyword.merge(@default_opts, opts))
     end
   end
 end

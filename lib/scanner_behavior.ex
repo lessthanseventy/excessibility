@@ -8,4 +8,5 @@ defmodule Excessibility.ScannerBehaviour do
       Application.put_env(:excessibility, :scanner_mod, MyScannerMock)
   """
   @callback scan(String.t(), keyword()) :: {:ok, map()} | {:error, term()}
+  @callback scan_viewports(String.t(), [{pos_integer(), pos_integer()}], keyword()) :: {:ok, map()} | {:error, term()}
 end
