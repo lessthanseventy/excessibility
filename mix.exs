@@ -101,7 +101,7 @@ defmodule Excessibility.MixProject do
       {:floki, "~> 0.30"},
       {:igniter, "~> 0.7", runtime: false},
       {:jason, "~> 1.4"},
-      {:mix_test_interactive, "~> 5.0", only: :dev, runtime: false},
+      {:mix_test_interactive, "~> 6.0", only: :dev, runtime: false},
       {:mox, "~> 1.1", only: :test},
       {:phoenix, "~> 1.5"},
       {:phoenix_live_view, "~> 0.17 or ~> 1.0"},
