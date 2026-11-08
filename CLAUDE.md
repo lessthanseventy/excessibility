@@ -132,6 +132,7 @@ mix excessibility.debug --only live_view
 
 # With debug options
 mix excessibility.debug test/my_test.exs --analyze=memory
+mix excessibility.debug test/my_test.exs --profile=memory   # unknown --analyze/--profile names fail the run
 mix excessibility.debug test/my_test.exs --no-analyze
 mix excessibility.debug test/my_test.exs --verbose
 mix excessibility.debug test/my_test.exs --full

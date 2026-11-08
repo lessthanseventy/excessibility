@@ -150,7 +150,13 @@ mix excessibility.debug test/my_test.exs --analyze=all
 
 # Skip analysis
 mix excessibility.debug test/my_test.exs --no-analyze
+
+# Run a predefined bundle (quick, memory, performance, ...)
+mix excessibility.debug test/my_test.exs --profile=memory
 ```
+
+An analyzer or profile name that matches nothing fails the run and lists the
+known names, so a typo never turns into a silent "no findings".
 
 ### Verbose Output
 
