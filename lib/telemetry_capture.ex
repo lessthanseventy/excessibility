@@ -535,9 +535,14 @@ defmodule Excessibility.TelemetryCapture do
 
       analyzers_str ->
         # Parse analyzer names and resolve their enrichers
-        analyzer_names = Registry.analyzer_names_from_string(analyzers_str)
+        case Registry.analyzer_names_from_string(analyzers_str) do
+          {:ok, analyzer_names} ->
+            Registry.resolve_enrichers(analyzer_names)
 
-        Registry.resolve_enrichers(analyzer_names)
+          {:error, unknown} ->
+            raise ArgumentError,
+                  "EXCESSIBILITY_ANALYZERS names unknown analyzers: #{Enum.join(unknown, ", ")}"
+        end
     end
   end
 
