@@ -447,6 +447,10 @@ else
       mix excessibility.install requires Igniter. Add it to your deps and run the task again:
 
           {:igniter, "~> 0.7", only: [:dev, :test], runtime: false}
+
+      If excessibility was compiled before Igniter was added, recompile it first:
+
+          mix deps.compile excessibility --force
       """)
 
       exit({:shutdown, 1})

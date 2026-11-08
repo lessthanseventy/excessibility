@@ -8,6 +8,8 @@ defmodule Excessibility.TelemetryCapture.EctoCapture do
   alias Excessibility.TelemetryCapture
   alias Excessibility.TelemetryCapture.Enrichers.EctoQueries
 
+  require Logger
+
   @downgrade_warned_key {__MODULE__, :analyze_downgrade_warned}
 
   @plan_warnings_key :excessibility_plan_warnings
@@ -74,6 +76,23 @@ defmodule Excessibility.TelemetryCapture.EctoCapture do
   # Test seam: clears the run-level downgrade-warning flag so a test can assert
   # the warn-once behavior deterministically.
   def reset_analyze_downgrade_warning, do: :persistent_term.erase(@downgrade_warned_key)
+
+  @doc false
+  # `plan_capture_mode/0` is evaluated once per query, and a journey spans many
+  # LiveView processes, so a per-process flag floods the command with identical
+  # downgrade warnings. The flag is global to the run's BEAM (the
+  # `mix test` child that capture runs in), so the warning is emitted at most
+  # once per command/run.
+  def warn_analyze_downgrade_once do
+    if :persistent_term.get(@downgrade_warned_key, false) == false do
+      :persistent_term.put(@downgrade_warned_key, true)
+
+      Logger.warning(
+        "Excessibility: EXPLAIN ANALYZE requested but :query_plan_allow_analyze is not " <>
+          "enabled; downgrading to EXPLAIN (no data-touching plan capture)."
+      )
+    end
+  end
 
   # An Ecto repo emits queries at `telemetry_prefix ++ [:query]`. The prefix
   # defaults to the repo module's segments as atoms (MyApp.Repo -> [:my_app,

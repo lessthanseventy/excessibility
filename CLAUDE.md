@@ -321,7 +321,7 @@ The library follows this flow when a test calls `html_snapshot/2`:
 Application.get_env(:excessibility, :system_mod, Excessibility.System)
 ```
 
-**Compile-Time Configuration**: Paths like `:excessibility_output_path` are read at compile time via `Application.compile_env/3` for performance, but most config is runtime via `Application.get_env/3`.
+**Runtime Configuration**: every key, including `:excessibility_output_path` (through `Excessibility.Paths`), is read at runtime via `Application.get_env/3`, so `config/runtime.exs` and per-test `Application.put_env/3` both take effect.
 
 **Macro-Based Context Capture**: The `html_snapshot/2` macro captures `__ENV__` and `__MODULE__` at call site to auto-generate meaningful filenames like `MyApp_PageTest_42.html` (module_line.html).
 
