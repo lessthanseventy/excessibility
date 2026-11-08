@@ -85,7 +85,7 @@ defmodule Excessibility.LiveViewRules.Rules.ClickAwayWithoutEscape do
 
   # A keydown handler is present but phx-key is "escape"/"ESCAPE"/etc. rather
   # than the exact DOM value "Escape", so Escape dismissal silently never
-  # fires. Common, hard-to-spot pitfall — call it out specifically (#110).
+  # fires. Common, hard-to-spot pitfall — call it out specifically.
   defp build_message(tag, attrs) do
     if miscased_escape?(attrs) do
       key = find_attr(attrs, "phx-key")

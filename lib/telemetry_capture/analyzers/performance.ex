@@ -60,7 +60,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Performance do
 
   # On a short timeline *some* event is always the majority of total time and
   # some event is always the relative outlier — that's a statement about
-  # sample size, not the code (issue #142: a 40 ms first mount reported as
+  # sample size, not the code (a 40 ms first mount reported as
   # "6.7x average" and "60% of total time"). Slow/bottleneck findings
   # therefore require an absolute duration floor; genuinely slow events
   # (>1000 ms) still escalate on their own.

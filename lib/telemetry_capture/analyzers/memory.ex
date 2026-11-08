@@ -39,15 +39,15 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Memory do
 
   alias Excessibility.TelemetryCapture.Analyzer
 
-  # A ratio off a tiny denominator (issue #142: a 220-byte freshly-mounted
+  # A ratio off a tiny denominator (a 220-byte freshly-mounted
   # view followed by a 109 KB loaded view reads as "507x growth") is noise:
   # 109 KB is an ordinary LiveView heap. A memory finding therefore requires
   # the larger side to clear an absolute floor, regardless of ratio.
   @min_notable_bytes 262_144
 
   # The floor gates the size, but not the growth: a run that holds steady at
-  # 1.3 MB is a global outlier that clears the floor yet grew 0% (issue #146,
-  # reported as "grew 1.0x"). A "grew Nx" finding therefore also requires the
+  # 1.3 MB is a global outlier that clears the floor yet grew 0%
+  # (reported as "grew 1.0x"). A "grew Nx" finding therefore also requires the
   # ratio to clear a minimum — a flat or shrinking transition isn't bloat.
   @min_growth_factor 1.2
 
@@ -148,7 +148,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.Memory do
   end
 
   # Consecutive-event comparisons run per view: a journey test interleaves
-  # LiveViews, so adjacent events can belong to different processes (#142).
+  # LiveViews, so adjacent events can belong to different processes.
   defp detect_bloat(timeline, stats) do
     timeline
     |> Analyzer.group_by_view()

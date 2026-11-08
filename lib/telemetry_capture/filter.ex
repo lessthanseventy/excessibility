@@ -9,7 +9,7 @@ defmodule Excessibility.TelemetryCapture.Filter do
   # Library structs that are machinery, not actionable app state. Descending
   # into them tracks changeset internals (`.types`, `.mappings`, `.validations`)
   # and explodes timestamp microsecond tuples into 2-element lists, which the
-  # data_growth analyzer then mistakes for app state (issue #142). They are
+  # data_growth analyzer then mistakes for app state. They are
   # collapsed to a scalar leaf instead. Referenced by module atom so Ecto and
   # Decimal stay optional deps (matching the NotLoaded handling below).
   @opaque_structs [Date, Time, DateTime, NaiveDateTime, Decimal, Ecto.Changeset]

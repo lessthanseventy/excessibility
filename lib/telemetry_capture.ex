@@ -58,7 +58,7 @@ defmodule Excessibility.TelemetryCapture do
   # Ecto queries fire in the LiveView process while it handles an event, but
   # the enrichment that reads them runs post-hoc from ETS snapshots — so we
   # accumulate queries in the emitting process's dictionary and flush them
-  # onto each captured event (issue #147). Without configured repos there is
+  # onto each captured event. Without configured repos there is
   # no query event to attach to, so ecto_query_analysis stays dark; say so
   # once instead of silently reporting a green (empty) N+1 section.
   defp attach_ecto do
@@ -248,7 +248,7 @@ defmodule Excessibility.TelemetryCapture do
 
   Phoenix LiveView emits telemetry for `mount`/`handle_params`/`handle_event`/
   `render` but not for the message-driven callbacks, so there is no global
-  event to attach to (issue #147). This hook is the seam: it uses
+  event to attach to. This hook is the seam: it uses
   `Phoenix.LiveView.attach_hook/4` on the `:handle_info` stage, which does
   need to be installed per LiveView — so it is opt-in, never forced.
 
@@ -320,7 +320,7 @@ defmodule Excessibility.TelemetryCapture do
   # on flush (at each captured :stop). A test's `setup` seeds run before the
   # LiveView exists, in the same process as the static mount, so those queries
   # would otherwise flush onto `mount`. Resetting the accumulator when the mount
-  # begins keeps setup queries out of the first event (issue #151).
+  # begins keeps setup queries out of the first event.
   def handle_event([:phoenix, :live_view, :mount, :start], _measurements, _metadata, _config) do
     flush_ecto_queries()
     :ok
@@ -623,7 +623,7 @@ defmodule Excessibility.TelemetryCapture do
 
   # `plan_capture_mode/0` is evaluated once per query, and a journey spans many
   # LiveView processes, so a per-process flag floods the command with identical
-  # downgrade warnings (issue #159). The flag is global to the run's BEAM (the
+  # downgrade warnings. The flag is global to the run's BEAM (the
   # `mix test` child that capture runs in), so the warning is emitted at most
   # once per command/run.
   defp warn_analyze_downgrade_once do

@@ -30,8 +30,8 @@ defmodule Excessibility.SnapshotDiff do
   @live_roles ~w(alert status log)
   @input_tags ~w(textarea input select)
 
-  # Text-ratio fallback for classifying a *dead-render* navigation (issue
-  # #193, Case A) when neither snapshot has a LiveView root to key on. It is
+  # Text-ratio fallback for classifying a *dead-render* navigation
+  # when neither snapshot has a LiveView root to key on. It is
   # deliberately NOT applied to a same-view LiveView patch — there, identity
   # (a stable root id) already proves the change is in-place, so a small
   # fully-replaced region (a toast, a counter) stays a real status message.
@@ -118,9 +118,9 @@ defmodule Excessibility.SnapshotDiff do
 
   # A changed region is not a status message — and so must not be flagged —
   # when it is already announced (aria-live/role/output), when the user
-  # authored it themselves (a form control they are typing into; issue #193
-  # Case B), or, for non-LiveView pages only, when it is a full-page
-  # navigation rather than an in-place patch (issue #193 Case A).
+  # authored it themselves (a form control they are typing into), or, for
+  # non-LiveView pages only, when it is a full-page navigation rather than an
+  # in-place patch.
   defp suppress?(region, nav_heuristic?) do
     region.announced or region.user_input or
       (nav_heuristic? and navigation_scale?(region))

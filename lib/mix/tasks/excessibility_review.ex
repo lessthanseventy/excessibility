@@ -254,7 +254,7 @@ defmodule Mix.Tasks.Excessibility.Review do
 
   # Accessibility tiers gate the build via --fail-on (default :block).
   # Behavioral findings are advisory by default (they have no baseline, so
-  # they're absolute single-run measurements, issue #142) and only gate the
+  # they're absolute single-run measurements) and only gate the
   # build when the user opts in with --fail-on-behavioral.
   defp maybe_exit(report, fail_on, fail_on_behavioral?) do
     a11y_block? = report.summary.block > 0
@@ -272,7 +272,7 @@ defmodule Mix.Tasks.Excessibility.Review do
     Enum.any?(Map.get(report, :behavioral, []), &(&1.severity == :serious))
   end
 
-  # ── JSON output (issue #143) ───────────────────────────────────────
+  # ── JSON output ────────────────────────────────────────────────────
   #
   # One object on stdout so CI can consume the report without scraping the
   # human-readable text. Rule ids and severities are atoms internally, so

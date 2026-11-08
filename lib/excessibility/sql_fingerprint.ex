@@ -18,7 +18,7 @@ defmodule Excessibility.SQLFingerprint do
   The literal-aware `scan/3` runs first, on the **original-case** SQL: Postgres
   dollar-quote tags (`$TAG$`) and E-string escapes are case-sensitive, so
   lowercasing before scanning could turn look-alike text inside a literal into a
-  false closing delimiter and leak literal contents (see #166). The scan folds
+  false closing delimiter and leak literal contents. The scan folds
   every string / dollar-quoted / E-string literal to `?` and strips comments, so
   only value-free tokens remain; downcasing the scanned result is then safe.
   """
@@ -54,7 +54,7 @@ defmodule Excessibility.SQLFingerprint do
   # reach the digest. A single left-to-right scanner tracks literal/identifier
   # context so a comment or delimiter marker *inside* a literal is not mistaken
   # for a real one. Postgres dollar tags and E-string escapes are case-sensitive,
-  # so this MUST see the original case (#166): a lowercase `$tag$` inside an
+  # so this MUST see the original case: a lowercase `$tag$` inside an
   # uppercase-tagged `$TAG$…$TAG$` literal is body content, not a close.
   #
   # Comments and folded literals become `?`/space; the remaining value-free
@@ -82,7 +82,7 @@ defmodule Excessibility.SQLFingerprint do
   defp scan(<<_c, rest::binary>>, :squote, acc), do: scan(rest, :squote, acc)
 
   # --- E'…' escape string: skip body, honour both the \\<char> backslash escape
-  #     and the '' escape so neither closes the literal early (#166) ---
+  #     and the '' escape so neither closes the literal early ---
   defp scan(<<"\\", _c, rest::binary>>, :estring, acc), do: scan(rest, :estring, acc)
   defp scan(<<"''", rest::binary>>, :estring, acc), do: scan(rest, :estring, acc)
   defp scan(<<"'", rest::binary>>, :estring, acc), do: scan(rest, :normal, acc)

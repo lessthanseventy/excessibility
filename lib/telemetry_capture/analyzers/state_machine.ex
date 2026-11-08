@@ -71,7 +71,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.StateMachine do
   # Transitions are computed within a view: a journey test interleaves
   # LiveViews, so a pair spanning two views (e.g. an Index render followed by
   # a UserLoginLive mount) would diff two unrelated processes' key sets and
-  # report phantom "keys added/removed" and "unstable state" (issue #142).
+  # report phantom "keys added/removed" and "unstable state".
   defp detect_transitions(timeline) do
     timeline
     |> Analyzer.group_by_view()

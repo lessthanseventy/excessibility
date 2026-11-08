@@ -62,7 +62,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EventPattern do
   # Patterns are detected within a view: a journey test interleaves
   # LiveViews, so mounts of two different views sitting next to each other
   # aren't "consecutive duplicate" events, and a mount count summed across
-  # views isn't a single view mounting excessively (issue #142). Stats stay
+  # views isn't a single view mounting excessively. Stats stay
   # global — they describe the whole run.
   defp detect_patterns(timeline) do
     timeline
@@ -177,7 +177,7 @@ defmodule Excessibility.TelemetryCapture.Analyzers.EventPattern do
   # Lifecycle events (mount, handle_params) are not user-driven repeats or
   # render churn — consecutive mounts come from `LiveViewTest.live/2`'s
   # disconnected+connected double-mount and re-navigation, so flagging them as
-  # "unnecessary re-renders" is a capture artifact (issue #142). The rapid-fire
+  # "unnecessary re-renders" is a capture artifact. The rapid-fire
   # heuristics target handle_event:* and render only.
   defp lifecycle_event?(event) when is_binary(event) do
     event == "mount" or String.starts_with?(event, "handle_params")

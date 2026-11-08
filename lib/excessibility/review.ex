@@ -182,7 +182,7 @@ defmodule Excessibility.Review do
   # `content_change_without_live_region` compares rendered text, so it only
   # means something when both sides rendered the same fixture data. The
   # baseline and current snapshots normally come from two independent
-  # `mix test` runs whose fixtures differ (issue #139), so it is opt-in here
+  # `mix test` runs whose fixtures differ, so it is opt-in here
   # — unlike `SnapshotDiff.scan_sequence/2`, which diffs consecutive
   # snapshots within one run and keeps it unconditionally.
   defp content_change_findings(baseline_html, current_html, opts) do
@@ -231,7 +231,7 @@ defmodule Excessibility.Review do
 
   # Selectors embed DOM ids, and Phoenix idiomatically derives those from
   # record ids (`id={"row-#{@row.id}"}`) whose values shift between the
-  # baseline run and the current run (issue #140), so digit runs are
+  # baseline run and the current run, so digit runs are
   # collapsed before comparing. The raw selector stays on the finding for
   # display.
   defp fingerprint(%{rule: rule, selector: selector}), do: {rule, String.replace(selector, ~r/\d+/, "N")}

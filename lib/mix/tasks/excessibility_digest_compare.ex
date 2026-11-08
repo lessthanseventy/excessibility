@@ -193,11 +193,11 @@ defmodule Mix.Tasks.Excessibility.Digest.Compare do
     "## Plans\n\n" <> body <> "\n"
   end
 
-  # One SQL fingerprint can carry several structural plan variants (#173):
+  # One SQL fingerprint can carry several structural plan variants:
   # variants added/removed capture shape changes, `variant_deltas` the numeric
   # change to a structure present on both sides. The variant set is bounded, so
   # per-side omission counts state plainly that the dropped structures were never
-  # compared — a header-only entry must not read as a clean result (#183).
+  # compared — a header-only entry must not read as a clean result.
   defp plan_lines(p) do
     omitted = omitted_suffix(p[:base_variants_omitted], p[:head_variants_omitted])
     header = "- #{p[:view]} #{p[:callback]} #{p[:fingerprint]}#{omitted}"
