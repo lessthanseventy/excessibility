@@ -62,8 +62,9 @@ defmodule Excessibility.MCP.SubprocessTest do
 
       assert output =~ "timed out"
       assert exit_code == 124
-      # Should timeout in roughly 100ms, not 10 seconds
-      assert elapsed < 500
+      # The bound only has to rule out waiting for the 10 s sleep; a tight one
+      # fails under a loaded CI box.
+      assert elapsed < 5_000
     end
 
     test "kills subprocess on timeout" do

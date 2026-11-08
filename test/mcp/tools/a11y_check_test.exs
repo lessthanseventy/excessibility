@@ -28,6 +28,7 @@ defmodule Excessibility.MCP.Tools.A11yCheckTest do
   end
 
   describe "execute/2 with url" do
+    @tag browser: true
     test "checks a file:// URL via AxeRunner" do
       # Create a minimal HTML file for testing
       tmp_dir = System.tmp_dir!()

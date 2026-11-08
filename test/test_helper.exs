@@ -22,6 +22,11 @@ Excessibility.TelemetryCapture.SnapshotStore.ensure_started()
 # telemetry. Otherwise exclude that tag so `mix test` stays green with no DB.
 database_url = System.get_env("DATABASE_URL")
 
+# Scanner tests launch Playwright from the bundled assets; a fresh clone has not
+# run `npm install` yet, so they are excluded until it has.
+browser_excludes =
+  if File.dir?("assets/node_modules/playwright"), do: [], else: [browser: true]
+
 # Always define the repo module so the reference in the (possibly excluded)
 # database test compiles without an "undefined module" warning. `use Ecto.Repo`
 # has no side effects at definition time — a real connection is only opened by
@@ -39,13 +44,13 @@ if database_url do
     {:error, {:already_started, _}} -> :ok
   end
 
-  ExUnit.start()
+  ExUnit.start(exclude: browser_excludes)
 else
   # Exclude by tag *value* (`database: true`), not the bare atom. An atom filter
   # matches the tag key regardless of value, so a DB-free companion guard
   # colocated in a `@moduletag :database` module could not opt back in with
   # `@tag database: false`.
-  ExUnit.start(exclude: [database: true])
+  ExUnit.start(exclude: [database: true] ++ browser_excludes)
 end
 
 Mox.defmock(Excessibility.LiveViewMock, for: Excessibility.LiveView.Behaviour)

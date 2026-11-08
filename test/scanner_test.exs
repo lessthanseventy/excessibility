@@ -13,6 +13,7 @@ defmodule Excessibility.ScannerTest do
   alias Excessibility.Scanner
 
   @moduletag timeout: 60_000
+  @moduletag browser: true
 
   @tmp_dir System.tmp_dir!()
 
@@ -263,7 +264,7 @@ defmodule Excessibility.ScannerTest do
       {:ok, report} = Scanner.scan("file://#{path}", viewport: {800, 600})
 
       assert is_list(report.violations)
-      refute Map.get(report, :results)
+      refute Map.has_key?(report, :results)
     end
   end
 
