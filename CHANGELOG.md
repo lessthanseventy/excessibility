@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- `igniter` is an optional dependency. `mix excessibility.install` needs it in the host project's deps and says so when it is missing; apps that never run the installer no longer pull it in.
+- Scanner tests are tagged `browser: true` and skipped until `npm install` has run in `assets/`, the same way database tests are skipped without `DATABASE_URL`.
+- Hexdocs group modules by product line (snapshots, LiveView rules, review, telemetry, analyzers, enrichers, digest, MCP, Mix tasks). Internal helpers are left out of the docs.
+- CI tests Elixir 1.20 and runs `mix hex.audit`.
+
+### Fixed
+- The Hex package ships `priv/`, so the installer finds the Claude skills plugin in a dependency checkout instead of skipping it silently.
+- Dependency advisories cleared by updating all deps.
+
 ## [0.20.0] - 2026-09-02
 
 ### Added
