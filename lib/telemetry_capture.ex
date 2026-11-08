@@ -322,30 +322,12 @@ defmodule Excessibility.TelemetryCapture do
         if Application.get_env(:excessibility, :query_plan_allow_analyze, false) do
           :explain_analyze
         else
-          warn_analyze_downgrade_once()
+          EctoCapture.warn_analyze_downgrade_once()
           :explain
         end
 
       _ ->
         :disabled
-    end
-  end
-
-  @downgrade_warned_key {__MODULE__, :analyze_downgrade_warned}
-
-  # `plan_capture_mode/0` is evaluated once per query, and a journey spans many
-  # LiveView processes, so a per-process flag floods the command with identical
-  # downgrade warnings. The flag is global to the run's BEAM (the
-  # `mix test` child that capture runs in), so the warning is emitted at most
-  # once per command/run.
-  defp warn_analyze_downgrade_once do
-    if :persistent_term.get(@downgrade_warned_key, false) == false do
-      :persistent_term.put(@downgrade_warned_key, true)
-
-      Logger.warning(
-        "Excessibility: EXPLAIN ANALYZE requested but :query_plan_allow_analyze is not " <>
-          "enabled; downgrading to EXPLAIN (no data-touching plan capture)."
-      )
     end
   end
 

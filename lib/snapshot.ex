@@ -27,13 +27,6 @@ defmodule Excessibility.Snapshot do
 
   require Logger
 
-  @output_path Application.compile_env(
-                 :excessibility,
-                 :excessibility_output_path,
-                 "test/excessibility"
-               )
-  @snapshots_path Path.join(@output_path, "html_snapshots")
-
   @doc """
   Generates an HTML snapshot from a test source.
 
@@ -70,8 +63,8 @@ defmodule Excessibility.Snapshot do
     metadata = get_capture_metadata(source, opts)
 
     filename = get_filename(env, module, opts, metadata)
-    path = Path.join([File.cwd!(), @snapshots_path, filename])
-    File.mkdir_p!(@snapshots_path)
+    path = Path.join([File.cwd!(), Excessibility.Paths.snapshots_dir(), filename])
+    File.mkdir_p!(Excessibility.Paths.snapshots_dir())
 
     html
     |> HTML.wrap()
@@ -262,7 +255,7 @@ defmodule Excessibility.Snapshot do
     # Screenshots are named after their snapshot, so they go stale the moment
     # the snapshot they document is deleted.
     ["#{prefix}_*.html", "#{prefix}_*.png"]
-    |> Enum.flat_map(&Path.wildcard(Path.join(@snapshots_path, &1)))
+    |> Enum.flat_map(&Path.wildcard(Path.join(Excessibility.Paths.snapshots_dir(), &1)))
     |> Enum.each(&File.rm/1)
 
     Logger.info("Old snapshots for #{module} cleaned up")

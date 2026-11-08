@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Scanner tests are tagged `browser: true` and skipped until `npm install` has run in `assets/`, the same way database tests are skipped without `DATABASE_URL`.
 - Hexdocs group modules by product line (snapshots, LiveView rules, review, telemetry, analyzers, enrichers, digest, MCP, Mix tasks). Internal helpers are left out of the docs.
 - CI tests Elixir 1.20 and runs `mix hex.audit`.
+- `:excessibility_output_path` is read at runtime everywhere, including by `html_snapshot/2`, so a value set in `config/runtime.exs` or with `Application.put_env/3` takes effect without recompiling.
 
 ### Fixed
 - The Hex package ships `priv/`, so the installer finds the Claude skills plugin in a dependency checkout instead of skipping it silently.

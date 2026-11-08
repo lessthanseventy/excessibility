@@ -13,11 +13,12 @@ defmodule Excessibility.ScannerTest do
   alias Excessibility.Scanner
 
   @moduletag timeout: 60_000
-  @moduletag browser: true
 
   @tmp_dir System.tmp_dir!()
 
   describe "scan/2 — happy paths" do
+    @describetag browser: true
+
     test "returns a report with violations for inaccessible HTML" do
       path =
         write_tmp_html("""
@@ -196,6 +197,8 @@ defmodule Excessibility.ScannerTest do
   end
 
   describe "scan/2 — multiple viewports" do
+    @describetag browser: true
+
     test "returns per-viewport results and actually applies each width" do
       # The media query hides the unlabeled input below 400px, so axe must
       # report the label violation at 1440px but not at 320px — proving the
@@ -269,6 +272,8 @@ defmodule Excessibility.ScannerTest do
   end
 
   describe "scan/2 — clipping detection" do
+    @describetag browser: true
+
     # A 300px button whose left edge sits at 250px: fully visible at
     # 1440px, but only 70px (23%) visible at 320px — axe reports nothing
     # at either width, which is exactly why the check exists.
@@ -340,6 +345,8 @@ defmodule Excessibility.ScannerTest do
   end
 
   describe "scan/2 — playwright resolution" do
+    @describetag browser: true
+
     test "honors the :playwright_path config override" do
       bundled = Path.expand("assets/node_modules/playwright", File.cwd!())
       Application.put_env(:excessibility, :playwright_path, bundled)
@@ -421,6 +428,7 @@ defmodule Excessibility.ScannerTest do
       assert {:error, {:invalid_url, :unsupported_scheme}} = Scanner.scan("ftp://example.com/")
     end
 
+    @tag browser: true
     test "returns {:error, {:navigation_failed, _}} for nonexistent file" do
       assert {:error, {:navigation_failed, _msg}} = Scanner.scan("file:///nonexistent/path.html")
     end
