@@ -233,8 +233,7 @@ defmodule Mix.Tasks.Excessibility.Debug do
         filter_opts
 
       fields_str ->
-        highlight_fields = fields_str |> String.split(",") |> Enum.map(&String.to_atom/1)
-        Keyword.put(filter_opts, :highlight_fields, highlight_fields)
+        Keyword.put(filter_opts, :highlight_fields, String.split(fields_str, ","))
     end
   end
 

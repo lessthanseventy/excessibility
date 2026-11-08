@@ -98,7 +98,7 @@ defmodule Excessibility.TelemetryCapture.Enrichers.CollectionSize do
 
   defp count_lists(_value, _path), do: {%{}, 0}
 
-  defp build_path_key([]), do: :root
+  defp build_path_key([]), do: "root"
 
   defp build_path_key(path) do
     path
@@ -108,6 +108,5 @@ defmodule Excessibility.TelemetryCapture.Enrichers.CollectionSize do
       key -> to_string(key)
     end)
     |> String.replace(".[", "[")
-    |> String.to_atom()
   end
 end

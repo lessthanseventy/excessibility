@@ -48,7 +48,7 @@ defmodule Excessibility.TelemetryCapture.Enrichers.CollectionSizeTest do
              "expected no changeset internals in list_sizes, got: #{inspect(keys)}"
 
       # Real app lists are still tracked.
-      assert result.list_sizes[:products] == 3
+      assert result.list_sizes["products"] == 3
     end
 
     test "counts lists at top level" do
@@ -60,11 +60,7 @@ defmodule Excessibility.TelemetryCapture.Enrichers.CollectionSizeTest do
 
       result = CollectionSize.enrich(assigns, [])
 
-      assert result.list_sizes == %{
-               products: 3,
-               users: 2,
-               tags: 5
-             }
+      assert result.list_sizes == %{"products" => 3, "users" => 2, "tags" => 5}
 
       assert result.max_list_size == 5
       assert result.total_list_items == 10
@@ -80,10 +76,7 @@ defmodule Excessibility.TelemetryCapture.Enrichers.CollectionSizeTest do
 
       result = CollectionSize.enrich(assigns, [])
 
-      assert result.list_sizes == %{
-               "user.posts": 3,
-               "user.comments": 2
-             }
+      assert result.list_sizes == %{"user.posts" => 3, "user.comments" => 2}
 
       assert result.max_list_size == 3
       assert result.total_list_items == 5
@@ -102,7 +95,7 @@ defmodule Excessibility.TelemetryCapture.Enrichers.CollectionSizeTest do
 
       result = CollectionSize.enrich(assigns, [])
 
-      assert result.list_sizes == %{"data.level1.level2.items": 4}
+      assert result.list_sizes == %{"data.level1.level2.items" => 4}
       assert result.max_list_size == 4
       assert result.total_list_items == 4
     end
@@ -118,10 +111,10 @@ defmodule Excessibility.TelemetryCapture.Enrichers.CollectionSizeTest do
       result = CollectionSize.enrich(assigns, [])
 
       # Should count the outer list and nested lists
-      assert result.list_sizes[:matrix] == 2
-      assert Map.has_key?(result.list_sizes, :"matrix[0]")
-      assert result.list_sizes[:"matrix[0]"] == 2
-      assert result.list_sizes[:"matrix[1]"] == 3
+      assert result.list_sizes["matrix"] == 2
+      assert Map.has_key?(result.list_sizes, "matrix[0]")
+      assert result.list_sizes["matrix[0]"] == 2
+      assert result.list_sizes["matrix[1]"] == 3
       assert result.max_list_size == 3
     end
 
@@ -133,10 +126,7 @@ defmodule Excessibility.TelemetryCapture.Enrichers.CollectionSizeTest do
 
       result = CollectionSize.enrich(assigns, [])
 
-      assert result.list_sizes == %{
-               products: 0,
-               users: 2
-             }
+      assert result.list_sizes == %{"products" => 0, "users" => 2}
 
       assert result.max_list_size == 2
       assert result.total_list_items == 2
@@ -159,7 +149,7 @@ defmodule Excessibility.TelemetryCapture.Enrichers.CollectionSizeTest do
 
       result = CollectionSize.enrich(assigns, [])
 
-      assert result.list_sizes == %{products: 3}
+      assert result.list_sizes == %{"products" => 3}
       assert result.max_list_size == 3
       assert result.total_list_items == 3
     end
@@ -175,11 +165,11 @@ defmodule Excessibility.TelemetryCapture.Enrichers.CollectionSizeTest do
 
       result = CollectionSize.enrich(assigns, [])
 
-      assert result.list_sizes == %{"user.posts": 3}
+      assert result.list_sizes == %{"user.posts" => 3}
       assert result.max_list_size == 3
     end
 
-    test "uses atom keys for paths" do
+    test "names a path with dots, as a string: no atom is made from assign keys" do
       assigns = %{
         cart: %{
           items: [1, 2]
@@ -188,9 +178,7 @@ defmodule Excessibility.TelemetryCapture.Enrichers.CollectionSizeTest do
 
       result = CollectionSize.enrich(assigns, [])
 
-      # Keys should be atoms for efficiency
-      assert is_atom(:"cart.items")
-      assert Map.has_key?(result.list_sizes, :"cart.items")
+      assert Map.has_key?(result.list_sizes, "cart.items")
     end
   end
 end

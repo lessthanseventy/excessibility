@@ -32,7 +32,7 @@ defmodule Excessibility.TelemetryCapture.Enrichers.BinaryContentTest do
       assert length(result.large_binaries) == 1
 
       [binary_info] = result.large_binaries
-      assert binary_info.key == :image_data
+      assert binary_info.key == "image_data"
       assert binary_info.size == 50_000
     end
 
@@ -79,7 +79,7 @@ defmodule Excessibility.TelemetryCapture.Enrichers.BinaryContentTest do
 
       assert result.binary_count == 1
       [binary_info] = result.large_binaries
-      assert binary_info.key == :"upload.data"
+      assert binary_info.key == "upload.data"
     end
 
     test "detects binaries in lists" do
