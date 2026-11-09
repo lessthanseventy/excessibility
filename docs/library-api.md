@@ -177,7 +177,7 @@ mix excessibility.review --format json
 
 ```json
 {
-  "excessibility_version": "0.20.0",
+  "excessibility_version": "0.21.0",
   "summary": { "block": 1, "review": 0, "auto": 55 },
   "warnings": [],
   "behavioral": [],

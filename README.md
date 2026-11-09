@@ -20,7 +20,7 @@ queries it ran, and the patterns that stand out.
 ```elixir
 def deps do
   [
-    {:excessibility, "~> 0.20", only: [:dev, :test]},
+    {:excessibility, "~> 0.21", only: [:dev, :test]},
     {:igniter, "~> 0.7", only: [:dev, :test], runtime: false}
   ]
 end
