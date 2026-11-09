@@ -233,10 +233,13 @@ defmodule Excessibility.Review do
 
   # Selectors embed DOM ids, and Phoenix idiomatically derives those from
   # record ids (`id={"row-#{@row.id}"}`) whose values shift between the
-  # baseline run and the current run, so digit runs are
+  # baseline run and the current run, so UUIDs and then digit runs are
   # collapsed before comparing. The raw selector stays on the finding for
   # display.
-  defp fingerprint(%{rule: rule, selector: selector}), do: {rule, String.replace(selector, ~r/\d+/, "N")}
+  defp fingerprint(%{rule: rule, selector: selector}) do
+    uuid = ~r/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
+    {rule, selector |> String.replace(uuid, "UUID") |> String.replace(~r/\d+/, "N")}
+  end
 
   # ── axe-core findings ──────────────────────────────────────────────
 

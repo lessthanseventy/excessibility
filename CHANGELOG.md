@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** the keys of `list_sizes`, `large_binaries[].key` and `stale_fields[].key` in enricher output are strings (`"cart.items"`) rather than atoms made from assign names at runtime; `--highlight` fields are kept as strings too (an atom list still works).
 
 ### Fixed
+- **`mix excessibility.review` no longer reports pre-existing findings as new when DOM ids embed UUIDs** ([#206](https://github.com/lessthanseventy/excessibility/issues/206)). The `{rule, selector}` fingerprint from [#140](https://github.com/lessthanseventy/excessibility/issues/140) collapsed digit runs only, so a UUID kept its hex letters (`faq-article-d9cc504b-…` became `faq-article-dNccNb-…`) and still differed on every run. Apps with `binary_id` schemas or UUID-generating factories got the same false `:block` verdict #140 fixed for integer ids: on a real PR that changed neither the layout nor the FAQ, all 9 blocks came from this. UUIDs are now collapsed before the digit pass. A second violating element with a different UUID still counts as one new finding.
 - The Hex package ships `priv/`, so the installer finds the Claude skills plugin in a dependency checkout instead of skipping it silently.
 - Dependency advisories cleared by updating all deps.
 
