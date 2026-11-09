@@ -96,6 +96,28 @@ defmodule Excessibility.ReviewTest do
       assert change.tier == :block
     end
 
+    test "a pre-existing violation whose selector differs only by an embedded UUID is not new" do
+      baseline = ~s(<div><span id="row-d9cc504b-22e3-40f5-a661-8d2844266b1c" phx-click="a">one</span></div>)
+      current = ~s(<div><span id="row-87cdc37e-bd38-45c4-864b-c773a70d6957" phx-click="a">one</span></div>)
+
+      change = Review.review_pair("list", baseline, current)
+
+      assert change.findings == []
+      assert change.tier == :auto
+    end
+
+    test "an additional violation on a UUID-keyed sibling still counts as new" do
+      baseline = ~s(<div><span id="row-d9cc504b-22e3-40f5-a661-8d2844266b1c" phx-click="a">one</span></div>)
+
+      current =
+        ~s(<div><span id="row-d9cc504b-22e3-40f5-a661-8d2844266b1c" phx-click="a">one</span><span id="row-87cdc37e-bd38-45c4-864b-c773a70d6957" phx-click="b">two</span></div>)
+
+      change = Review.review_pair("list", baseline, current)
+
+      assert Enum.count(change.findings, &(&1.rule == :phx_click_on_non_interactive)) == 1
+      assert change.tier == :block
+    end
+
     test "a pre-existing rule violation is not counted as new (finding-delta)" do
       # The phx-click violation exists in BOTH snapshots; only the text inside
       # a live region changed, so there is nothing newly wrong.
