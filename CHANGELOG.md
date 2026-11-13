@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.22.1] - 2026-11-12
+
 ### Fixed
 - **`mix excessibility.review` no longer lists a view as changed when only a shortened UUID differs** ([#214](https://github.com/lessthanseventy/excessibility/issues/214)). A display id cut from the start of a `binary_id` (`Offer ID: c3b4c5`, `ID #9a1c2d3f`) is not a full UUID, so `normalize_numbers: true` collapsed only its digits and the letters still differed between two runs of the same commit. Hex runs of six or more characters now collapse to the digit placeholder, whether they are all digits, all letters (`fadecb`) or mixed. Any other text of that shape collapses with them, so a change that is only a colour code (`#ffcc00`), a short git SHA, a hex-looking SKU or one of the few words of six or more letters spelled in `a-f` (`facade`, `decade`) is no longer a region in a review.
 
