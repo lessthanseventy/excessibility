@@ -28,6 +28,9 @@ defmodule DemoWeb.Router do
       live "/a11y/widgets", MessyWidgetsLive, :index
 
       # Performance examples
+      live "/review/orders", OrdersLive, :index
+      live "/review/messy-orders", MessyOrdersLive, :index
+
       live "/perf/n-plus-one", NPlusOneLive, :index
       live "/perf/memory", LeakyLive, :index
       live "/perf/renders", ThrashLive, :index
