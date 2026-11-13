@@ -104,6 +104,102 @@ defmodule Excessibility.SnapshotDiffTest do
     end
   end
 
+  describe "render_equivalent?/2" do
+    test "per-render tokens, comments and record ids are not differences" do
+      old = """
+      <!-- Timestamp: 1 -->
+      <html><head><meta name="csrf-token" content="tokA"></head><body>
+      <div id="phx-F1a_x-Q" data-phx-main data-phx-session="sessA" data-phx-static="statA">
+      <input type="hidden" name="_csrf_token" value="tokA"><a data-csrf="tokA" href="/orders/12">Order 12</a>
+      <p id="row-0ad113de-7c1e-4f0a-9b1d-3f2a6c5e8d90" data-phx-id="c3-phx-F1a_x-Q">c3b4c5</p>
+      <label for="phx-F1a_upload" phx-drop-target="phx-F1a_upload" phx-click='[["dispatch",{"to":"#phx-F1a_upload"}]]'>Add</label>
+      </div></body></html>
+      """
+
+      new = """
+      <!-- Timestamp: 2 -->
+      <html><head><meta name="csrf-token" content="tokB"></head><body>
+      <div id="phx-G2b-y_R" data-phx-main data-phx-session="sessB" data-phx-static="statB">
+      <input type="hidden" name="_csrf_token" value="tokB"><a data-csrf="tokB" href="/orders/407">Order 407</a>
+      <p id="row-f3b9c2a1-1d2e-4a3b-8c4d-5e6f7a8b9c0d" data-phx-id="c3-phx-G2b-y_R">9a1c2d</p>
+      <label for="phx-G2b-upload" phx-drop-target="phx-G2b-upload" phx-click='[["dispatch",{"to":"#phx-G2b-upload"}]]'>Add</label>
+      </div></body></html>
+      """
+
+      assert SnapshotDiff.render_equivalent?(old, new)
+    end
+
+    test "a signed Phoenix token in a URL is not a difference" do
+      old = ~s(<a href="/share?token=SFMyNTY.g2gDYgArYQxuBgCjy9fToQFiAAFRgA.Ro2LZrKCAO2hg7po4X5eoLM-glUGI6gw">Share</a>)
+      new = ~s(<a href="/share?token=SFMyNTY.g2gDYgBqV1huBgB_xNrToQFiAAFRgA.c9Jq0V_3mXw1x7pT2bKfLhQ8sYd5nRzA">Share</a>)
+
+      assert SnapshotDiff.render_equivalent?(old, new)
+    end
+
+    # Each pair differs only in an id, so collapsing ids to one placeholder
+    # would call them equal; what changed is which element the id reaches.
+    for {label, old, new} <- [
+          {"a label that stops pointing at its input", ~s(<label for="f1">L</label><input id="f1">),
+           ~s(<label for="f2">L</label><input id="f1">)},
+          {"an aria-labelledby that stops resolving", ~s(<span id="l1">Name</span><input aria-labelledby="l1">),
+           ~s(<span id="l1">Name</span><input aria-labelledby="l2">)},
+          {"a skip link that loses its target", ~s(<a href="#main1">Skip</a><main id="main1">y</main>),
+           ~s(<a href="#main2">Skip</a><main id="main1">y</main>)},
+          {"two ids becoming one", ~s(<input id="x1" aria-label="a"><input id="x2" aria-label="a">),
+           ~s(<input id="x1" aria-label="a"><input id="x1" aria-label="a">)},
+          {"two radio groups becoming one", ~s(<input type="radio" name="g1"><input type="radio" name="g2">),
+           ~s(<input type="radio" name="g1"><input type="radio" name="g1">)},
+          {"a hex-looking id that stops matching", ~s(<label for="facade">L</label><input id="facade">),
+           ~s(<label for="decade">L</label><input id="facade">)},
+          {"an id moving to another rule of a style block",
+           ~s(<style>#box1{color:#eee}#box2{color:#000}</style><p id="box1">hi</p>),
+           ~s(<style>#box1{color:#eee}#box2{color:#000}</style><p id="box2">hi</p>)},
+          {"a data attribute moving to another rule of a style block",
+           ~s(<style>[data-level="1"]{color:#eee}[data-level="2"]{color:#000}</style><p data-level="1">hi</p>),
+           ~s(<style>[data-level="1"]{color:#eee}[data-level="2"]{color:#000}</style><p data-level="2">hi</p>)},
+          {"a doctype being dropped", "<!DOCTYPE html><html><body><p>a</p></body></html>",
+           "<html><body><p>a</p></body></html>"}
+        ] do
+      test "#{label} is a difference" do
+        refute SnapshotDiff.render_equivalent?(unquote(old), unquote(new))
+      end
+    end
+
+    test "an id that differs the same way everywhere it is used is not a difference" do
+      old = ~s(<label for="qty-12">Quantity</label><input id="qty-12" name="items[12]"><a href="/orders/12">Open</a>)
+      new = ~s(<label for="qty-97">Quantity</label><input id="qty-97" name="items[97]"><a href="/orders/97">Open</a>)
+
+      assert SnapshotDiff.render_equivalent?(old, new)
+    end
+
+    test "a processing instruction is compared, not crashed on" do
+      refute SnapshotDiff.render_equivalent?(~s(<?xml version="1.0"?><p>a</p>), "<p>a</p>")
+    end
+
+    test "byte-identical documents are equivalent even when they do not parse to a tree" do
+      assert SnapshotDiff.render_equivalent?("", "")
+    end
+
+    for {label, old, new} <- [
+          {"a class", ~s(<p class="text-neutral-900">x</p>), ~s(<p class="text-neutral-400">x</p>)},
+          {"an inline style", ~s(<p style="color: #111111">x</p>), ~s(<p style="color: #cccccc">x</p>)},
+          {"a style block", "<style>p { color: #111111 }</style><p>x</p>",
+           "<style>p { color: #cccccc }</style><p>x</p>"},
+          {"a stylesheet link", ~s(<link rel="stylesheet" href="/app-0a1b2c3d.css">),
+           ~s(<link rel="stylesheet" href="/app-4e5f6a7b.css">)},
+          {"a tabindex", ~s(<p tabindex="0">x</p>), ~s(<p tabindex="3">x</p>)},
+          {"an attribute being added", "<p>x</p>", ~s(<p hidden>x</p>)},
+          {"a word in the text", "<p>Save</p>", "<p>Submit</p>"},
+          {"a non-token meta", ~s(<meta name="viewport" content="width=1">),
+           ~s(<meta name="viewport" content="width=2">)},
+          {"an attribute name", ~s(<input name="a" value="1">), ~s(<input name="a" placeholder="1">)}
+        ] do
+      test "#{label} that differs is a difference" do
+        refute SnapshotDiff.render_equivalent?(unquote(old), unquote(new))
+      end
+    end
+  end
+
   describe "live_region_findings/3 — content change without aria-live" do
     test "flags a significant content change outside any live region" do
       assert [finding] = findings(@table_two, @table_one)
