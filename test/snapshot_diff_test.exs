@@ -157,6 +157,11 @@ defmodule Excessibility.SnapshotDiffTest do
           {"a data attribute moving to another rule of a style block",
            ~s(<style>[data-level="1"]{color:#eee}[data-level="2"]{color:#000}</style><p data-level="1">hi</p>),
            ~s(<style>[data-level="1"]{color:#eee}[data-level="2"]{color:#000}</style><p data-level="2">hi</p>)},
+          {"a label that stops pointing at its input, with its attributes reordered",
+           ~s(<label class="l" for="f-2">L</label><input id="f-2">),
+           ~s(<label for="f-2" class="l">L</label><input id="f-3">)},
+          {"an srcset pointing at another file", ~s(<img src="/p.png" srcset="/p.png 500w">),
+           ~s(<img src="/p.png" srcset="/q.png 500w">)},
           {"a doctype being dropped", "<!DOCTYPE html><html><body><p>a</p></body></html>",
            "<html><body><p>a</p></body></html>"}
         ] do
@@ -168,6 +173,20 @@ defmodule Excessibility.SnapshotDiffTest do
     test "an id that differs the same way everywhere it is used is not a difference" do
       old = ~s(<label for="qty-12">Quantity</label><input id="qty-12" name="items[12]"><a href="/orders/12">Open</a>)
       new = ~s(<label for="qty-97">Quantity</label><input id="qty-97" name="items[97]"><a href="/orders/97">Open</a>)
+
+      assert SnapshotDiff.render_equivalent?(old, new)
+    end
+
+    test "attribute order is not a difference" do
+      old = ~s(<label class="l" for="qty-12">Q</label><a href="/x/12" class="btn" data-test-id="go">Go</a>)
+      new = ~s(<label for="qty-97" class="l">Q</label><a href="/x/97" data-test-id="go" class="btn">Go</a>)
+
+      assert SnapshotDiff.render_equivalent?(old, new)
+    end
+
+    test "a record id in srcset that differs as it does in src is not a difference" do
+      old = ~s(<img src="/p.png#252-500px" srcset="/p.png#252-500px 500w, /p.png#252-original 1000w">)
+      new = ~s(<img src="/p.png#239-500px" srcset="/p.png#239-500px 500w, /p.png#239-original 1000w">)
 
       assert SnapshotDiff.render_equivalent?(old, new)
     end

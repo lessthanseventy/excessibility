@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **`mix excessibility.review` no longer scans a view whose only differences are attribute order or a record id in `srcset`** ([#227](https://github.com/lessthanseventy/excessibility/issues/227)). `Excessibility.SnapshotDiff.render_equivalent?/2` compared each element's attributes in the order they were written, and that order can change between two renders of one template, for example where a component merges `{@rest}` global attributes with literal ones (`class="…" data-test-id="go"` in one render, `data-test-id="go" class="…"` in the next). It also compared `srcset` as written, so an image URL carrying a record id differed on every run although the same id in `src` was accepted as a renaming. On a same-commit re-render of 124 snapshots, 111 pairs were still scanned and the review took 263s. Attributes are now sorted by name before the comparison, and `srcset` is one of the attributes that name or point at something, so an id in it may differ as a renaming under the same rules as `src`. On those 124 pairs the two changes leave 14 to scan. Still a difference: a class, an `srcset` that points at another file, and a `for` that stops matching its `id`, whatever order the attributes come in. What is no longer scanned: a pair whose only difference is a number in `srcset` that changed everywhere it appears, for instance a lone width descriptor `500w` becoming `800w` on a page that uses neither number in another id.
+
 ## [0.22.2] - 2026-11-13
 
 ### Changed
