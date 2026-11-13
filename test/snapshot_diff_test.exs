@@ -80,9 +80,16 @@ defmodule Excessibility.SnapshotDiffTest do
       assert [] = SnapshotDiff.diff(old, new, normalize_numbers: true)
     end
 
-    test "hex-letter words are not collapsed" do
-      old = ~s(<div><p>A decade of facade work</p><p>Total 3</p></div>)
-      new = ~s(<div><p>A facade of decade work</p><p>Total 4</p></div>)
+    test "a shortened UUID that is all letters is unchanged too" do
+      old = ~s(<ul><li>Offer ID: fadecb</li><li>Ref DEADBEEF</li></ul>)
+      new = ~s(<ul><li>Offer ID: c3b4c5</li><li>Ref 12345678</li></ul>)
+
+      assert [] = SnapshotDiff.diff(old, new, normalize_numbers: true)
+    end
+
+    test "hex-letter words shorter than six characters are not collapsed" do
+      old = ~s(<div><p>Row added</p><p>Total 3</p></div>)
+      new = ~s(<div><p>Row faded</p><p>Total 4</p></div>)
 
       assert [_] = SnapshotDiff.diff(old, new, normalize_numbers: true)
     end

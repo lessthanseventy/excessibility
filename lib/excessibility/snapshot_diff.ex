@@ -73,12 +73,12 @@ defmodule Excessibility.SnapshotDiff do
   ## Options
 
     * `:normalize_numbers` - compare text with UUIDs, shortened UUIDs
-      (hex runs of six or more characters holding a digit) and digit runs
-      collapsed, so record ids and factory sequences that differ between
-      two test runs are not changes. A change that is only a number
-      (`$7.38` to `$7.50`) or only such a hex run (a colour `#ffcc00`, a
-      short git SHA) is then not a change either. Regions keep the raw
-      text. Default `false`.
+      (hex runs of six or more characters) and digit runs collapsed, so
+      record ids and factory sequences that differ between two test runs
+      are not changes. A change that is only a number (`$7.38` to
+      `$7.50`) or only such a hex run (a colour `#ffcc00`, a short git
+      SHA, the word `facade`) is then not a change either. Regions keep
+      the raw text. Default `false`.
   """
   @spec diff(String.t(), String.t(), keyword()) :: [region()]
   def diff(old_html, new_html, opts \\ []) when is_binary(old_html) and is_binary(new_html) do
@@ -281,7 +281,7 @@ defmodule Excessibility.SnapshotDiff do
   defp collapse_numbers(text) do
     uuid = ~r/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
     # A shortened UUID can be all digits, so it shares the digit placeholder.
-    hex_id = ~r/(?<![0-9a-z])(?=[0-9a-f]*\d)[0-9a-f]{6,}(?![0-9a-z])/i
+    hex_id = ~r/(?<![0-9a-z])[0-9a-f]{6,}(?![0-9a-z])/i
 
     text |> String.replace(uuid, "UUID") |> String.replace(hex_id, "N") |> String.replace(~r/\d+/, "N")
   end
