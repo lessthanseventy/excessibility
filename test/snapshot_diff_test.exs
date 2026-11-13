@@ -191,6 +191,14 @@ defmodule Excessibility.SnapshotDiffTest do
       assert SnapshotDiff.render_equivalent?(old, new)
     end
 
+    test "a record id equal to a number in a JS command's classes or time is not a difference" do
+      toggle = ~s([["toggle",{"to":"#menu","ins":[["duration-300"],["opacity-0"],["opacity-100"]],"time":300}]])
+      old = ~s(<p id="row-297">a</p><button phx-click='#{toggle}'>Menu</button>)
+      new = ~s(<p id="row-300">a</p><button phx-click='#{toggle}'>Menu</button>)
+
+      assert SnapshotDiff.render_equivalent?(old, new)
+    end
+
     test "a processing instruction is compared, not crashed on" do
       refute SnapshotDiff.render_equivalent?(~s(<?xml version="1.0"?><p>a</p>), "<p>a</p>")
     end
@@ -206,6 +214,10 @@ defmodule Excessibility.SnapshotDiffTest do
            "<style>p { color: #cccccc }</style><p>x</p>"},
           {"a stylesheet link", ~s(<link rel="stylesheet" href="/app-0a1b2c3d.css">),
            ~s(<link rel="stylesheet" href="/app-4e5f6a7b.css">)},
+          {"a class in a JS command", ~s(<p phx-click='[["add_class",{"names":["duration-300"]}]]'>x</p>),
+           ~s(<p phx-click='[["add_class",{"names":["duration-700"]}]]'>x</p>)},
+          {"a JS command's target", ~s(<p id="m1">x</p><p id="m2">y</p><b phx-click='[["show",{"to":"#m1"}]]'>s</b>),
+           ~s(<p id="m1">x</p><p id="m2">y</p><b phx-click='[["show",{"to":"#m2"}]]'>s</b>)},
           {"a tabindex", ~s(<p tabindex="0">x</p>), ~s(<p tabindex="3">x</p>)},
           {"an attribute being added", "<p>x</p>", ~s(<p hidden>x</p>)},
           {"a word in the text", "<p>Save</p>", "<p>Submit</p>"},

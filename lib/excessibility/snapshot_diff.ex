@@ -74,6 +74,10 @@ defmodule Excessibility.SnapshotDiff do
   @reference_attrs ~w(id for name href action src srcset aria-labelledby aria-describedby aria-controls aria-owns
                       aria-activedescendant)
 
+  # The arguments of a `Phoenix.LiveView.JS` command that hold class names
+  # and a duration: a digit run in them (`duration-300`) is not an id.
+  @js_literal_keys ~w(ins outs names transition time)
+
   @doc """
   Diff two HTML snapshots and return the list of changed regions.
 
@@ -129,9 +133,10 @@ defmodule Excessibility.SnapshotDiff do
   same render, and a `for` that stops matching its `id` is not.
 
   Every other attribute is compared as written, `class` and `style` included,
-  as are `<style>` blocks, `<link>` elements and the doctype, so a styling
-  change is always a difference. The order of an element's attributes is not
-  compared.
+  as are `<style>` blocks, `<link>` elements, the doctype, and the class
+  names and `time` of a `Phoenix.LiveView.JS` command in a `phx-*`
+  attribute, so a styling change is always a difference. The order of an
+  element's attributes is not compared.
   """
   @spec render_equivalent?(String.t(), String.t()) :: boolean()
   def render_equivalent?(html, html), do: true
@@ -387,7 +392,7 @@ defmodule Excessibility.SnapshotDiff do
   defp canonical_attr(name, _value, _token_attr, refs) when name in @per_render_attrs, do: {"", refs}
   defp canonical_attr(name, value, _token_attr, refs) when name in @text_attrs, do: {collapse_numbers(value), refs}
   defp canonical_attr("data-" <> _, value, _token_attr, refs), do: reference(value, refs)
-  defp canonical_attr("phx-" <> _, value, _token_attr, refs), do: reference(value, refs)
+  defp canonical_attr("phx-" <> _, value, _token_attr, refs), do: js_reference(value, refs)
   defp canonical_attr(name, value, _token_attr, refs) when name in @reference_attrs, do: reference(value, refs)
   defp canonical_attr(_name, value, _token_attr, refs), do: {value, refs}
 
@@ -396,6 +401,32 @@ defmodule Excessibility.SnapshotDiff do
   defp reference(value, refs) do
     {String.replace(value, id_pattern(), <<0>>), %{refs | ids: Enum.reverse(scan_ids(value), refs.ids)}}
   end
+
+  defp js_reference(value, refs) do
+    case Jason.decode(value) do
+      {:ok, ops} when is_list(ops) -> js_term(ops, refs)
+      _ -> reference(value, refs)
+    end
+  end
+
+  defp js_term(list, refs) when is_list(list), do: Enum.map_reduce(list, refs, &js_term/2)
+
+  defp js_term(map, refs) when is_map(map) do
+    map
+    |> Enum.sort()
+    |> Enum.map_reduce(refs, fn
+      {key, value}, refs when key in @js_literal_keys ->
+        {{key, value}, refs}
+
+      {key, value}, refs ->
+        {value, refs} = js_term(value, refs)
+        {{key, value}, refs}
+    end)
+  end
+
+  defp js_term(string, refs) when is_binary(string), do: reference(string, refs)
+  defp js_term(number, refs) when is_number(number), do: reference(to_string(number), refs)
+  defp js_term(other, refs), do: {other, refs}
 
   defp scan_ids(string), do: id_pattern() |> Regex.scan(string) |> Enum.map(&hd/1)
 
