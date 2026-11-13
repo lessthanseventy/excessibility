@@ -154,7 +154,9 @@ if Code.ensure_loaded?(Igniter.Mix.Task) do
           Igniter.add_warning(
             igniter,
             "npx playwright install chromium exited with status #{status}. " <>
-              "Run `npx playwright install chromium` manually in #{assets_dir}."
+              "Run `npx playwright install chromium` manually in #{assets_dir}. " <>
+              "If Playwright reports that it does not support this OS, set " <>
+              "`config :excessibility, playwright_path: ...` to a Playwright installation that does."
           )
       end
     end
