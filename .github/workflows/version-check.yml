@@ -4,11 +4,12 @@ name: Version Check
 # Tag creation lives in release.yml, a deliberate human-gated path that runs
 # after the release PR merges and CI passes.
 #
-# On every push to main it checks that the declared Hex *package surface*
-# is consistent with the version: if a tag for the current @version already
-# exists, the packaged files must be unchanged. It does NOT fail merely because
-# HEAD differs from the tag — commits that only touch non-package files (tests,
-# CI, CHANGELOG, docs outside the package) are allowed to diverge from a tag.
+# On every push to main it compares the declared Hex *package surface* with
+# the version: if a tag for the current @version already exists and the
+# packaged files differ from it, it warns that main carries unreleased package
+# changes. It does not fail: fixes collect under [Unreleased] and the version
+# is bumped once, in the release PR. release.yml is what refuses to release a
+# version whose tag targets another commit.
 
 on:
   push:
@@ -81,7 +82,5 @@ jobs:
             echo "✓ Package surface is identical to v$VERSION."
             echo "  Only non-package files (tests, CI, docs) differ — safe to merge without a bump."
           else
-            echo "::error::The Hex package surface changed but v$VERSION is already tagged (and may be published)."
-            echo "Tags are immutable. Bump @version in mix.exs (plus README and CHANGELOG) before merging package changes."
-            exit 1
+            echo "::warning::main carries package changes that are not in v$VERSION. Bump @version in mix.exs (plus README and CHANGELOG) in the release PR before releasing them."
           fi
