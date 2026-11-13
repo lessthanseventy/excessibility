@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.22.2] - 2026-11-13
 
+### Changed
+- **The bundled axe-core moves from 4.11.1 to 4.14.0** (`@axe-core/playwright` `^4.14.0`). Re-run `mix excessibility.install`, or `npm install` in the dependency's `assets/`, to pick it up. A newer axe can report findings the older one did not, so `mix excessibility` may list violations on snapshots that have not changed. `mix excessibility.review` scans both sides of a pair with the same engine, so it does not report them as new.
+
 ### Removed
 - **`assets/axe-crawl.js` is gone from the package.** It was a standalone script that walked a careers site (landing page, first job listing, Apply button) and ran axe at each step. No mix task, module or guide used or mentioned it. Anyone running it with `node` directly should copy it from the 0.22.1 package.
 
