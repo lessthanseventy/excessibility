@@ -71,7 +71,7 @@ defmodule Excessibility.SnapshotDiff do
   # Attributes that name or point at something: an element, a route, a form
   # field. Any attribute in neither list is compared as written, so one
   # these lists have never heard of costs a scan rather than hiding a change.
-  @reference_attrs ~w(id for name href action src aria-labelledby aria-describedby aria-controls aria-owns
+  @reference_attrs ~w(id for name href action src srcset aria-labelledby aria-describedby aria-controls aria-owns
                       aria-activedescendant)
 
   @doc """
@@ -121,7 +121,7 @@ defmodule Excessibility.SnapshotDiff do
   `title`, `placeholder`, `aria-label`).
 
   In the attributes that name or point at something (`id`, `for`, `name`,
-  `href`, `action`, `src`, the ARIA id references, `data-*`, `phx-*`) those
+  `href`, `action`, `src`, `srcset`, the ARIA id references, `data-*`, `phx-*`) those
   runs, LiveView's generated `phx-…` ids and signed `Phoenix.Token` values
   may differ only as a renaming: each old value becomes one new value
   everywhere it is used, and neither is otherwise in use on the other side
@@ -130,7 +130,8 @@ defmodule Excessibility.SnapshotDiff do
 
   Every other attribute is compared as written, `class` and `style` included,
   as are `<style>` blocks, `<link>` elements and the doctype, so a styling
-  change is always a difference.
+  change is always a difference. The order of an element's attributes is not
+  compared.
   """
   @spec render_equivalent?(String.t(), String.t()) :: boolean()
   def render_equivalent?(html, html), do: true
@@ -362,8 +363,12 @@ defmodule Excessibility.SnapshotDiff do
   defp canonical({tag, attrs, children}, refs) when is_binary(tag) and is_list(attrs) do
     token_attr = token_attr(tag, attrs)
 
+    # Attribute order has no meaning in HTML, and merged global attributes
+    # can land in a different order on each render.
     {attrs, refs} =
-      Enum.map_reduce(attrs, refs, fn {name, value}, refs ->
+      attrs
+      |> Enum.sort_by(&elem(&1, 0))
+      |> Enum.map_reduce(refs, fn {name, value}, refs ->
         {value, refs} = canonical_attr(name, value, token_attr, refs)
         {{name, value}, refs}
       end)
