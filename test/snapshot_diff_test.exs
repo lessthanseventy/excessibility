@@ -70,6 +70,23 @@ defmodule Excessibility.SnapshotDiffTest do
       assert [] = SnapshotDiff.diff(old, new, normalize_numbers: true)
     end
 
+    test "text that differs only by shortened UUIDs is unchanged" do
+      old =
+        ~s(<ul><li>Offer ID: c3b4c5</li><li>Chrome Baseball Offer - ID #e1b2b3b4b5</li><li>Ref 12345678</li><li>offer_9a1c2d3f</li></ul>)
+
+      new =
+        ~s(<ul><li>Offer ID: f9c1bcca</li><li>Chrome Baseball Offer - ID #9a1c2d3</li><li>Ref 9a1c2d3f</li><li>offer_f9c1bcca</li></ul>)
+
+      assert [] = SnapshotDiff.diff(old, new, normalize_numbers: true)
+    end
+
+    test "hex-letter words are not collapsed" do
+      old = ~s(<div><p>A decade of facade work</p><p>Total 3</p></div>)
+      new = ~s(<div><p>A facade of decade work</p><p>Total 4</p></div>)
+
+      assert [_] = SnapshotDiff.diff(old, new, normalize_numbers: true)
+    end
+
     test "a change in the words is still reported, with the raw text" do
       old = ~s(<div><p>Order 12 shipped</p><p>Total 3</p></div>)
       new = ~s(<div><p>Order 97 cancelled</p><p>Total 4</p></div>)
