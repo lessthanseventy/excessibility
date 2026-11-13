@@ -1,5 +1,5 @@
-// Resolves the node modules shared by axe-runner.js and axe-crawl.js
-// (playwright and @axe-core/playwright). Resolution order:
+// Resolves the node modules axe-runner.js needs (playwright and
+// @axe-core/playwright). Resolution order:
 //
 //   1. EXCESSIBILITY_PLAYWRIGHT_PATH (set via `config :excessibility,
 //      playwright_path: "..."`) — reuse a host project's Playwright

@@ -106,7 +106,6 @@ defmodule Excessibility.MixProject do
         "assets/package.json",
         "assets/package-lock.json",
         "assets/axe-runner.js",
-        "assets/axe-crawl.js",
         "assets/resolve-playwright.js",
         "bin",
         "priv",
