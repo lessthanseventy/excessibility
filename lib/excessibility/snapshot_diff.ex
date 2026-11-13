@@ -71,11 +71,13 @@ defmodule Excessibility.SnapshotDiff do
   # Attributes that name or point at something: an element, a route, a form
   # field. Any attribute in neither list is compared as written, so one
   # these lists have never heard of costs a scan rather than hiding a change.
-  @reference_attrs ~w(id for name href action src srcset aria-labelledby aria-describedby aria-controls aria-owns
+  @reference_attrs ~w(id for name href action src aria-labelledby aria-describedby aria-controls aria-owns
                       aria-activedescendant)
 
   # The arguments of a `Phoenix.LiveView.JS` command that hold class names
-  # and a duration: a digit run in them (`duration-300`) is not an id.
+  # and a duration: a digit run in them (`duration-300`) is not an id. A
+  # pushed `value` may use the same names for its own keys, so they are
+  # literal only as a command's direct arguments.
   @js_literal_keys ~w(ins outs names transition time)
 
   @doc """
@@ -125,7 +127,7 @@ defmodule Excessibility.SnapshotDiff do
   `title`, `placeholder`, `aria-label`).
 
   In the attributes that name or point at something (`id`, `for`, `name`,
-  `href`, `action`, `src`, `srcset`, the ARIA id references, `data-*`, `phx-*`) those
+  `href`, `action`, `src`, the URLs of `srcset`, the ARIA id references, `data-*`, `phx-*`) those
   runs, LiveView's generated `phx-…` ids and signed `Phoenix.Token` values
   may differ only as a renaming: each old value becomes one new value
   everywhere it is used, and neither is otherwise in use on the other side
@@ -133,10 +135,11 @@ defmodule Excessibility.SnapshotDiff do
   same render, and a `for` that stops matching its `id` is not.
 
   Every other attribute is compared as written, `class` and `style` included,
-  as are `<style>` blocks, `<link>` elements, the doctype, and the class
-  names and `time` of a `Phoenix.LiveView.JS` command in a `phx-*`
-  attribute, so a styling change is always a difference. The order of an
-  element's attributes is not compared.
+  as are `<style>` blocks, `<link>` elements, the doctype, the width and
+  density descriptors of `srcset`, and the class names and `time` of a
+  `Phoenix.LiveView.JS` command in a `phx-*` attribute, so a styling change
+  is always a difference. The order of an element's attributes is not
+  compared.
   """
   @spec render_equivalent?(String.t(), String.t()) :: boolean()
   def render_equivalent?(html, html), do: true
@@ -393,6 +396,7 @@ defmodule Excessibility.SnapshotDiff do
   defp canonical_attr(name, value, _token_attr, refs) when name in @text_attrs, do: {collapse_numbers(value), refs}
   defp canonical_attr("data-" <> _, value, _token_attr, refs), do: reference(value, refs)
   defp canonical_attr("phx-" <> _, value, _token_attr, refs), do: js_reference(value, refs)
+  defp canonical_attr("srcset", value, _token_attr, refs), do: srcset_reference(value, refs)
   defp canonical_attr(name, value, _token_attr, refs) when name in @reference_attrs, do: reference(value, refs)
   defp canonical_attr(_name, value, _token_attr, refs), do: {value, refs}
 
@@ -402,30 +406,49 @@ defmodule Excessibility.SnapshotDiff do
     {String.replace(value, id_pattern(), <<0>>), %{refs | ids: Enum.reverse(scan_ids(value), refs.ids)}}
   end
 
+  # The URLs of an srcset are references; a width or density descriptor
+  # (`500w`, `2x`) picks which image is shown, so it is compared as written.
+  defp srcset_reference(value, refs) do
+    ~r/\s\d+(?:\.\d+)?[wx]\s*(?:,|$)/
+    |> Regex.split(value, include_captures: true)
+    |> Enum.map_reduce(refs, fn part, refs ->
+      if part =~ ~r/^\s\d+(?:\.\d+)?[wx]\s*,?$/, do: {part, refs}, else: reference(part, refs)
+    end)
+  end
+
   defp js_reference(value, refs) do
     case Jason.decode(value) do
-      {:ok, ops} when is_list(ops) -> js_term(ops, refs)
+      {:ok, ops} when is_list(ops) -> Enum.map_reduce(ops, refs, &js_op/2)
       _ -> reference(value, refs)
     end
   end
+
+  defp js_op([kind, args], refs) when is_map(args) do
+    {literal, rest} = Map.split(args, @js_literal_keys)
+    {rest, refs} = js_term(rest, refs)
+    {[kind, literal, rest], refs}
+  end
+
+  defp js_op(other, refs), do: js_term(other, refs)
 
   defp js_term(list, refs) when is_list(list), do: Enum.map_reduce(list, refs, &js_term/2)
 
   defp js_term(map, refs) when is_map(map) do
     map
     |> Enum.sort()
-    |> Enum.map_reduce(refs, fn
-      {key, value}, refs when key in @js_literal_keys ->
-        {{key, value}, refs}
-
-      {key, value}, refs ->
-        {value, refs} = js_term(value, refs)
-        {{key, value}, refs}
+    |> Enum.map_reduce(refs, fn {key, value}, refs ->
+      {value, refs} = js_term(value, refs)
+      {{key, value}, refs}
     end)
   end
 
   defp js_term(string, refs) when is_binary(string), do: reference(string, refs)
-  defp js_term(number, refs) when is_number(number), do: reference(to_string(number), refs)
+
+  defp js_term(number, refs) when is_number(number) do
+    {shape, refs} = reference(to_string(number), refs)
+    {{:number, shape}, refs}
+  end
+
   defp js_term(other, refs), do: {other, refs}
 
   defp scan_ids(string), do: id_pattern() |> Regex.scan(string) |> Enum.map(&hd/1)
