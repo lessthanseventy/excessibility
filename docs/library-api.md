@@ -160,6 +160,8 @@ Where `mix excessibility` checks each snapshot in isolation, `mix excessibility.
 
 Baseline and current snapshots come from separate test runs, so regions are compared with UUIDs and digit runs collapsed: a record id or factory sequence that shifted between runs is not a change, and neither is a change that is only a number (`$7.38` to `$7.50`).
 
+axe scans a view only when its two snapshots differ in more than per-render values (`Excessibility.SnapshotDiff.render_equivalent?/2`). CSRF tokens, the LiveView session, the snapshot header comment and record ids in text are ignored. Ids in `id`, `for`, `href`, `name`, the ARIA references, `data-*` and `phx-*` (LiveView's generated `phx-…` ids and signed `Phoenix.Token` values included) may differ as long as each one differs the same way everywhere it is used. `class`, `style`, `<style>` blocks and `<link>` elements are compared as written. A stylesheet edited in place, with no change to the HTML, is therefore not scanned by a review; `mix excessibility` scans every snapshot.
+
 ```bash
 # Generate/refresh snapshots, then review against the baseline
 mix test

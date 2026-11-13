@@ -115,4 +115,49 @@ defmodule Excessibility.Review.AxeFindingsTest do
     assert change.tier == :auto
     assert change.warnings == []
   end
+
+  describe "two renders of the same code" do
+    defp render(csrf, session, root, id, uuid, seq, body_class) do
+      """
+      <!--
+      Excessibility Snapshot
+      Timestamp: 2026-11-12T10:00:#{seq}Z
+      Assigns: %{id: #{id}}
+      -->
+      <html><head><meta name="csrf-token" content="#{csrf}"></head><body class="#{body_class}">
+      <div id="phx-#{root}" data-phx-main data-phx-session="#{session}" data-phx-static="#{session}x">
+        <div data-phx-id="m1-phx-#{root}" data-phx-parent-id="phx-#{root}">
+          <form><input type="hidden" name="_csrf_token" value="#{csrf}"><a data-csrf="#{csrf}" href="/orders/#{id}">Go</a></form>
+          <article data-test-id="product-card-#{id}" id="faq-article-#{uuid}" phx-value-id="#{id}">
+            <label for="quantity#{id}">Quantity for product #{id}</label>
+            <input id="quantity#{id}" name="items[#{id}][quantity]" type="text" value="#{seq}">
+            <p aria-describedby="faq-article-#{uuid}">email-#{seq}@example.com</p>
+          </article>
+        </div>
+      </div>
+      </body></html>
+      """
+    end
+
+    defp baseline_render(body_class \\ "text-neutral-900") do
+      render("tokA", "sessA", "F1a_x-Q", 2_741_595, "0ad113de-7c1e-4f0a-9b1d-3f2a6c5e8d90", 568, body_class)
+    end
+
+    defp current_render(body_class \\ "text-neutral-900") do
+      render("tokB", "sessB", "G2b-y_R", 2_741_611, "f3b9c2a1-1d2e-4a3b-8c4d-5e6f7a8b9c0d", 400, body_class)
+    end
+
+    test "per-render tokens and test-data ids do not trigger a scan" do
+      change = Review.review_pair("product", baseline_render(), current_render())
+
+      assert change.tier == :auto
+      assert change.warnings == []
+    end
+
+    test "a class-only change is still scanned" do
+      expect(Excessibility.ScannerMock, :scan, 2, fn _url, _opts -> {:ok, %{violations: []}} end)
+
+      Review.review_pair("product", baseline_render(), current_render("text-neutral-400"))
+    end
+  end
 end
