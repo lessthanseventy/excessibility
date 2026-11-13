@@ -199,6 +199,13 @@ defmodule Excessibility.SnapshotDiffTest do
       assert SnapshotDiff.render_equivalent?(old, new)
     end
 
+    test "a record id under a pushed value's key named like a JS class argument is not a difference" do
+      old = ~s(<b phx-click='[["push",{"event":"pick","value":{"time":12,"names":"u12"}}]]'>x</b>)
+      new = ~s(<b phx-click='[["push",{"event":"pick","value":{"time":97,"names":"u97"}}]]'>x</b>)
+
+      assert SnapshotDiff.render_equivalent?(old, new)
+    end
+
     test "a processing instruction is compared, not crashed on" do
       refute SnapshotDiff.render_equivalent?(~s(<?xml version="1.0"?><p>a</p>), "<p>a</p>")
     end
@@ -218,6 +225,12 @@ defmodule Excessibility.SnapshotDiffTest do
            ~s(<p phx-click='[["add_class",{"names":["duration-700"]}]]'>x</p>)},
           {"a JS command's target", ~s(<p id="m1">x</p><p id="m2">y</p><b phx-click='[["show",{"to":"#m1"}]]'>s</b>),
            ~s(<p id="m1">x</p><p id="m2">y</p><b phx-click='[["show",{"to":"#m2"}]]'>s</b>)},
+          {"an srcset width descriptor", ~s(<img srcset="/a.png 400w">), ~s(<img srcset="/a.png 800w">)},
+          {"an srcset density descriptor", ~s(<img srcset="/a.png 1x, /b.png 1.5x">),
+           ~s(<img srcset="/a.png 1x, /b.png 2x">)},
+          {"a number becoming a string in a JS command",
+           ~s(<p phx-click='[["push",{"event":"x","value":{"n":1}}]]'>x</p>),
+           ~s(<p phx-click='[["push",{"event":"x","value":{"n":"1"}}]]'>x</p>)},
           {"a tabindex", ~s(<p tabindex="0">x</p>), ~s(<p tabindex="3">x</p>)},
           {"an attribute being added", "<p>x</p>", ~s(<p hidden>x</p>)},
           {"a word in the text", "<p>Save</p>", "<p>Submit</p>"},
