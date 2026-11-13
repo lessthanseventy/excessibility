@@ -1,0 +1,8 @@
+version: 2
+updates:
+  # The Playwright pin ships in the Hex package; an old one has no browser
+  # build for a new OS release.
+  - package-ecosystem: npm
+    directory: /assets
+    schedule:
+      interval: weekly
