@@ -133,10 +133,15 @@ defmodule Excessibility.Review do
 
   @doc """
   Review a single view's baseline-vs-current snapshot pair.
+
+  Regions are diffed with `normalize_numbers: true` (see
+  `Excessibility.SnapshotDiff.diff/3`), because the two sides normally come
+  from separate test runs whose record ids and factory sequences differ.
+  Pass `normalize_numbers: false` to report number-only changes too.
   """
   @spec review_pair(String.t(), String.t(), String.t(), keyword()) :: change()
   def review_pair(view, baseline_html, current_html, opts \\ []) do
-    regions = SnapshotDiff.diff(baseline_html, current_html, opts)
+    regions = SnapshotDiff.diff(baseline_html, current_html, Keyword.put_new(opts, :normalize_numbers, true))
 
     {axe_pair, warnings} = axe_findings_pair(baseline_html, current_html, opts)
 

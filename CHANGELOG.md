@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **`mix excessibility.review` no longer lists a view as changed when only test-data ids differ** ([#208](https://github.com/lessthanseventy/excessibility/issues/208)). Rendering the same commit twice reported about half the views as changed, because serial ids, UUIDs and factory sequences in rendered text (`Order 2741595`, `email-568@example.com`) differ between two test runs. `Excessibility.SnapshotDiff.diff/3` takes `normalize_numbers: true`, which compares text with UUIDs and digit runs collapsed, and `Excessibility.Review` passes it by default (`normalize_numbers: false` turns it off). A change that is only a number (`$7.38` to `$7.50`) is therefore no longer a region in a review, the same trade-off the finding fingerprint makes. The cross-snapshot check in `mix excessibility` and the `diff_snapshots` MCP tool compare within one run and still see number changes.
+
 ## [0.21.0] - 2026-11-09
 
 ### Changed

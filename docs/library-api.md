@@ -154,6 +154,8 @@ Where `mix excessibility` checks each snapshot in isolation, `mix excessibility.
 - `review` — a new moderate/minor issue; worth a human glance
 - `auto` — rendering changed but introduced no accessibility issues
 
+Baseline and current snapshots come from separate test runs, so regions are compared with UUIDs and digit runs collapsed: a record id or factory sequence that shifted between runs is not a change, and neither is a change that is only a number (`$7.38` to `$7.50`).
+
 ```bash
 # Generate/refresh snapshots, then review against the baseline
 mix test

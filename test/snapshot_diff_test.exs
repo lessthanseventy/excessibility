@@ -59,6 +59,27 @@ defmodule Excessibility.SnapshotDiffTest do
     end
   end
 
+  describe "diff/3 — normalize_numbers: true" do
+    test "text that differs only by record ids, UUIDs and sequences is unchanged" do
+      old =
+        ~s(<ul><li>Order 2741595</li><li>email-568@example.com</li><li>0ad113de-7c1e-4f0a-9b1d-3f2a6c5e8d90</li></ul>)
+
+      new = ~s(<ul><li>Order 88</li><li>email-400@example.com</li><li>f3b9c2a1-1d2e-4a3b-8c4d-5e6f7a8b9c0d</li></ul>)
+
+      assert [_ | _] = SnapshotDiff.diff(old, new)
+      assert [] = SnapshotDiff.diff(old, new, normalize_numbers: true)
+    end
+
+    test "a change in the words is still reported, with the raw text" do
+      old = ~s(<div><p>Order 12 shipped</p><p>Total 3</p></div>)
+      new = ~s(<div><p>Order 97 cancelled</p><p>Total 4</p></div>)
+
+      assert [region] = SnapshotDiff.diff(old, new, normalize_numbers: true)
+      assert region.old_text == "Order 12 shipped"
+      assert region.new_text == "Order 97 cancelled"
+    end
+  end
+
   describe "live_region_findings/3 — content change without aria-live" do
     test "flags a significant content change outside any live region" do
       assert [finding] = findings(@table_two, @table_one)

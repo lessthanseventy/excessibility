@@ -43,8 +43,10 @@ defmodule Excessibility.MCP.Tools.DiffSnapshots do
   def execute(%{"before" => before, "after" => current} = args, _opts) when is_binary(before) and is_binary(current) do
     # Before/after here are the same view re-rendered around the agent's own
     # edit, so both sides share fixture data and the content diff is sound —
-    # unlike `mix excessibility.review`, where it is opt-in.
-    change = Review.review_pair(Map.get(args, "view", "diff"), before, current, content_diff: true)
+    # unlike `mix excessibility.review`, where it is opt-in and numbers are
+    # normalized away.
+    change =
+      Review.review_pair(Map.get(args, "view", "diff"), before, current, content_diff: true, normalize_numbers: false)
 
     {:ok,
      %{

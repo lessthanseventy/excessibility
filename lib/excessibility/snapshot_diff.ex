@@ -69,9 +69,19 @@ defmodule Excessibility.SnapshotDiff do
   content differs between `old_html` and `new_html`. Returns `[]` when the
   documents are content-equivalent (whitespace aside) or either fails to
   parse.
+
+  ## Options
+
+    * `:normalize_numbers` - compare text with UUIDs and digit runs
+      collapsed, so record ids and factory sequences that differ between
+      two test runs are not changes. A change that is only a number
+      (`$7.38` to `$7.50`) is then not a change either. Regions keep the
+      raw text. Default `false`.
   """
   @spec diff(String.t(), String.t(), keyword()) :: [region()]
-  def diff(old_html, new_html, _opts \\ []) when is_binary(old_html) and is_binary(new_html) do
+  def diff(old_html, new_html, opts \\ []) when is_binary(old_html) and is_binary(new_html) do
+    key = if Keyword.get(opts, :normalize_numbers, false), do: &collapse_numbers/1, else: &Function.identity/1
+
     with {:ok, old_tree} <- Floki.parse_document(old_html),
          {:ok, new_tree} <- Floki.parse_document(new_html) do
       old_root = root_node(old_tree)
@@ -79,7 +89,7 @@ defmodule Excessibility.SnapshotDiff do
       doc_len = max(String.length(text(old_root)), String.length(text(new_root)))
 
       old_root
-      |> regions(new_root, [])
+      |> regions(new_root, [], key)
       |> Enum.map(&put_coverage(&1, doc_len))
     else
       _ -> []
@@ -260,30 +270,35 @@ defmodule Excessibility.SnapshotDiff do
 
   # ── Diff walk ──────────────────────────────────────────────────────
 
-  defp regions(old_node, new_node, ancestors) do
-    if text(old_node) == text(new_node),
+  defp regions(old_node, new_node, ancestors, key) do
+    if key.(text(old_node)) == key.(text(new_node)),
       do: [],
-      else: diff_changed(old_node, new_node, ancestors)
+      else: diff_changed(old_node, new_node, ancestors, key)
   end
 
-  defp diff_changed(old_node, new_node, ancestors) do
+  defp collapse_numbers(text) do
+    uuid = ~r/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
+    text |> String.replace(uuid, "UUID") |> String.replace(~r/\d+/, "N")
+  end
+
+  defp diff_changed(old_node, new_node, ancestors, key) do
     old_children = element_children(old_node)
     new_children = element_children(new_node)
 
     if old_children != [] and matchable?(old_children, new_children),
-      do: localize(old_node, new_node, ancestors, old_children, new_children),
+      do: localize(old_node, new_node, ancestors, old_children, new_children, key),
       else: [region(old_node, new_node, ancestors)]
   end
 
   # Recurse into the matched children; if none of them changed, the change
   # lives in this node's own text nodes, so report this node itself.
-  defp localize(old_node, new_node, ancestors, old_children, new_children) do
+  defp localize(old_node, new_node, ancestors, old_children, new_children, key) do
     child_ancestors = [new_node | ancestors]
 
     deeper =
       old_children
       |> Enum.zip(new_children)
-      |> Enum.flat_map(fn {o, n} -> regions(o, n, child_ancestors) end)
+      |> Enum.flat_map(fn {o, n} -> regions(o, n, child_ancestors, key) end)
 
     if deeper == [], do: [region(old_node, new_node, ancestors)], else: deeper
   end
