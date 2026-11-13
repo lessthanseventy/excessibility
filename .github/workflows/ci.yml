@@ -147,6 +147,10 @@ jobs:
         working-directory: demo
         run: mix deps.get
 
+      - name: Check demo formatting
+        working-directory: demo
+        run: mix format --check-formatted
+
       # Renders every demo page twice and reviews the second render against
       # the first. Any review or block verdict is a false positive: the code
       # did not change between the two.

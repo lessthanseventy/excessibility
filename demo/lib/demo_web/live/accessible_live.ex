@@ -60,7 +60,12 @@ defmodule DemoWeb.AccessibleLive do
 
       <section>
         <h2>Need help?</h2>
-        <button type="button" phx-click="toggle_help" aria-expanded={to_string(@show_help?)} aria-controls="help">
+        <button
+          type="button"
+          phx-click="toggle_help"
+          aria-expanded={to_string(@show_help?)}
+          aria-controls="help"
+        >
           {if @show_help?, do: "Hide help", else: "Show help"}
         </button>
         <div :if={@show_help?} id="help">
