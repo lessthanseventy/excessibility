@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **axe `color-contrast` findings no longer flap on a page with a CSS entry animation** ([#219](https://github.com/lessthanseventy/excessibility/issues/219)). `assets/axe-runner.js` neither waited for animations nor disabled them, so a scan that landed in the middle of a fade measured the blended colour of a half-transparent element: two buttons in a modal with a 300ms opacity fade were flagged in 4 of 15 scans of the same snapshot, and `mix excessibility.review` gave a `block` verdict to a view with `region_count: 0`. The runner now emulates `prefers-reduced-motion: reduce` and injects a style that sets animation and transition duration and delay to `0s`, so every animation ends on its final state before axe runs, infinite ones (`animate-spin`) included. Before each axe pass it also finishes whatever is still running through the Web Animations API, in every frame and open shadow root, which covers what the injected style cannot reach: a shadow tree, a script-driven animation and a rule the page marks `!important`. An infinite animation there is cancelled. Screenshots show the settled page too. Two consequences: a page with `@media (prefers-reduced-motion: reduce)` rules is scanned with those rules applied, and on a live URL whose Content-Security-Policy blocks inline styles the injection fails and the report's `:warnings` says so.
+
 ## [0.22.1] - 2026-11-12
 
 ### Fixed

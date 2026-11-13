@@ -253,6 +253,50 @@ async function measureClipping(page, ratioThreshold) {
     .catch(() => null);
 }
 
+// axe reads computed colors at one instant, so a scan during a fade
+// measures the blended, half-transparent color and the result changes from
+// run to run. Zero duration ends every animation and transition on its
+// final state, infinite ones included, and keeps later ones (a transition
+// set off by a viewport change) from starting.
+async function disableAnimations(page, warnings) {
+  const content =
+    "*, *::before, *::after { animation-duration: 0s !important; animation-delay: 0s !important;" +
+    " transition-duration: 0s !important; transition-delay: 0s !important; }";
+
+  const results = await Promise.allSettled(page.frames().map((frame) => frame.addStyleTag({ content })));
+  if (results.some((r) => r.status === "rejected")) {
+    warnings.push(
+      "could not disable animations (the page's Content-Security-Policy may block inline styles) — contrast findings may vary between scans",
+    );
+  }
+}
+
+// The injected style does not reach a shadow root, a script-driven
+// animation, or a rule the page itself marks !important. Those are ended
+// here: finish() jumps to the final state and throws on an infinite
+// animation, which is cancelled instead.
+async function finishAnimations(page) {
+  await Promise.allSettled(
+    page.frames().map((frame) =>
+      frame.evaluate(() => {
+        const finishIn = (root) => {
+          for (const animation of root.getAnimations()) {
+            try {
+              animation.finish();
+            } catch {
+              animation.cancel();
+            }
+          }
+          for (const el of root.querySelectorAll("*")) {
+            if (el.shadowRoot) finishIn(el.shadowRoot);
+          }
+        };
+        finishIn(document);
+      }),
+    ),
+  );
+}
+
 function viewportScreenshotPath(basePath, vp) {
   const suffix = `${vp.width}x${vp.height}`;
   return /\.png$/i.test(basePath) ? basePath.replace(/\.png$/i, `.${suffix}.png`) : `${basePath}.${suffix}.png`;
@@ -308,6 +352,7 @@ async function main() {
   const contextOptions = {
     viewport: viewports ? viewports[0] : viewport,
     locale: "en-US",
+    reducedMotion: "reduce",
   };
   if (!isFileUrl) {
     contextOptions.userAgent = userAgent || DEFAULT_UA;
@@ -372,8 +417,10 @@ async function main() {
     }
 
     await waitForStylesheets(page, warnings, failedStylesheetRequests);
+    await disableAnimations(page, warnings);
 
     const runAxe = async () => {
+      await finishAnimations(page);
       let builder = new AxeBuilder({ page }).withTags(tags);
       if (disableRules.length > 0) builder = builder.disableRules(disableRules);
       return builder.analyze();
