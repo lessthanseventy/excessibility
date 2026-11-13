@@ -162,6 +162,41 @@ defmodule Excessibility.ReviewTest do
     end
   end
 
+  describe "review_pairs/2 — two renders of the same code" do
+    defp render(csrf, session, root, id, uuid, seq) do
+      """
+      <!--
+      Excessibility Snapshot
+      Timestamp: 2026-11-12T10:00:#{seq}Z
+      Assigns: %{id: #{id}}
+      -->
+      <html><head><meta name="csrf-token" content="#{csrf}"></head><body>
+      <div id="phx-#{root}" data-phx-main data-phx-session="#{session}" data-phx-static="#{session}x">
+        <form><input type="hidden" name="_csrf_token" value="#{csrf}"><a data-csrf="#{csrf}" href="/x">Go</a></form>
+        <article data-test-id="product-card-#{id}" id="faq-chevron-faq-article-#{uuid}">
+          <label for="input_form_quantity#{id}">Quantity for product #{id}</label>
+          <input id="input_form_quantity#{id}" type="text">
+          <p>email-#{seq}@example.com</p>
+        </article>
+      </div>
+      </body></html>
+      """
+    end
+
+    test "per-render tokens and test-data ids are not changes" do
+      baseline = render("tokA", "sessA", "F1a", 2_741_595, "0ad113de-7c1e-4f0a-9b1d-3f2a6c5e8d90", 568)
+      current = render("tokB", "sessB", "G2b", 2_741_611, "f3b9c2a1-1d2e-4a3b-8c4d-5e6f7a8b9c0d", 400)
+
+      assert %{changes: []} = Review.review_pairs([{"product", baseline, current}], axe: false)
+    end
+
+    test "normalize_numbers: false reports the number-only change" do
+      change = Review.review_pair("cart", "<p>Total 3</p>", "<p>Total 4</p>", axe: false, normalize_numbers: false)
+
+      assert change.region_count == 1
+    end
+  end
+
   describe "behavioral findings from a timeline" do
     test "are attached to the change and escalate the tier" do
       change =
@@ -198,7 +233,7 @@ defmodule Excessibility.ReviewTest do
       # An :auto view change plus an unrelated run-level critical finding:
       # the run-level finding must not mark this view :block.
       report =
-        [{"search", ~s(<div aria-live="polite">0</div>), ~s(<div aria-live="polite">1</div>)}]
+        [{"search", ~s(<div aria-live="polite">idle</div>), ~s(<div aria-live="polite">done</div>)}]
         |> Review.review_pairs()
         |> Map.put(:behavioral, [
           %{severity: :serious, rule: :stub, message: "N+1 in orders", source: :telemetry, events: []}
