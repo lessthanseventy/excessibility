@@ -196,6 +196,65 @@ defmodule Excessibility.ScannerTest do
     end
   end
 
+  describe "scan/2 — animations" do
+    @describetag browser: true
+
+    # The text is 7:1 on white once the fade ends and about 2.3:1 at its
+    # first frame, which a 60s fade is still showing when axe runs.
+    test "measures contrast on the settled page, not mid-animation" do
+      path =
+        write_tmp_html("""
+        <html lang="en"><head><title>Test</title>
+        <style>
+          @keyframes fade-in { from { opacity: 0.5; } to { opacity: 1; } }
+          body { background: #fff; }
+          .modal { animation: 60s fade-in 0s linear 1 forwards; }
+          .modal p { color: #595959; }
+        </style>
+        </head>
+        <body><main><h1>Hello</h1><div class="modal"><p>Fading text</p></div></main></body></html>
+        """)
+
+      on_exit(fn -> File.rm(path) end)
+
+      {:ok, report} = Scanner.scan("file://#{path}")
+
+      refute Enum.any?(report.violations, &(&1.id == "color-contrast"))
+    end
+
+    # An injected stylesheet cannot override either of these: an author
+    # `!important` outranks its `*` selector, and it does not reach into a
+    # shadow root.
+    for {label, body} <- [
+          {"marked !important",
+           ~s(<style>.modal { animation: 60s fade-in 0s linear 1 forwards !important; }</style>) <>
+             ~s(<div class="modal"><p>Fading text</p></div>)},
+          {"inside a shadow root",
+           ~s(<div><template shadowrootmode="open"><style>@keyframes fade-in { from { opacity: 0.5; } to { opacity: 1; } }) <>
+             ~s( p { color: #595959; animation: 60s fade-in 0s linear 1 forwards; }</style><p>Fading text</p></template></div>)}
+        ] do
+      test "settles an animation #{label}" do
+        path =
+          write_tmp_html("""
+          <html lang="en"><head><title>Test</title>
+          <style>
+            @keyframes fade-in { from { opacity: 0.5; } to { opacity: 1; } }
+            body { background: #fff; }
+            p { color: #595959; }
+          </style>
+          </head>
+          <body><main><h1>Hello</h1>#{unquote(body)}</main></body></html>
+          """)
+
+        on_exit(fn -> File.rm(path) end)
+
+        {:ok, report} = Scanner.scan("file://#{path}")
+
+        refute Enum.any?(report.violations, &(&1.id == "color-contrast"))
+      end
+    end
+  end
+
   describe "scan_viewports/3" do
     @describetag browser: true
 

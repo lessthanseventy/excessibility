@@ -108,6 +108,10 @@ its narrow-width images without a separate pass.
 Scan reports also carry a `:warnings` list — e.g. a linked stylesheet
 that failed to load, which would silently invalidate contrast findings.
 
+Every scan runs with `prefers-reduced-motion: reduce` and with CSS
+animations and transitions set to zero duration, so axe and the
+screenshots see the page in its settled state rather than mid-fade.
+
 See `Excessibility.Scanner` for the full report type and options list.
 Unlike Mix tasks, the Scanner is safe to call from production Phoenix
 releases, which makes it easy to build things like a public URL
