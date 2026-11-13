@@ -116,3 +116,40 @@ jobs:
       - name: Build documentation
         if: matrix.elixir == '1.19'
         run: mix docs
+
+  demo:
+    name: Demo app (same-commit review)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: '1.19'
+          otp-version: '27'
+          install-rebar: true
+          install-hex: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+
+      - name: Install npm dependencies and Playwright
+        run: |
+          cd assets && npm install
+          npx playwright install chromium --with-deps
+
+      - name: Install demo dependencies
+        working-directory: demo
+        run: mix deps.get
+
+      # Renders every demo page twice and reviews the second render against
+      # the first. Any review or block verdict is a false positive: the code
+      # did not change between the two.
+      - name: Review two renders of the same commit
+        working-directory: demo
+        run: mix review.same_commit

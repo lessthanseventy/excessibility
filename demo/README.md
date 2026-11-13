@@ -17,7 +17,7 @@ mix test             # generates snapshots + timelines
 
 ## What it demonstrates
 
-The landing page groups the examples into the two things Excessibility checks.
+The landing page groups the examples by what Excessibility does with them.
 
 ### Accessibility (static snapshots → axe-core + LiveView rules)
 
@@ -37,6 +37,25 @@ mix excessibility                               # axe-core + LiveView rules over
 
 > `mix excessibility` runs axe-core through Playwright. If it isn't installed yet,
 > run `mix excessibility.install` first (the LiveView rules run without it).
+
+### Review (two renders of the same commit → no findings)
+
+| Route | What it shows |
+|-------|---------------|
+| `/review/orders` | An accessible page built from what differs on every render of a real app: random ids, UUIDs in DOM ids, sequenced emails, a clock, a CSRF form and link, a signed token in a URL, an upload input, a stream, live components. Its dialog fades in over 300ms and its sync indicator animates forever. Buyer names are drawn at random, so the page counts as changed and axe scans both renders. |
+| `/review/messy-orders` | Deliberate violations (an unlabelled input and a clickable `<div>` per order) on elements whose ids differ on every render. They exist on both sides, so a review reports none of them as new. |
+
+```bash
+mix review.same_commit
+```
+
+That runs the tests, locks the snapshots as the baseline, runs the tests again and
+reviews the second render against the first. The code is the same both times, so
+the expected report is the two `/review` pages as `auto` (their names changed) and
+nothing as `review` or `block`; the command fails otherwise. Every other page
+differs only in per-render tokens and is not scanned at all. CI runs this on every
+pull request, which makes this app the regression test for false positives in
+`mix excessibility.review`.
 
 ### Performance (telemetry timeline → behavioral analyzers)
 

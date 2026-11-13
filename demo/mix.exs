@@ -66,6 +66,13 @@ defmodule Demo.MixProject do
   defp aliases do
     [
       setup: ["deps.get"],
+      # Each step is its own `mix`, so the two test runs get their own data.
+      "review.same_commit": [
+        "cmd mix test",
+        "cmd mix excessibility.baseline",
+        "cmd mix test",
+        "cmd mix excessibility.review --fail-on review"
+      ],
       precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"]
     ]
   end

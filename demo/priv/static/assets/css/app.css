@@ -1,1 +1,26 @@
 /* This file is for your main application CSS */
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.spinner {
+  animation: 1s fade-in 0s linear infinite alternate;
+  color: #374151;
+}
+
+.dialog {
+  animation: 300ms fade-in 0s ease-in 1 forwards;
+  background: #ffffff;
+  border: 1px solid #6b7280;
+  padding: 1rem;
+}
+
+.dialog .button--primary,
+.dialog .button--secondary {
+  background: #fdfdfd;
+  color: #111827;
+  border: 1px solid #111827;
+  padding: 0.25rem 0.75rem;
+}

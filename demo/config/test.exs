@@ -8,8 +8,7 @@ config :demo, DemoWeb.Endpoint,
   server: false
 
 # Excessibility: point it at the app's endpoint for <head> extraction and
-# snapshot output. axe/pa11y browser scans are disabled in this harness;
-# we're exercising the LiveView rules + behavioral analyzers end to end.
+# snapshot output.
 config :excessibility,
   endpoint: DemoWeb.Endpoint,
   excessibility_output_path: "test/excessibility",
