@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **The bundled Playwright installs on Ubuntu 26.04.** The pin moves from `~1.58.2` to `~1.65.0`. Playwright before 1.61 has no Chromium build for Ubuntu 26.04 and fails `npx playwright install chromium` with "Playwright does not support chromium on ubuntu26.04-x64", which broke `mix excessibility.install` and any CI on `ubuntu-latest`. Playwright 1.65 needs Node 20 or later (1.58 ran on Node 18). When the browser install fails, the installer's warning now names `config :excessibility, playwright_path:` as the way to use a Playwright that supports the OS.
 - **`mix excessibility.review` no longer lists a view as changed when only test-data ids differ** ([#208](https://github.com/lessthanseventy/excessibility/issues/208)). Rendering the same commit twice reported about half the views as changed, because serial ids, UUIDs and factory sequences in rendered text (`Order 2741595`, `email-568@example.com`) differ between two test runs. `Excessibility.SnapshotDiff.diff/3` takes `normalize_numbers: true`, which compares text with UUIDs and digit runs collapsed, and `Excessibility.Review` passes it by default (`normalize_numbers: false` turns it off). A change that is only a number (`$7.38` to `$7.50`) is therefore no longer a region in a review, the same trade-off the finding fingerprint makes. The cross-snapshot check in `mix excessibility` and the `diff_snapshots` MCP tool compare within one run and still see number changes.
 
 ## [0.21.0] - 2026-11-09

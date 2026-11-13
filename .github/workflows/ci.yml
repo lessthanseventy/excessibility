@@ -9,8 +9,7 @@ on:
 jobs:
   test:
     name: Test (Elixir ${{ matrix.elixir }} / OTP ${{ matrix.otp }})
-    # Playwright ~1.58 has no Chromium build for ubuntu-26.04.
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     # Disposable Postgres for the DB-gated privacy regression (#175). Tests that
     # do not set DATABASE_URL exclude the `:database` tag and ignore this.
