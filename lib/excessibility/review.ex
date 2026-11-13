@@ -254,7 +254,7 @@ defmodule Excessibility.Review do
   # that did scan would look new — so both sides are dropped and a warning
   # is surfaced instead.
   defp axe_findings_pair(baseline_html, current_html, opts) do
-    if Keyword.get(opts, :axe, true) and baseline_html != current_html do
+    if Keyword.get(opts, :axe, true) and not SnapshotDiff.render_equivalent?(baseline_html, current_html) do
       case {axe_scan(baseline_html), axe_scan(current_html)} do
         {{:ok, baseline_report}, {:ok, current_report}} ->
           {{axe_findings(baseline_report), axe_findings(current_report)}, []}

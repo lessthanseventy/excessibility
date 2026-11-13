@@ -62,6 +62,18 @@ defmodule Excessibility.SnapshotDiff do
 
   # ── Public API ─────────────────────────────────────────────────────
 
+  @per_render_attrs ~w(data-csrf data-phx-session data-phx-static)
+
+  # Attributes that repeat rendered text; a record id in one is collapsed
+  # as it is in text.
+  @text_attrs ~w(value alt title placeholder aria-label)
+
+  # Attributes that name or point at something: an element, a route, a form
+  # field. Any attribute in neither list is compared as written, so one
+  # these lists have never heard of costs a scan rather than hiding a change.
+  @reference_attrs ~w(id for name href action src aria-labelledby aria-describedby aria-controls aria-owns
+                      aria-activedescendant)
+
   @doc """
   Diff two HTML snapshots and return the list of changed regions.
 
@@ -95,6 +107,44 @@ defmodule Excessibility.SnapshotDiff do
       |> Enum.map(&put_coverage(&1, doc_len))
     else
       _ -> []
+    end
+  end
+
+  @doc """
+  Whether two snapshots are the same render apart from values that differ on
+  every render of the same code.
+
+  Ignored outright: HTML comments (the snapshot header), CSRF tokens
+  (`data-csrf`, the `csrf-token` meta, `_csrf_token` inputs),
+  `data-phx-session` and `data-phx-static`, and UUIDs, hex runs and digit
+  runs in text and in the attributes that repeat text (`value`, `alt`,
+  `title`, `placeholder`, `aria-label`).
+
+  In the attributes that name or point at something (`id`, `for`, `name`,
+  `href`, `action`, `src`, the ARIA id references, `data-*`, `phx-*`) those
+  runs, LiveView's generated `phx-…` ids and signed `Phoenix.Token` values
+  may differ only as a renaming: each old value becomes one new value
+  everywhere it is used, and neither is otherwise in use on the other side
+  or in a `<style>` block. So `row-12` becoming `row-97` throughout is the
+  same render, and a `for` that stops matching its `id` is not.
+
+  Every other attribute is compared as written, `class` and `style` included,
+  as are `<style>` blocks, `<link>` elements and the doctype, so a styling
+  change is always a difference.
+  """
+  @spec render_equivalent?(String.t(), String.t()) :: boolean()
+  def render_equivalent?(html, html), do: true
+
+  def render_equivalent?(old_html, new_html) do
+    with true <- doctype(old_html) == doctype(new_html),
+         {:ok, old_tree} <- Floki.parse_document(old_html),
+         {:ok, new_tree} <- Floki.parse_document(new_html) do
+      {old_shape, old_refs} = canonical(old_tree, %{ids: [], css: []})
+      {new_shape, new_refs} = canonical(new_tree, %{ids: [], css: []})
+
+      old_shape == new_shape and renamed?(old_refs, new_refs)
+    else
+      _ -> false
     end
   end
 
@@ -284,6 +334,85 @@ defmodule Excessibility.SnapshotDiff do
     hex_id = ~r/(?<![0-9a-z])[0-9a-f]{6,}(?![0-9a-z])/i
 
     text |> String.replace(uuid, "UUID") |> String.replace(hex_id, "N") |> String.replace(~r/\d+/, "N")
+  end
+
+  # ── Render equivalence ─────────────────────────────────────────────
+
+  # Floki's tree has no doctype node.
+  defp doctype(html), do: Regex.run(~r/<!doctype[^>]*>/i, html)
+
+  # Returns the tree with every per-render value blanked, and `refs`: the
+  # ids found in reference attributes, in document order, and the ids a
+  # style block mentions.
+  defp canonical(nodes, refs) when is_list(nodes) do
+    nodes |> Enum.reject(&match?({:comment, _}, &1)) |> Enum.map_reduce(refs, &canonical/2)
+  end
+
+  defp canonical(text, refs) when is_binary(text), do: {collapse_numbers(text), refs}
+
+  # A colour is a hex run and a stylesheet's digest is its version, so
+  # neither CSS text nor a <link> is collapsed.
+  defp canonical({"style", _attrs, children} = node, refs) do
+    css = children |> Enum.filter(&is_binary/1) |> Enum.join()
+    {node, %{refs | css: scan_ids(css) ++ refs.css}}
+  end
+
+  defp canonical({tag, _attrs, _children} = node, refs) when tag in ~w(script link), do: {node, refs}
+
+  defp canonical({tag, attrs, children}, refs) when is_binary(tag) and is_list(attrs) do
+    token_attr = token_attr(tag, attrs)
+
+    {attrs, refs} =
+      Enum.map_reduce(attrs, refs, fn {name, value}, refs ->
+        {value, refs} = canonical_attr(name, value, token_attr, refs)
+        {{name, value}, refs}
+      end)
+
+    {children, refs} = canonical(children, refs)
+    {{tag, attrs, children}, refs}
+  end
+
+  defp canonical(other, refs), do: {other, refs}
+
+  defp token_attr("meta", attrs), do: if({"name", "csrf-token"} in attrs, do: "content")
+  defp token_attr("input", attrs), do: if({"name", "_csrf_token"} in attrs, do: "value")
+  defp token_attr(_tag, _attrs), do: nil
+
+  defp canonical_attr(name, _value, name, refs), do: {"", refs}
+  defp canonical_attr(name, _value, _token_attr, refs) when name in @per_render_attrs, do: {"", refs}
+  defp canonical_attr(name, value, _token_attr, refs) when name in @text_attrs, do: {collapse_numbers(value), refs}
+  defp canonical_attr("data-" <> _, value, _token_attr, refs), do: reference(value, refs)
+  defp canonical_attr("phx-" <> _, value, _token_attr, refs), do: reference(value, refs)
+  defp canonical_attr(name, value, _token_attr, refs) when name in @reference_attrs, do: reference(value, refs)
+  defp canonical_attr(_name, value, _token_attr, refs), do: {value, refs}
+
+  # NUL cannot occur in parsed HTML, so the placeholder is never mistaken
+  # for text the page wrote.
+  defp reference(value, refs) do
+    {String.replace(value, id_pattern(), <<0>>), %{refs | ids: Enum.reverse(scan_ids(value), refs.ids)}}
+  end
+
+  defp scan_ids(string), do: id_pattern() |> Regex.scan(string) |> Enum.map(&hd/1)
+
+  # Besides what `collapse_numbers/1` collapses: a signed Phoenix.Token
+  # (`SFMyNTY` is its fixed header) and LiveView's generated ids
+  # (`phx-GJA6FvD6RWsarkrB`), both random base64.
+  defp id_pattern do
+    ~r/SFMyNTY\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+|phx-[A-Za-z0-9_-]+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|(?<![0-9a-z])[0-9a-f]{6,}(?![0-9a-z])|\d+/i
+  end
+
+  # The ids of two renders of one template pair up one to one. An id that
+  # changed must also be gone from the other side: `box1` becoming `box2`
+  # while `#box2` is styled, or still in use elsewhere, is a real change.
+  defp renamed?(old, new) do
+    pairs = old.ids |> Enum.zip(new.ids) |> Enum.uniq()
+    old_seen = MapSet.new(old.ids ++ old.css)
+    new_seen = MapSet.new(new.ids ++ new.css)
+
+    length(old.ids) == length(new.ids) and
+      pairs == Enum.uniq_by(pairs, &elem(&1, 0)) and
+      pairs == Enum.uniq_by(pairs, &elem(&1, 1)) and
+      Enum.all?(pairs, fn {a, b} -> a == b or (a not in new_seen and b not in old_seen) end)
   end
 
   defp diff_changed(old_node, new_node, ancestors, key) do
