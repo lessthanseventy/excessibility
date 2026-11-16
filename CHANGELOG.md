@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Snapshots keep the app's whitespace, so they render the way the app does.** `Excessibility.HTML.wrap/1` wrote every snapshot with `Floki.raw_html(pretty: true)`, which re-indents the document and puts each inline element and text node on its own line. A flash reading `Saved. <a href="/undo">Undo</a>.` rendered in the snapshot, its axe scan and its screenshot as "Undo ." with a space before the period, and spacing around any inline element could differ from the app. Snapshots are now written without reformatting. Baselines saved before this change are in the indented form, and `mix excessibility.snapshot.compare` compares bytes, so after upgrading it reports a diff on every snapshot; re-run `mix excessibility.baseline` once. `mix excessibility.review` normalizes whitespace and is unaffected.
+
 ## [0.22.3] - 2026-11-13
 
 ### Fixed

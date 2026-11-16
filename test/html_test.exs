@@ -23,6 +23,12 @@ defmodule Excessibility.HTMLTest do
     assert result =~ ~r/<body>.*Main.*<\/body>/s
   end
 
+  test "keeps inline text and links exactly as rendered" do
+    flash = ~s(<div role="alert"><p>Saved. <a href="/undo">Undo</a>.</p></div>)
+
+    assert HTML.wrap("<html><head></head><body>#{flash}</body></html>") =~ flash
+  end
+
   test "prefixes static paths for href/src" do
     content = ~s(<img src="/images/foo.png"><link href="/styles.css">)
     result = HTML.wrap(content)
