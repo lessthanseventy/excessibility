@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-11-16
+
 ### Added
 - **The telemetry timeline lines up with `html_snapshot/2` calls** ([#235](https://github.com/lessthanseventy/excessibility/issues/235)). While capture runs, each `html_snapshot/2` adds a `{"event": "snapshot", "snapshot": "<file name>"}` mark to the timeline at the point it was taken. The analyzers, the digest and benchmark mode skip these marks. Every event also records `connected?`, which is `false` for the static render and `true` once connected, so the static mount can be dropped exactly. Each test's timeline is now also written to `timelines/<TestModule>/<test name>-<hash>.json`. The hash keeps apart test names that differ only in punctuation. `timeline.json` is still written and still holds the last test's.
 
