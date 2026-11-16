@@ -156,7 +156,8 @@ defmodule Excessibility.TelemetryCaptureIntegrationTest do
           assigns: %{user_id: 123, products: [%{id: 1}]},
           view: MyApp.Live
         },
-        params: %{"event" => "add_product"}
+        event: "add_product",
+        params: %{}
       },
       nil
     )

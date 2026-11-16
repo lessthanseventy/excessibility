@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Telemetry capture no longer prints a line per captured event.** `mix excessibility.debug` printed `✅ Captured telemetry snapshot for …` for every event and `📸 Excessibility: Telemetry mount event fired!` for every mount, which buried test output on a long run. The same information is still logged at debug level.
 
+### Fixed
+- **The telemetry timeline names each `handle_event` and records LiveComponent events** ([#234](https://github.com/lessthanseventy/excessibility/issues/234)). Every LiveView event was recorded as `handle_event:event`, because the name was read from the event payload instead of the telemetry metadata, and `handle_event` inside a LiveComponent was not captured at all. Each event is now recorded as `handle_event:<name>`, and every timeline event carries a `component` field: the LiveComponent module for a component's event, `null` otherwise. The memory, data growth, event pattern, state machine and render efficiency analyzers keep a component's events apart from its parent view's.
+
 ## [0.23.0] - 2026-11-15
 
 ### Changed

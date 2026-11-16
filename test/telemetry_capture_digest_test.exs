@@ -49,7 +49,8 @@ defmodule Excessibility.TelemetryCaptureDigestTest do
       %{duration: 50},
       %{
         socket: %{assigns: %{user_id: 123, products: [%{id: 1}]}, view: MyApp.Live},
-        params: %{"event" => "save"}
+        event: "save",
+        params: %{}
       },
       nil
     )
@@ -93,7 +94,7 @@ defmodule Excessibility.TelemetryCaptureDigestTest do
     TelemetryCapture.handle_event(
       [:phoenix, :live_view, :handle_event, :stop],
       %{duration: 50},
-      %{socket: %{assigns: %{user_id: 123}, view: MyApp.Live}, params: %{"event" => "save"}},
+      %{socket: %{assigns: %{user_id: 123}, view: MyApp.Live}, event: "save", params: %{}},
       nil
     )
 
@@ -114,7 +115,7 @@ defmodule Excessibility.TelemetryCaptureDigestTest do
     TelemetryCapture.handle_event(
       [:phoenix, :live_view, :handle_event, :stop],
       %{duration: 50},
-      %{socket: %{assigns: %{user_id: 123}, view: MyApp.Live}, params: %{"event" => "save"}},
+      %{socket: %{assigns: %{user_id: 123}, view: MyApp.Live}, event: "save", params: %{}},
       nil
     )
 

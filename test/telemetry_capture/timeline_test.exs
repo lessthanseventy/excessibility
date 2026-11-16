@@ -93,6 +93,20 @@ defmodule Excessibility.TelemetryCapture.TimelineTest do
       assert second.duration_since_previous_ms == 1000
     end
 
+    test "carries the LiveComponent that handled an event" do
+      snapshots = [
+        %{
+          event_type: "handle_event:validate",
+          assigns: %{},
+          timestamp: ~U[2026-01-25 10:00:00Z],
+          view_module: MyApp.Live,
+          component: MyApp.InputForm
+        }
+      ]
+
+      assert [%{component: MyApp.InputForm}] = Timeline.build_timeline(snapshots, "t").timeline
+    end
+
     test "handles empty snapshots" do
       result = Timeline.build_timeline([], "empty_test")
 

@@ -125,6 +125,7 @@ defmodule Excessibility.TelemetryCapture.Timeline do
         # analyzers (message_flooding) need a plain number to diff.
         timestamp_ms: DateTime.to_unix(snapshot.timestamp, :millisecond),
         view_module: snapshot.view_module,
+        component: Map.get(snapshot, :component),
         key_state: key_state,
         changes: changes,
         duration_since_previous_ms: duration_since_previous

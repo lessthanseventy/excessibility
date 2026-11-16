@@ -71,15 +71,16 @@ defmodule Excessibility.TelemetryCapture.Analyzer do
   next to a `MarketplaceLive.Index` render as a transition — that's an
   artifact of the interleaving, not the code.
 
-  Events are grouped by `:view_module`; groups appear in first-seen order
+  Events are grouped by `:view_module` and `:component`, since a LiveComponent's
+  assigns are not its parent's; groups appear in first-seen order
   and events keep their relative order within a group. Events without a
   `:view_module` (older fixtures, single-view timelines) collapse to one
   group, so the ungrouped case is unchanged.
   """
   @spec group_by_view([map()]) :: [[map()]]
   def group_by_view(events) do
-    order = events |> Enum.map(&Map.get(&1, :view_module)) |> Enum.uniq()
-    grouped = Enum.group_by(events, &Map.get(&1, :view_module))
+    order = events |> Enum.map(&view_key/1) |> Enum.uniq()
+    grouped = Enum.group_by(events, &view_key/1)
     Enum.map(order, &Map.fetch!(grouped, &1))
   end
 
@@ -235,4 +236,6 @@ defmodule Excessibility.TelemetryCapture.Analyzer do
       {queue, new_degree}
     end
   end
+
+  defp view_key(event), do: {Map.get(event, :view_module), Map.get(event, :component)}
 end
