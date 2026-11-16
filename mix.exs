@@ -140,10 +140,13 @@ defmodule Excessibility.MixProject do
       {:floki, "~> 0.30"},
       {:igniter, "~> 0.7", optional: true, runtime: false},
       {:jason, "~> 1.4"},
+      # Optional as in LiveView itself: Phoenix's generator pins it `only: :test`,
+      # which a required dep here would conflict with.
+      {:lazy_html, "~> 0.1", optional: true},
       {:mix_test_interactive, "~> 6.0", only: :dev, runtime: false},
       {:mox, "~> 1.1", only: :test},
       {:phoenix, "~> 1.5"},
-      {:phoenix_live_view, "~> 0.17 or ~> 1.0"},
+      {:phoenix_live_view, "~> 1.1"},
       {:quokka, "~> 2.13", only: [:dev, :test], runtime: false},
       # Wallaby is optional - add it to your project if you want Wallaby.Session support.
       # `runtime: false` keeps the modules compiled and on the code path (so the

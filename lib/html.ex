@@ -16,6 +16,8 @@ defmodule Excessibility.HTML do
   doesn't need to be called directly.
   """
 
+  @compile {:no_warn_undefined, LazyHTML}
+
   @type html_tree :: tuple() | list(tuple())
 
   @doc """
@@ -31,7 +33,7 @@ defmodule Excessibility.HTML do
     wrapped =
       cond do
         is_binary(raw_content) ->
-          Floki.parse_document!(raw_content)
+          parse_document(raw_content)
 
         match?({"html", _, _}, raw_content) ->
           raw_content
@@ -56,6 +58,20 @@ defmodule Excessibility.HTML do
   # renders the snapshot in quirks mode, laid out unlike the app.
   defp with_doctype([{:doctype, _, _, _} | _] = tree), do: tree
   defp with_doctype(tree), do: [{:doctype, "html", "", ""} | tree]
+
+  # Floki's default parser drops whitespace-only text between tags, which the
+  # browser renders as a space. LazyHTML keeps it.
+  defp parse_document(html) do
+    if not Code.ensure_loaded?(LazyHTML) do
+      raise """
+      Excessibility snapshots of HTML strings need lazy_html. Add it to your deps:
+
+          {:lazy_html, ">= 0.1.0", only: :test}
+      """
+    end
+
+    html |> LazyHTML.from_document() |> LazyHTML.to_tree()
+  end
 
   defp app_head_and_html_attrs do
     path = Application.get_env(:excessibility, :head_render_path, "/")
