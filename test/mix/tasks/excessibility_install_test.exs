@@ -22,6 +22,30 @@ defmodule Mix.Tasks.Excessibility.InstallTest do
     assert content =~ "system_mod: Excessibility.System"
   end
 
+  test "adds lazy_html as a test dependency" do
+    igniter =
+      []
+      |> Igniter.Test.test_project()
+      |> put_args(endpoint: "DemoWeb.Endpoint", skip_npm: true, no_mcp: true)
+      |> Install.igniter()
+
+    assert file_content(igniter, "mix.exs") =~ ~s|{:lazy_html, ">= 0.1.0", only: :test}|
+  end
+
+  test "keeps an app's own lazy_html declaration" do
+    igniter =
+      []
+      |> Igniter.Test.test_project()
+      |> Igniter.Project.Deps.add_dep({:lazy_html, "~> 0.1.14", only: :test})
+      |> put_args(endpoint: "DemoWeb.Endpoint", skip_npm: true, no_mcp: true)
+      |> Install.igniter()
+
+    content = file_content(igniter, "mix.exs")
+
+    assert content =~ ~s|{:lazy_html, "~> 0.1.14", only: :test}|
+    assert length(String.split(content, ":lazy_html")) == 2
+  end
+
   test "uses custom head_render_path for apps with auth" do
     igniter =
       []
