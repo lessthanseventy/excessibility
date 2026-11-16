@@ -4,4 +4,7 @@ if System.get_env("EXCESSIBILITY_TELEMETRY_CAPTURE") == "true" do
   Excessibility.TelemetryCapture.attach()
 end
 
-ExUnit.start()
+browser_excludes =
+  if File.dir?("../assets/node_modules/playwright"), do: [], else: [browser: true]
+
+ExUnit.start(exclude: browser_excludes)

@@ -26,6 +26,7 @@ defmodule DemoWeb.Router do
       live "/accessible", AccessibleLive, :index
       live "/a11y/form", MessyFormLive, :index
       live "/a11y/widgets", MessyWidgetsLive, :index
+      live "/fidelity", FidelityLive, :index
 
       # Performance examples
       live "/review/orders", OrdersLive, :index

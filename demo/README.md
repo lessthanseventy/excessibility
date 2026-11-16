@@ -30,6 +30,13 @@ The landing page groups the examples by what Excessibility does with them.
 Between the two messy pages they trip **all six** LiveView-specific rules that
 axe-core can't see.
 
+`/fidelity` holds markup a snapshot must reproduce exactly to render like the app
+(a flash with an inline link, inline elements against punctuation, `<pre>`, an
+image alone on its line). `test/demo_web/snapshot_fidelity_test.exs` loads each
+page from a running server and its snapshot from disk in Chromium, and fails if
+the render mode, the visible text or any element's box differs. It needs
+Playwright (`mix excessibility.install`) and is skipped without it.
+
 ```bash
 mix test test/demo_web/accessibility_test.exs   # write the snapshots
 mix excessibility                               # axe-core + LiveView rules over them
