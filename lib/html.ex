@@ -47,8 +47,15 @@ defmodule Excessibility.HTML do
 
     wrapped
     |> Floki.traverse_and_update(&prefix_paths(&1, static_path))
+    |> List.wrap()
+    |> with_doctype()
     |> Floki.raw_html()
   end
+
+  # Floki's default parser drops the doctype, and without one the browser
+  # renders the snapshot in quirks mode, laid out unlike the app.
+  defp with_doctype([{:doctype, _, _, _} | _] = tree), do: tree
+  defp with_doctype(tree), do: [{:doctype, "html", "", ""} | tree]
 
   defp app_head_and_html_attrs do
     path = Application.get_env(:excessibility, :head_render_path, "/")
