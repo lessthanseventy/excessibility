@@ -29,6 +29,19 @@ defmodule Excessibility.HTMLTest do
     assert HTML.wrap("<html><head></head><body>#{flash}</body></html>") =~ flash
   end
 
+  test "writes one HTML5 doctype so the snapshot renders in standards mode" do
+    for content <- [
+          "<html><head></head><body>x</body></html>",
+          "<!DOCTYPE html><html><head></head><body>x</body></html>",
+          {"div", [{"data-phx-main", "true"}], ["x"]}
+        ] do
+      result = HTML.wrap(content)
+
+      assert result =~ ~r/\A<!DOCTYPE html>/
+      assert length(Regex.scan(~r/<!doctype/i, result)) == 1
+    end
+  end
+
   test "prefixes static paths for href/src" do
     content = ~s(<img src="/images/foo.png"><link href="/styles.css">)
     result = HTML.wrap(content)
