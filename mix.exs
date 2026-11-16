@@ -2,7 +2,7 @@ defmodule Excessibility.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/lessthanseventy/excessibility"
-  @version "0.22.3"
+  @version "0.23.0"
 
   @internal_modules [
     Excessibility.Capture,

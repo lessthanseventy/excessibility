@@ -20,7 +20,7 @@ queries it ran, and the patterns that stand out.
 ```elixir
 def deps do
   [
-    {:excessibility, "~> 0.22", only: [:dev, :test]},
+    {:excessibility, "~> 0.23", only: [:dev, :test]},
     {:igniter, "~> 0.7", only: [:dev, :test], runtime: false}
   ]
 end
@@ -31,8 +31,10 @@ mix deps.get
 mix excessibility.install
 ```
 
-The installer writes the configuration into `config/test.exs` and installs Playwright and
-axe-core with npm in your assets directory. It runs on Igniter, which is why Igniter is in the
+The installer writes the configuration into `config/test.exs`, adds
+`{:lazy_html, ">= 0.1.0", only: :test}` to your deps if it is not there (Phoenix's generator
+already adds it; snapshots of controller responses are parsed with it), and installs Playwright and
+axe-core with npm in your assets directory. Excessibility needs LiveView 1.1 or later. It runs on Igniter, which is why Igniter is in the
 deps above; without it the task says so and stops. An app that needs a login for most pages
 names a public route to read `<head>` from: `mix excessibility.install --head-render-path /login`.
 

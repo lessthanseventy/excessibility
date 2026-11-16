@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-11-15
+
 ### Changed
 - **Breaking:** Excessibility needs `phoenix_live_view` 1.1 or later (it accepted `~> 0.17 or ~> 1.0`).
 - **Breaking:** a snapshot of an HTML string (a `Plug.Conn` response, a binary) needs `lazy_html` in the app's test deps, as LiveViewTest does since LiveView 1.1; Phoenix's generator already adds `{:lazy_html, ">= 0.1.0", only: :test}`. Without it, `html_snapshot/2` raises with that line, and `mix excessibility.install` now adds it when missing (an existing declaration is left as it is). Excessibility declares it optional, as LiveView does, so it does not conflict with the generator's `only: :test`.
