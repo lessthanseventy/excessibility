@@ -55,7 +55,7 @@ defmodule Excessibility.TelemetryCaptureDigestTest do
       nil
     )
 
-    TelemetryCapture.write_snapshots(__MODULE__, "digest_write_test")
+    TelemetryCapture.write_snapshots(__MODULE__, "digest_write_test", self())
 
     assert File.exists?(@digest_path)
 
@@ -98,7 +98,7 @@ defmodule Excessibility.TelemetryCaptureDigestTest do
       nil
     )
 
-    TelemetryCapture.write_snapshots(__MODULE__, "dollar_tag_leak_test")
+    TelemetryCapture.write_snapshots(__MODULE__, "dollar_tag_leak_test", self())
 
     raw = File.read!(@digest_path)
     refute raw =~ "canary_166@example.com"
@@ -119,7 +119,7 @@ defmodule Excessibility.TelemetryCaptureDigestTest do
       nil
     )
 
-    TelemetryCapture.write_snapshots(__MODULE__, "fixtures_guard_test")
+    TelemetryCapture.write_snapshots(__MODULE__, "fixtures_guard_test", self())
 
     digest = @digest_path |> File.read!() |> Jason.decode!()
     # The list must not flow into coverage.fixtures; it stays an object.

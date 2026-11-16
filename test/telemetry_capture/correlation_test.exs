@@ -120,10 +120,30 @@ defmodule Excessibility.TelemetryCapture.CorrelationTest do
     assert Timeline.without_snapshot_marks(%{timeline: [%{sequence: 1}]}) == %{timeline: [%{sequence: 1}]}
   end
 
+  test "a test writes and clears only the events of LiveViews it started" do
+    other_test = spawn(fn -> Process.sleep(:infinity) end)
+
+    fn ->
+      Process.put(:"$callers", [other_test])
+      mount(socket(self()))
+    end
+    |> Task.async()
+    |> Task.await()
+
+    mount(socket())
+    TelemetryCapture.write_snapshots(MyApp.PageTest, :"test mine", self())
+    TelemetryCapture.clear_snapshots(self())
+
+    assert %{"timeline" => [%{"connected?" => false}]} =
+             @output |> Path.join("timeline.json") |> File.read!() |> Jason.decode!()
+
+    assert [%{connected?: true}] = TelemetryCapture.get_snapshots()
+  end
+
   test "tests whose names differ only in punctuation get separate timeline files" do
     mount(socket(self()))
-    TelemetryCapture.write_snapshots(MyApp.PageTest, :"test x?")
-    TelemetryCapture.write_snapshots(MyApp.PageTest, :"test x!")
+    TelemetryCapture.write_snapshots(MyApp.PageTest, :"test x?", self())
+    TelemetryCapture.write_snapshots(MyApp.PageTest, :"test x!", self())
 
     assert [_, _] = File.ls!(Path.join(@output, "timelines/MyApp.PageTest"))
   end
@@ -158,7 +178,7 @@ defmodule Excessibility.TelemetryCapture.CorrelationTest do
 
   test "each test's timeline is also written under timelines/<module>/<test>.json" do
     mount(socket(self()))
-    TelemetryCapture.write_snapshots(MyApp.PageTest, :"test user signs in")
+    TelemetryCapture.write_snapshots(MyApp.PageTest, :"test user signs in", self())
 
     assert [per_test] = Path.wildcard(Path.join(@output, "timelines/MyApp.PageTest/test_user_signs_in-*.json"))
     assert File.read!(per_test) == File.read!(Path.join(@output, "timeline.json"))
