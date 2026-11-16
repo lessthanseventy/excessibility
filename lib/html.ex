@@ -49,6 +49,7 @@ defmodule Excessibility.HTML do
 
     wrapped
     |> Floki.traverse_and_update(&prefix_paths(&1, static_path))
+    |> Floki.traverse_and_update(&restore_leading_newline/1)
     |> List.wrap()
     |> with_doctype()
     |> Floki.raw_html()
@@ -109,6 +110,14 @@ defmodule Excessibility.HTML do
   defp build_static_path do
     Path.join(Mix.Project.app_path(), "priv/static")
   end
+
+  # The parser drops one newline right after these opening tags, so a leading
+  # newline in their text is written twice, as the HTML serializer spec does.
+  defp restore_leading_newline({tag, attrs, ["\n" <> _ = text | rest]}) when tag in ["pre", "textarea", "listing"] do
+    {tag, attrs, ["\n" <> text | rest]}
+  end
+
+  defp restore_leading_newline(node), do: node
 
   defp prefix_paths({"script", _, _}, _), do: nil
   defp prefix_paths({"a", _, _} = link, _), do: link
