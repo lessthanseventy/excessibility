@@ -23,6 +23,7 @@ defmodule Excessibility.TelemetryCapture.Writer do
   here is logged rather than raised — instrumentation must not fail the
   test it observes.
   """
+  @spec write_snapshots(module(), atom() | String.t()) :: :ok | nil
   def write_snapshots(module, test_name) do
     snapshots = TelemetryCapture.get_snapshots()
 
@@ -36,10 +37,6 @@ defmodule Excessibility.TelemetryCapture.Writer do
       timeline = Timeline.build_timeline(snapshots, test_name, enrichers: enrichers)
       timeline_json = Formatter.format_json(timeline)
       File.write!(Path.join(output_path, "timeline.json"), timeline_json)
-
-      per_test_path = per_test_timeline_path(output_path, module, test_name)
-      File.mkdir_p!(Path.dirname(per_test_path))
-      File.write!(per_test_path, timeline_json)
 
       IO.puts("📊 Excessibility: Wrote timeline.json with #{length(snapshots)} events")
 
@@ -68,6 +65,10 @@ defmodule Excessibility.TelemetryCapture.Writer do
 
       File.write!(Path.join(output_path, "digest.json"), Formatter.format_json(digest))
       IO.puts("🔒 Excessibility: Wrote digest.json (value-free)")
+
+      per_test_path = per_test_timeline_path(output_path, module, test_name)
+      File.mkdir_p!(Path.dirname(per_test_path))
+      File.write!(per_test_path, timeline_json)
     end
   rescue
     error ->
@@ -78,9 +79,13 @@ defmodule Excessibility.TelemetryCapture.Writer do
       :ok
   end
 
+  # The hash keeps names that sanitize alike ("x?" and "x!") apart; the
+  # truncation keeps a long describe/test name under the filesystem's limit.
   defp per_test_timeline_path(output_path, module, test_name) do
-    file = String.replace(to_string(test_name), ~r/[^\w.-]+/u, "_") <> ".json"
-    Path.join([output_path, "timelines", inspect(module), file])
+    name = to_string(test_name)
+    readable = name |> String.replace(~r/[^\w.-]+/u, "_") |> String.slice(0, 100)
+    hash = :sha256 |> :crypto.hash(name) |> Base.encode16(case: :lower) |> binary_part(0, 8)
+    Path.join([output_path, "timelines", inspect(module), "#{readable}-#{hash}.json"])
   end
 
   # Flatten every snapshot's stashed plan-capture warnings (in event order) into

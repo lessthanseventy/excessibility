@@ -105,7 +105,7 @@ Automatically captures LiveView state throughout test execution and generates sc
 mix excessibility.debug test/my_test.exs
 ```
 
-This writes the full local `timeline.json`, plus one per test under `timelines/<TestModule>/<test name>.json`, so a run over many tests keeps each test's events. Each `html_snapshot/2` call leaves a `snapshot` event naming its file, and each event says whether its socket was `connected?`, so the timeline can be lined up with the snapshots taken along the way. Alongside it, capture also writes a **value-free `digest.json`** that is safe to upload to CI or hand to a reviewer/model — see [Runtime Evidence Digest](#runtime-evidence-digest) below.
+This writes the full local `timeline.json`, plus one per test under `timelines/<TestModule>/<test name>-<hash>.json`, so a run over many tests keeps each test's events. Each `html_snapshot/2` call leaves a `snapshot` event naming its file, and each event says whether its socket was `connected?`, so the timeline can be lined up with the snapshots taken along the way. Alongside it, capture also writes a **value-free `digest.json`** that is safe to upload to CI or hand to a reviewer/model — see [Runtime Evidence Digest](#runtime-evidence-digest) below.
 
 See the project's `CLAUDE.md` file for detailed usage.
 

@@ -79,16 +79,16 @@ defmodule Excessibility.TelemetryCapture.Timeline do
       snapshots
       |> Enum.with_index(1)
       |> Enum.map_reduce({nil, %{}}, fn {snapshot, index}, {previous, last_by_source} ->
-        source = {snapshot.view_module, Map.get(snapshot, :component)}
+        source = {snapshot.view_module, Map.get(snapshot, :component), Map.get(snapshot, :component_id)}
 
-        {entry, last_by_source} =
+        {entry, next_state} =
           case snapshot.event_type do
             "snapshot" ->
-              {snapshot_mark(snapshot, index), last_by_source}
+              {snapshot_mark(snapshot, index), {previous, last_by_source}}
 
             _event ->
               {build_timeline_entry(snapshot, Map.get(last_by_source, source), index, opts),
-               Map.put(last_by_source, source, snapshot)}
+               {snapshot, Map.put(last_by_source, source, snapshot)}}
           end
 
         entry =
@@ -98,7 +98,7 @@ defmodule Excessibility.TelemetryCapture.Timeline do
             if(previous, do: DateTime.diff(snapshot.timestamp, previous.timestamp, :millisecond))
           )
 
-        {entry, {snapshot, last_by_source}}
+        {entry, next_state}
       end)
 
     %{
@@ -113,8 +113,12 @@ defmodule Excessibility.TelemetryCapture.Timeline do
   consumers that analyze LiveView callbacks.
   """
   @spec without_snapshot_marks(map()) :: map()
-  def without_snapshot_marks(%{timeline: events} = timeline) do
-    %{timeline | timeline: Enum.reject(events, &(&1.event == "snapshot"))}
+  def without_snapshot_marks(%{timeline: events} = timeline) when is_list(events) do
+    %{timeline | timeline: Enum.reject(events, &(Map.get(&1, :event) == "snapshot"))}
+  end
+
+  def without_snapshot_marks(%{"timeline" => events} = timeline) when is_list(events) do
+    %{timeline | "timeline" => Enum.reject(events, &(Map.get(&1, "event") == "snapshot"))}
   end
 
   def without_snapshot_marks(timeline), do: timeline
@@ -151,6 +155,7 @@ defmodule Excessibility.TelemetryCapture.Timeline do
         timestamp_ms: DateTime.to_unix(snapshot.timestamp, :millisecond),
         view_module: snapshot.view_module,
         component: Map.get(snapshot, :component),
+        component_id: Map.get(snapshot, :component_id),
         connected?: Map.get(snapshot, :connected?),
         key_state: key_state,
         changes: changes
@@ -208,7 +213,8 @@ defmodule Excessibility.TelemetryCapture.Timeline do
       timestamp: snapshot.timestamp,
       timestamp_ms: DateTime.to_unix(snapshot.timestamp, :millisecond),
       view_module: nil,
-      component: nil
+      component: nil,
+      component_id: nil
     }
   end
 end
