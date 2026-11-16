@@ -15,6 +15,7 @@ defmodule Excessibility.Review.Behavioral do
 
   alias Excessibility.TelemetryCapture.Analyzer
   alias Excessibility.TelemetryCapture.Registry
+  alias Excessibility.TelemetryCapture.Timeline
 
   @type finding :: %{
           rule: atom(),
@@ -47,6 +48,7 @@ defmodule Excessibility.Review.Behavioral do
   @spec analyze(map(), keyword()) :: %{findings: [finding()], warnings: [String.t()]}
   def analyze(timeline, opts \\ []) do
     analyzers = Keyword.get(opts, :analyzers) || Registry.get_default_analyzers()
+    timeline = Timeline.without_snapshot_marks(timeline)
     events = Map.get(timeline, :timeline) || Map.get(timeline, "timeline") || []
 
     {runnable, skip_warnings} = partition_by_enrichers(analyzers, events)

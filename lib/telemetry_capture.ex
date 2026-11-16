@@ -13,6 +13,7 @@ defmodule Excessibility.TelemetryCapture do
   require Logger
 
   @ecto_handler_id "excessibility-ecto-capture"
+  @suppress_key :excessibility_capture_suppressed
 
   @doc """
   Attaches telemetry handlers for automatic snapshot capture.
@@ -140,18 +141,7 @@ defmodule Excessibility.TelemetryCapture do
   end
 
   defp record_handle_info(message, socket) do
-    clean_assigns = extract_clean_assigns(socket)
-    view_module = extract_view_module(socket, %{})
-
-    store_snapshot(
-      "handle_info:#{message_name(message)}",
-      clean_assigns,
-      view_module,
-      %{},
-      %{},
-      flush_ecto_queries(),
-      drain_plan_warnings()
-    )
+    store_snapshot("handle_info:#{message_name(message)}", socket, %{}, %{})
   rescue
     error -> Logger.warning("Excessibility: failed to record handle_info: #{inspect(error)}")
   end
@@ -202,23 +192,10 @@ defmodule Excessibility.TelemetryCapture do
   defp capture_snapshot(event_type, measurements, metadata) do
     socket = metadata[:socket]
 
-    if socket do
-      clean_assigns = extract_clean_assigns(socket)
-      view_module = extract_view_module(socket, metadata)
-      ecto_queries = flush_ecto_queries()
-      plan_warnings = drain_plan_warnings()
-
-      store_snapshot(
-        event_type,
-        clean_assigns,
-        view_module,
-        metadata,
-        measurements,
-        ecto_queries,
-        plan_warnings
-      )
-    else
-      Logger.debug("Excessibility: No socket in metadata for #{event_type}")
+    cond do
+      Process.get(@suppress_key, false) -> :ok
+      socket -> store_snapshot(event_type, socket, metadata, measurements)
+      true -> Logger.debug("Excessibility: No socket in metadata for #{event_type}")
     end
   rescue
     error ->
@@ -247,24 +224,44 @@ defmodule Excessibility.TelemetryCapture do
     end
   end
 
-  defp store_snapshot(event_type, clean_assigns, view_module, metadata, measurements, ecto_queries, plan_warnings) do
-    key = {DateTime.utc_now(), :erlang.unique_integer([:monotonic])}
+  @doc """
+  Marks the timeline with an `html_snapshot/2` call, so a timeline event can be
+  matched to the snapshot file `name` taken at that point. Does nothing unless
+  telemetry capture is running.
+  """
+  @spec record_html_snapshot(String.t()) :: :ok
+  def record_html_snapshot(name) do
+    if capture_running?() and :ets.whereis(:excessibility_snapshots) != :undefined do
+      insert_snapshot(%{
+        event_type: "snapshot",
+        snapshot: name,
+        assigns: %{},
+        timestamp: DateTime.utc_now(),
+        view_module: nil,
+        component: nil
+      })
+    end
 
-    snapshot = %{
-      event_type: event_type,
-      assigns: clean_assigns,
-      timestamp: DateTime.utc_now(),
-      view_module: view_module,
-      component: Map.get(metadata, :component),
-      metadata_keys: Map.keys(metadata),
-      measurements: measurements,
-      ecto_queries: ecto_queries,
-      plan_warnings: plan_warnings
-    }
+    :ok
+  end
 
-    :ets.insert(:excessibility_snapshots, {key, snapshot})
+  @doc """
+  Runs `fun` with capture suspended in this process and returns its result.
 
-    Logger.debug("Excessibility: Captured snapshot for #{event_type} with assigns: #{inspect(Map.keys(clean_assigns))}")
+  The `<head>` render of a snapshot mounts whatever LiveView `:head_render_path`
+  routes to; those events, and the queries they fire, are not part of the test.
+  """
+  @spec without_capture((-> result)) :: result when result: var
+  def without_capture(fun) do
+    Process.put(@suppress_key, true)
+
+    try do
+      fun.()
+    after
+      Process.delete(@suppress_key)
+      flush_ecto_queries()
+      drain_plan_warnings()
+    end
   end
 
   @doc """
@@ -300,7 +297,7 @@ defmodule Excessibility.TelemetryCapture do
   end
 
   @doc false
-  defdelegate write_snapshots(test_name), to: Writer
+  defdelegate write_snapshots(module, test_name), to: Writer
 
   # The configured query-plan capture mode, reported into the digest. Task 10/11
   # will actually run EXPLAIN; here it only surfaces intent. `:explain_analyze`
@@ -327,4 +324,27 @@ defmodule Excessibility.TelemetryCapture do
 
   @doc false
   defdelegate reset_analyze_downgrade_warning, to: EctoCapture
+
+  defp store_snapshot(event_type, socket, metadata, measurements) do
+    clean_assigns = extract_clean_assigns(socket)
+
+    insert_snapshot(%{
+      event_type: event_type,
+      assigns: clean_assigns,
+      timestamp: DateTime.utc_now(),
+      view_module: extract_view_module(socket, metadata),
+      component: Map.get(metadata, :component),
+      connected?: is_pid(Map.get(socket, :transport_pid)),
+      metadata_keys: Map.keys(metadata),
+      measurements: measurements,
+      ecto_queries: flush_ecto_queries(),
+      plan_warnings: drain_plan_warnings()
+    })
+
+    Logger.debug("Excessibility: Captured snapshot for #{event_type} with assigns: #{inspect(Map.keys(clean_assigns))}")
+  end
+
+  defp insert_snapshot(snapshot) do
+    :ets.insert(:excessibility_snapshots, {{snapshot.timestamp, :erlang.unique_integer([:monotonic])}, snapshot})
+  end
 end

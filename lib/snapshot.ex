@@ -72,6 +72,8 @@ defmodule Excessibility.Snapshot do
     |> write_snapshot(path, opts)
     |> maybe_open_browser(opts)
 
+    Excessibility.TelemetryCapture.record_html_snapshot(filename)
+
     source
   end
 

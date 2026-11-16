@@ -91,7 +91,7 @@ defmodule Excessibility.TelemetryCaptureRealPostgresTest do
       nil
     )
 
-    TelemetryCapture.write_snapshots("real_pg_leak_test")
+    TelemetryCapture.write_snapshots(__MODULE__, "real_pg_leak_test")
 
     assert File.exists?(@digest_path)
     raw = File.read!(@digest_path)

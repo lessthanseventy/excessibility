@@ -95,7 +95,7 @@ defmodule Excessibility do
         on_exit(fn ->
           # Write telemetry snapshots to files if captured
           if System.get_env("EXCESSIBILITY_TELEMETRY_CAPTURE") == "true" do
-            Excessibility.TelemetryCapture.write_snapshots(context[:test])
+            Excessibility.TelemetryCapture.write_snapshots(context[:module], context[:test])
             Excessibility.TelemetryCapture.clear_snapshots()
           end
 
