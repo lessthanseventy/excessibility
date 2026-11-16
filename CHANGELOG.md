@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Telemetry capture no longer prints a line per captured event.** `mix excessibility.debug` printed `✅ Captured telemetry snapshot for …` for every event and `📸 Excessibility: Telemetry mount event fired!` for every mount, which buried test output on a long run. The same information is still logged at debug level.
+
 ## [0.23.0] - 2026-11-15
 
 ### Changed
