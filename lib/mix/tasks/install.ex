@@ -44,6 +44,7 @@ if Code.ensure_loaded?(Igniter.Mix.Task) do
       skip_mcp? = opts[:no_mcp]
 
       igniter
+      |> Igniter.Project.Deps.add_dep({:lazy_html, ">= 0.1.0", only: :test}, on_exists: :skip)
       |> ensure_test_config(endpoint, head_render_path)
       |> ensure_test_helper()
       |> maybe_install_deps(assets_dir, skip_npm?)
