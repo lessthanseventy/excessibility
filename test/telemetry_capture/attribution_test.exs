@@ -92,7 +92,7 @@ defmodule Excessibility.TelemetryCapture.AttributionTest do
   defp mount_stop, do: emit([:phoenix, :live_view, :mount, :stop], %{socket: socket()})
 
   defp handle_event_stop(name),
-    do: emit([:phoenix, :live_view, :handle_event, :stop], %{socket: socket(), params: %{"event" => name}})
+    do: emit([:phoenix, :live_view, :handle_event, :stop], %{socket: socket(), event: name, params: %{}})
 
   defp handle_params_stop, do: emit([:phoenix, :live_view, :handle_params, :stop], %{socket: socket()})
 

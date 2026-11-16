@@ -99,4 +99,14 @@ defmodule Excessibility.TelemetryCapture.AnalyzerTest do
       assert is_map(finding.metadata)
     end
   end
+
+  describe "group_by_view/1" do
+    test "keeps a LiveComponent's events apart from its parent view's" do
+      parent = %{view_module: MyApp.Live, component: nil, sequence: 1}
+      component = %{view_module: MyApp.Live, component: MyApp.Form, sequence: 2}
+      parent_again = %{view_module: MyApp.Live, component: nil, sequence: 3}
+
+      assert Analyzer.group_by_view([parent, component, parent_again]) == [[parent, parent_again], [component]]
+    end
+  end
 end

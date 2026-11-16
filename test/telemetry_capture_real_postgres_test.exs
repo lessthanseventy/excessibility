@@ -87,7 +87,7 @@ defmodule Excessibility.TelemetryCaptureRealPostgresTest do
     TelemetryCapture.handle_event(
       [:phoenix, :live_view, :handle_event, :stop],
       %{duration: @duration_canary},
-      %{socket: %{assigns: %{user_id: 123}, view: MyApp.Live}, params: %{"event" => "save"}},
+      %{socket: %{assigns: %{user_id: 123}, view: MyApp.Live}, event: "save", params: %{}},
       nil
     )
 

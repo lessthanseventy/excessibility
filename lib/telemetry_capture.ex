@@ -32,6 +32,7 @@ defmodule Excessibility.TelemetryCapture do
         [:phoenix, :live_view, :mount, :start],
         [:phoenix, :live_view, :mount, :stop],
         [:phoenix, :live_view, :handle_event, :stop],
+        [:phoenix, :live_component, :handle_event, :stop],
         [:phoenix, :live_view, :handle_params, :stop],
         [:phoenix, :live_view, :render, :stop]
       ],
@@ -185,14 +186,9 @@ defmodule Excessibility.TelemetryCapture do
     capture_snapshot("mount", measurements, metadata)
   end
 
-  def handle_event([:phoenix, :live_view, :handle_event, :stop], measurements, metadata, _config) do
-    event_name =
-      case metadata do
-        %{params: %{"event" => event}} when not is_nil(event) -> event
-        _ -> "event"
-      end
-
-    capture_snapshot("handle_event:#{event_name}", measurements, metadata)
+  def handle_event([:phoenix, kind, :handle_event, :stop], measurements, %{event: event} = metadata, _config)
+      when kind in [:live_view, :live_component] do
+    capture_snapshot("handle_event:#{event}", measurements, metadata)
   end
 
   def handle_event([:phoenix, :live_view, :handle_params, :stop], measurements, metadata, _config) do
@@ -259,6 +255,7 @@ defmodule Excessibility.TelemetryCapture do
       assigns: clean_assigns,
       timestamp: DateTime.utc_now(),
       view_module: view_module,
+      component: Map.get(metadata, :component),
       metadata_keys: Map.keys(metadata),
       measurements: measurements,
       ecto_queries: ecto_queries,
