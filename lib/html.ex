@@ -47,7 +47,7 @@ defmodule Excessibility.HTML do
 
     wrapped
     |> Floki.traverse_and_update(&prefix_paths(&1, static_path))
-    |> Floki.raw_html(pretty: true)
+    |> Floki.raw_html()
   end
 
   defp app_head_and_html_attrs do
