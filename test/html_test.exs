@@ -34,6 +34,13 @@ defmodule Excessibility.HTMLTest do
              "<b>a</b> <i>b</i>"
   end
 
+  test "keeps a leading blank line in pre and textarea, which the parser drops one newline of" do
+    result = HTML.wrap("<html><head></head><body><pre>\n\nline</pre><textarea>\n\nline</textarea></body></html>")
+
+    assert result =~ "<pre>\n\nline</pre>"
+    assert result =~ "<textarea>\n\nline</textarea>"
+  end
+
   test "writes one HTML5 doctype so the snapshot renders in standards mode" do
     for content <- [
           "<html><head></head><body>x</body></html>",
