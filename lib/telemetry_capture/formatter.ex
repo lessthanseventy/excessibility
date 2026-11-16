@@ -83,8 +83,7 @@ defmodule Excessibility.TelemetryCapture.Formatter do
     rows =
       Enum.map_join(entries, "\n", fn entry ->
         time = "+#{entry.duration_since_previous_ms || 0}ms"
-        changes = format_key_changes(entry.changes)
-        "| #{entry.sequence} | #{time} | #{entry.event} | #{changes} |"
+        "| #{entry.sequence} | #{time} | #{entry.event} | #{row_detail(entry)} |"
       end)
 
     header <> "\n" <> rows
@@ -105,7 +104,7 @@ defmodule Excessibility.TelemetryCapture.Formatter do
 
   defp build_detailed_changes(entries) do
     entries
-    |> Enum.filter(fn entry -> entry.changes != nil and map_size(entry.changes) > 0 end)
+    |> Enum.filter(fn entry -> Map.get(entry, :changes) not in [nil, %{}] end)
     |> Enum.map_join("\n\n---\n\n", &format_detailed_change/1)
   end
 
@@ -252,4 +251,7 @@ defmodule Excessibility.TelemetryCapture.Formatter do
   defp format_bytes(bytes) when bytes < 1024, do: "#{bytes} B"
   defp format_bytes(bytes) when bytes < 1024 * 1024, do: "#{Float.round(bytes / 1024, 1)} KB"
   defp format_bytes(bytes), do: "#{Float.round(bytes / 1024 / 1024, 1)} MB"
+
+  defp row_detail(%{event: "snapshot", snapshot: name}), do: name
+  defp row_detail(entry), do: entry |> Map.get(:changes) |> format_key_changes()
 end

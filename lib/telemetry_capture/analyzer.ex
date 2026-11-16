@@ -71,7 +71,7 @@ defmodule Excessibility.TelemetryCapture.Analyzer do
   next to a `MarketplaceLive.Index` render as a transition — that's an
   artifact of the interleaving, not the code.
 
-  Events are grouped by `:view_module` and `:component`, since a LiveComponent's
+  Events are grouped by `:view_module`, `:component` and `:component_id`, since a LiveComponent's
   assigns are not its parent's; groups appear in first-seen order
   and events keep their relative order within a group. Events without a
   `:view_module` (older fixtures, single-view timelines) collapse to one
@@ -237,5 +237,5 @@ defmodule Excessibility.TelemetryCapture.Analyzer do
     end
   end
 
-  defp view_key(event), do: {Map.get(event, :view_module), Map.get(event, :component)}
+  defp view_key(event), do: {Map.get(event, :view_module), Map.get(event, :component), Map.get(event, :component_id)}
 end

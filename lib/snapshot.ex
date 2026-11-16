@@ -65,14 +65,13 @@ defmodule Excessibility.Snapshot do
     filename = get_filename(env, module, opts, metadata)
     path = Path.join([File.cwd!(), Excessibility.Paths.snapshots_dir(), filename])
     File.mkdir_p!(Excessibility.Paths.snapshots_dir())
+    Excessibility.TelemetryCapture.record_html_snapshot(filename)
 
     html
     |> HTML.wrap()
     |> add_metadata(metadata)
     |> write_snapshot(path, opts)
     |> maybe_open_browser(opts)
-
-    Excessibility.TelemetryCapture.record_html_snapshot(filename)
 
     source
   end

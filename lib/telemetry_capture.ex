@@ -176,9 +176,9 @@ defmodule Excessibility.TelemetryCapture do
     capture_snapshot("mount", measurements, metadata)
   end
 
-  def handle_event([:phoenix, kind, :handle_event, :stop], measurements, %{event: event} = metadata, _config)
+  def handle_event([:phoenix, kind, :handle_event, :stop], measurements, metadata, _config)
       when kind in [:live_view, :live_component] do
-    capture_snapshot("handle_event:#{event}", measurements, metadata)
+    capture_snapshot("handle_event:#{Map.get(metadata, :event, "event")}", measurements, metadata)
   end
 
   def handle_event([:phoenix, :live_view, :handle_params, :stop], measurements, metadata, _config) do
@@ -193,7 +193,7 @@ defmodule Excessibility.TelemetryCapture do
     socket = metadata[:socket]
 
     cond do
-      Process.get(@suppress_key, false) -> :ok
+      capture_suppressed?() -> :ok
       socket -> store_snapshot(event_type, socket, metadata, measurements)
       true -> Logger.debug("Excessibility: No socket in metadata for #{event_type}")
     end
@@ -253,16 +253,18 @@ defmodule Excessibility.TelemetryCapture do
   """
   @spec without_capture((-> result)) :: result when result: var
   def without_capture(fun) do
-    Process.put(@suppress_key, true)
+    previous = Process.put(@suppress_key, true)
 
     try do
       fun.()
     after
-      Process.delete(@suppress_key)
-      flush_ecto_queries()
-      drain_plan_warnings()
+      Process.put(@suppress_key, previous || false)
     end
   end
+
+  @doc false
+  @spec capture_suppressed?() :: boolean()
+  def capture_suppressed?, do: Process.get(@suppress_key, false)
 
   @doc """
   Retrieves all captured snapshots and clears the table.
@@ -334,6 +336,7 @@ defmodule Excessibility.TelemetryCapture do
       timestamp: DateTime.utc_now(),
       view_module: extract_view_module(socket, metadata),
       component: Map.get(metadata, :component),
+      component_id: component_id(socket, metadata),
       connected?: is_pid(Map.get(socket, :transport_pid)),
       metadata_keys: Map.keys(metadata),
       measurements: measurements,
@@ -343,6 +346,9 @@ defmodule Excessibility.TelemetryCapture do
 
     Logger.debug("Excessibility: Captured snapshot for #{event_type} with assigns: #{inspect(Map.keys(clean_assigns))}")
   end
+
+  defp component_id(socket, %{component: _component}), do: Map.get(socket.assigns, :id)
+  defp component_id(_socket, _metadata), do: nil
 
   defp insert_snapshot(snapshot) do
     :ets.insert(:excessibility_snapshots, {{snapshot.timestamp, :erlang.unique_integer([:monotonic])}, snapshot})

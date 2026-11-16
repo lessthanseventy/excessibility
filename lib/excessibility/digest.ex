@@ -67,7 +67,7 @@ defmodule Excessibility.Digest do
       capture_version: capture_version(),
       # Plan-capture warnings accumulate in the LiveView process during EXPLAIN
       # and are threaded here via `:warnings`; fixture-validation warnings are
-      # appended by build/2 (see TelemetryCapture.write_snapshots/1).
+      # appended by build/2 (see TelemetryCapture.write_snapshots/2).
       warnings: warnings
     }
   end

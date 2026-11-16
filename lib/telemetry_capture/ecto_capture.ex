@@ -35,7 +35,7 @@ defmodule Excessibility.TelemetryCapture.EctoCapture do
     # telemetry fires in this same process. That event must NOT be recorded — it
     # is not a query the code under test ran, and recording it would both pollute
     # the timeline and (if it too were a SELECT) recurse. Return immediately.
-    if Process.get(@in_explain_key) do
+    if Process.get(@in_explain_key, false) or TelemetryCapture.capture_suppressed?() do
       :ok
     else
       # Read the plan-capture mode ONCE per query and thread it down the whole
