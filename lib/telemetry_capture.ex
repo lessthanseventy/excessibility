@@ -182,7 +182,6 @@ defmodule Excessibility.TelemetryCapture do
   end
 
   def handle_event([:phoenix, :live_view, :mount, :stop], measurements, metadata, _config) do
-    IO.puts("📸 Excessibility: Telemetry mount event fired!")
     capture_snapshot("mount", measurements, metadata)
   end
 
@@ -268,7 +267,6 @@ defmodule Excessibility.TelemetryCapture do
 
     :ets.insert(:excessibility_snapshots, {key, snapshot})
 
-    IO.puts("✅ Captured telemetry snapshot for #{event_type}")
     Logger.debug("Excessibility: Captured snapshot for #{event_type} with assigns: #{inspect(Map.keys(clean_assigns))}")
   end
 
