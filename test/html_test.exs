@@ -29,6 +29,11 @@ defmodule Excessibility.HTMLTest do
     assert HTML.wrap("<html><head></head><body>#{flash}</body></html>") =~ flash
   end
 
+  test "keeps whitespace between elements of string HTML" do
+    assert HTML.wrap("<html><head></head><body><b>a</b> <i>b</i></body></html>") =~
+             "<b>a</b> <i>b</i>"
+  end
+
   test "writes one HTML5 doctype so the snapshot renders in standards mode" do
     for content <- [
           "<html><head></head><body>x</body></html>",

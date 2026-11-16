@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Breaking:** Excessibility needs `phoenix_live_view` 1.1 or later (it accepted `~> 0.17 or ~> 1.0`).
+- **Breaking:** a snapshot of an HTML string (a `Plug.Conn` response, a binary) needs `lazy_html` in the app's test deps, as LiveViewTest does since LiveView 1.1; Phoenix's generator already adds `{:lazy_html, ">= 0.1.0", only: :test}`. Without it, `html_snapshot/2` raises with that line. Excessibility declares it optional, as LiveView does, so it does not conflict with the generator's `only: :test`.
+
 ### Fixed
+- **Snapshots render in standards mode.** Floki's parser drops the doctype and none was written back, so every snapshot rendered in quirks mode while the app rendered in standards mode, with differences in line boxes, gaps under inline images and table fonts. Every snapshot now starts with `<!DOCTYPE html>`.
+- **Snapshots of HTML strings keep the whitespace between elements.** Floki's parser drops whitespace-only text between tags, so `<button>Spaced</button> <button>buttons</button>` or a label followed by an input rendered with no space between them. String HTML is now parsed with LazyHTML, the parser LiveViewTest uses, so controller and LiveView snapshots are parsed alike.
 - **Snapshots keep the app's whitespace, so they render the way the app does.** `Excessibility.HTML.wrap/1` wrote every snapshot with `Floki.raw_html(pretty: true)`, which re-indents the document and puts each inline element and text node on its own line. A flash reading `Saved. <a href="/undo">Undo</a>.` rendered in the snapshot, its axe scan and its screenshot as "Undo ." with a space before the period, and spacing around any inline element could differ from the app. Snapshots are now written without reformatting. Baselines saved before this change are in the indented form, and `mix excessibility.snapshot.compare` compares bytes, so after upgrading it reports a diff on every snapshot; re-run `mix excessibility.baseline` once. `mix excessibility.review` normalizes whitespace and is unaffected.
 
 ## [0.22.3] - 2026-11-13
