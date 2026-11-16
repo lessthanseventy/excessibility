@@ -107,6 +107,38 @@ defmodule Excessibility.TelemetryCapture.TimelineTest do
       assert [%{component: MyApp.InputForm}] = Timeline.build_timeline(snapshots, "t").timeline
     end
 
+    test "diffs an event against the last one from the same view and component" do
+      snapshots = [
+        %{
+          event_type: "mount",
+          assigns: %{count: 1, live_action: nil},
+          timestamp: ~U[2026-01-25 10:00:00Z],
+          view_module: MyApp.Live
+        },
+        %{
+          event_type: "handle_event:validate",
+          assigns: %{form: :a},
+          timestamp: ~U[2026-01-25 10:00:01Z],
+          view_module: MyApp.Live,
+          component: MyApp.InputForm
+        },
+        %{
+          event_type: "handle_event:select",
+          assigns: %{count: 2, live_action: nil},
+          timestamp: ~U[2026-01-25 10:00:03Z],
+          view_module: MyApp.Live
+        },
+        %{event_type: "mount", assigns: %{page: 1}, timestamp: ~U[2026-01-25 10:00:04Z], view_module: MyApp.Other}
+      ]
+
+      [_mount, component, select, other] = Timeline.build_timeline(snapshots, "t").timeline
+
+      assert component.changes == nil
+      assert select.changes == %{"count" => {1, 2}}
+      assert select.duration_since_previous_ms == 2000
+      assert other.changes == nil
+    end
+
     test "handles empty snapshots" do
       result = Timeline.build_timeline([], "empty_test")
 

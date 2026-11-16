@@ -75,12 +75,21 @@ defmodule Excessibility.TelemetryCapture.Timeline do
     last_timestamp = List.last(snapshots).timestamp
     duration_ms = DateTime.diff(last_timestamp, first_timestamp, :millisecond)
 
-    timeline =
+    {timeline, _state} =
       snapshots
       |> Enum.with_index(1)
-      |> Enum.map(fn {snapshot, index} ->
-        previous = if index > 1, do: Enum.at(snapshots, index - 2)
-        build_timeline_entry(snapshot, previous, index, opts)
+      |> Enum.map_reduce({nil, %{}}, fn {snapshot, index}, {previous, last_by_source} ->
+        source = {snapshot.view_module, Map.get(snapshot, :component)}
+
+        entry =
+          snapshot
+          |> build_timeline_entry(Map.get(last_by_source, source), index, opts)
+          |> Map.put(
+            :duration_since_previous_ms,
+            if(previous, do: DateTime.diff(snapshot.timestamp, previous.timestamp, :millisecond))
+          )
+
+        {entry, {snapshot, Map.put(last_by_source, source, snapshot)}}
       end)
 
     %{
@@ -91,8 +100,10 @@ defmodule Excessibility.TelemetryCapture.Timeline do
   end
 
   @doc """
-  Builds a single timeline entry from a snapshot and its predecessor.
+  Builds a single timeline entry from a snapshot and the previous snapshot of
+  the same view and component, which its `changes` are diffed against.
   """
+  @spec build_timeline_entry(map(), map() | nil, pos_integer(), keyword()) :: map()
   def build_timeline_entry(snapshot, previous, sequence, opts \\ []) do
     filtered_assigns = Filter.filter_assigns(snapshot.assigns, opts)
 
@@ -107,12 +118,6 @@ defmodule Excessibility.TelemetryCapture.Timeline do
     diff = Diff.compute_diff(filtered_assigns, previous_assigns)
     changes = Diff.extract_changes(diff)
 
-    duration_since_previous =
-      if previous do
-        DateTime.diff(snapshot.timestamp, previous.timestamp, :millisecond)
-      end
-
-    # NEW: Run enrichers
     enrichments = run_enrichers(filtered_assigns, snapshot, opts)
 
     Map.merge(
@@ -127,8 +132,7 @@ defmodule Excessibility.TelemetryCapture.Timeline do
         view_module: snapshot.view_module,
         component: Map.get(snapshot, :component),
         key_state: key_state,
-        changes: changes,
-        duration_since_previous_ms: duration_since_previous
+        changes: changes
       },
       enrichments
     )
