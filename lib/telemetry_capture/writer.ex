@@ -12,7 +12,8 @@ defmodule Excessibility.TelemetryCapture.Writer do
   require Logger
 
   @doc """
-  Writes captured snapshots to timeline.json.
+  Writes captured snapshots to timeline.json, and the same timeline to
+  `timelines/<module>/<test>.json` so a run over many tests keeps each one.
 
   Note: HTML snapshot files are NOT generated from telemetry capture.
   For real accessibility testing, use `html_snapshot(view)` in your tests
@@ -22,7 +23,7 @@ defmodule Excessibility.TelemetryCapture.Writer do
   here is logged rather than raised — instrumentation must not fail the
   test it observes.
   """
-  def write_snapshots(test_name) do
+  def write_snapshots(module, test_name) do
     snapshots = TelemetryCapture.get_snapshots()
 
     if snapshots != [] do
@@ -34,8 +35,11 @@ defmodule Excessibility.TelemetryCapture.Writer do
       enrichers = resolve_enrichers_from_env()
       timeline = Timeline.build_timeline(snapshots, test_name, enrichers: enrichers)
       timeline_json = Formatter.format_json(timeline)
-      timeline_path = Path.join(output_path, "timeline.json")
-      File.write!(timeline_path, timeline_json)
+      File.write!(Path.join(output_path, "timeline.json"), timeline_json)
+
+      per_test_path = per_test_timeline_path(output_path, module, test_name)
+      File.mkdir_p!(Path.dirname(per_test_path))
+      File.write!(per_test_path, timeline_json)
 
       IO.puts("📊 Excessibility: Wrote timeline.json with #{length(snapshots)} events")
 
@@ -50,7 +54,9 @@ defmodule Excessibility.TelemetryCapture.Writer do
       requested_plan = requested_plan_mode()
 
       digest =
-        Excessibility.Digest.build(timeline,
+        timeline
+        |> Timeline.without_snapshot_marks()
+        |> Excessibility.Digest.build(
           ecto_configured?: TelemetryCapture.configured_repos() != [],
           enrichers_run: enricher_names(enrichers),
           plan_capture: effective_plan,
@@ -70,6 +76,11 @@ defmodule Excessibility.TelemetryCapture.Writer do
       )
 
       :ok
+  end
+
+  defp per_test_timeline_path(output_path, module, test_name) do
+    file = String.replace(to_string(test_name), ~r/[^\w.-]+/u, "_") <> ".json"
+    Path.join([output_path, "timelines", inspect(module), file])
   end
 
   # Flatten every snapshot's stashed plan-capture warnings (in event order) into

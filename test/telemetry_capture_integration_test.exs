@@ -51,7 +51,7 @@ defmodule Excessibility.TelemetryCaptureIntegrationTest do
     )
 
     # Write snapshots - should not raise on function encoding
-    TelemetryCapture.write_snapshots("function_test")
+    TelemetryCapture.write_snapshots(__MODULE__, "function_test")
 
     # Verify timeline.json exists and is valid JSON
     timeline_path = "test/excessibility/timeline.json"
@@ -89,7 +89,7 @@ defmodule Excessibility.TelemetryCaptureIntegrationTest do
       nil
     )
 
-    TelemetryCapture.write_snapshots("struct_list_test")
+    TelemetryCapture.write_snapshots(__MODULE__, "struct_list_test")
 
     timeline_path = "test/excessibility/timeline.json"
     assert File.exists?(timeline_path)
@@ -121,7 +121,7 @@ defmodule Excessibility.TelemetryCaptureIntegrationTest do
 
     log =
       capture_log(fn ->
-        TelemetryCapture.write_snapshots("resilience_test")
+        TelemetryCapture.write_snapshots(__MODULE__, "resilience_test")
       end)
 
     assert log =~ "Failed to write timeline"
@@ -163,7 +163,7 @@ defmodule Excessibility.TelemetryCaptureIntegrationTest do
     )
 
     # Write snapshots
-    TelemetryCapture.write_snapshots("integration_test")
+    TelemetryCapture.write_snapshots(__MODULE__, "integration_test")
 
     # Verify timeline.json exists
     timeline_path = "test/excessibility/timeline.json"
@@ -265,7 +265,7 @@ defmodule Excessibility.TelemetryCaptureIntegrationTest do
     )
 
     # Write snapshots
-    TelemetryCapture.write_snapshots("render_change_test")
+    TelemetryCapture.write_snapshots(__MODULE__, "render_change_test")
 
     # Verify timeline.json exists
     timeline_path = "test/excessibility/timeline.json"

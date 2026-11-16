@@ -7,6 +7,7 @@ defmodule Excessibility.Debug.Report do
   alias Excessibility.TelemetryCapture.Analyzer
   alias Excessibility.TelemetryCapture.Formatter
   alias Excessibility.TelemetryCapture.Registry
+  alias Excessibility.TelemetryCapture.Timeline
   alias Mix.Tasks.Excessibility.Debug
 
   def gather_snapshots do
@@ -54,7 +55,7 @@ defmodule Excessibility.Debug.Report do
 
         # Run analyzers
         analyzer_names = Debug.parse_analyzer_selection(opts)
-        analysis_results = run_analyzers(timeline, analyzer_names, opts)
+        analysis_results = timeline |> Timeline.without_snapshot_marks() |> run_analyzers(analyzer_names, opts)
 
         # Build markdown with analysis
         base_markdown = Formatter.format_markdown(timeline, report_data.snapshots)

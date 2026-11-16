@@ -7,10 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **The telemetry timeline lines up with `html_snapshot/2` calls** ([#235](https://github.com/lessthanseventy/excessibility/issues/235)). While capture runs, each `html_snapshot/2` adds a `{"event": "snapshot", "snapshot": "<file name>"}` mark to the timeline at the point it was taken. The analyzers, the digest and benchmark mode skip these marks. Every event also records `connected?`, which is `false` for the static render and `true` once connected, so the static mount can be dropped exactly. Each test's timeline is now also written to `timelines/<TestModule>/<test name>.json`. `timeline.json` is still written and still holds the last test's.
+
 ### Changed
 - **Telemetry capture no longer prints a line per captured event.** `mix excessibility.debug` printed `✅ Captured telemetry snapshot for …` for every event and `📸 Excessibility: Telemetry mount event fired!` for every mount, which buried test output on a long run. The same information is still logged at debug level.
 
 ### Fixed
+- **The `<head>` render no longer adds events to the timeline** ([#235](https://github.com/lessthanseventy/excessibility/issues/235)). With `:head_render_path` pointing at a LiveView, every `html_snapshot/2` mounted that LiveView, and the mount, with its queries, was recorded as part of the test.
 - **The telemetry timeline names each `handle_event` and records LiveComponent events** ([#234](https://github.com/lessthanseventy/excessibility/issues/234)). Every LiveView event was recorded as `handle_event:event`, because the name was read from the event payload instead of the telemetry metadata, and `handle_event` inside a LiveComponent was not captured at all. Each event is now recorded as `handle_event:<name>`, and every timeline event carries a `component` field: the LiveComponent module for a component's event, `null` otherwise. The memory, data growth, event pattern, state machine and render efficiency analyzers keep a component's events apart from its parent view's.
 - **A timeline event's `changes` are diffed against the previous event of the same view and component.** They were diffed against whatever event came just before, so the first event after a switch to another LiveView, or between a component and its parent, listed the other side's assigns as changes, with an assign that is `nil` reported as `nil → nil`. `duration_since_previous_ms` still measures from the event just before.
 

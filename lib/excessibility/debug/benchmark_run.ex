@@ -8,6 +8,7 @@ defmodule Excessibility.Debug.BenchmarkRun do
   import Excessibility.Paths
 
   alias Excessibility.TelemetryCapture.Formatter
+  alias Excessibility.TelemetryCapture.Timeline
   alias Mix.Tasks.Excessibility.Debug
 
   # Benchmark loop: run the test `runs` times, collect one timing sample per
@@ -64,6 +65,7 @@ defmodule Excessibility.Debug.BenchmarkRun do
   @doc false
   def collect_sample(timeline_map) do
     timeline_map
+    |> Timeline.without_snapshot_marks()
     |> Map.get(:timeline, [])
     |> Enum.reduce(%{}, fn event, acc ->
       acc

@@ -78,9 +78,11 @@ defmodule Excessibility.HTML do
     path = Application.get_env(:excessibility, :head_render_path, "/")
 
     conn =
-      :get
-      |> Plug.Test.conn(path)
-      |> app_endpoint().call([])
+      Excessibility.TelemetryCapture.without_capture(fn ->
+        :get
+        |> Plug.Test.conn(path)
+        |> app_endpoint().call([])
+      end)
 
     body = conn.resp_body
     doc = Floki.parse_document!(body)

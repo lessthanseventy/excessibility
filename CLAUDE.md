@@ -220,11 +220,17 @@ Timeline JSON structure:
 - `duration_ms` - Total test duration
 - `timeline[]` - Array of events with:
   - `sequence` - Event number
-  - `event` - Event type (mount, handle_event:name, etc.)
+  - `event` - Event type (mount, handle_event:name, etc.), or `snapshot` where `html_snapshot/2` was called
+  - `snapshot` - On a `snapshot` mark only: the snapshot file name. Marks carry no state and analyzers skip them
   - `timestamp` - ISO8601 timestamp
+  - `view_module` / `component` - The LiveView, and the LiveComponent for a component's `handle_event` (else `null`)
+  - `connected?` - `false` for the static (disconnected) render, `true` once connected
   - `memory_size` - Byte size of assigns (added by enricher)
   - `key_state` - Extracted important state
-  - `changes` - Diff from previous event
+  - `changes` - Diff from the previous event of the same view and component
+
+`timeline.json` holds the last test's timeline; each test's is also written to
+`timelines/<TestModule>/<test name>.json`. Events from the `<head>` render (`:head_render_path`) are not captured.
 
 **Filtering Options:**
 

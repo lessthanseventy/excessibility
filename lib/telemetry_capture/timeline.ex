@@ -81,15 +81,24 @@ defmodule Excessibility.TelemetryCapture.Timeline do
       |> Enum.map_reduce({nil, %{}}, fn {snapshot, index}, {previous, last_by_source} ->
         source = {snapshot.view_module, Map.get(snapshot, :component)}
 
+        {entry, last_by_source} =
+          case snapshot.event_type do
+            "snapshot" ->
+              {snapshot_mark(snapshot, index), last_by_source}
+
+            _event ->
+              {build_timeline_entry(snapshot, Map.get(last_by_source, source), index, opts),
+               Map.put(last_by_source, source, snapshot)}
+          end
+
         entry =
-          snapshot
-          |> build_timeline_entry(Map.get(last_by_source, source), index, opts)
-          |> Map.put(
+          Map.put(
+            entry,
             :duration_since_previous_ms,
             if(previous, do: DateTime.diff(snapshot.timestamp, previous.timestamp, :millisecond))
           )
 
-        {entry, {snapshot, Map.put(last_by_source, source, snapshot)}}
+        {entry, {snapshot, last_by_source}}
       end)
 
     %{
@@ -98,6 +107,17 @@ defmodule Excessibility.TelemetryCapture.Timeline do
       timeline: timeline
     }
   end
+
+  @doc """
+  Drops the `snapshot` marks that `html_snapshot/2` leaves in a timeline, for
+  consumers that analyze LiveView callbacks.
+  """
+  @spec without_snapshot_marks(map()) :: map()
+  def without_snapshot_marks(%{timeline: events} = timeline) do
+    %{timeline | timeline: Enum.reject(events, &(&1.event == "snapshot"))}
+  end
+
+  def without_snapshot_marks(timeline), do: timeline
 
   @doc """
   Builds a single timeline entry from a snapshot and the previous snapshot of
@@ -131,6 +151,7 @@ defmodule Excessibility.TelemetryCapture.Timeline do
         timestamp_ms: DateTime.to_unix(snapshot.timestamp, :millisecond),
         view_module: snapshot.view_module,
         component: Map.get(snapshot, :component),
+        connected?: Map.get(snapshot, :connected?),
         key_state: key_state,
         changes: changes
       },
@@ -177,5 +198,17 @@ defmodule Excessibility.TelemetryCapture.Timeline do
       enrichment = enricher.enrich(assigns, enricher_opts)
       Map.merge(acc, enrichment)
     end)
+  end
+
+  defp snapshot_mark(snapshot, sequence) do
+    %{
+      sequence: sequence,
+      event: "snapshot",
+      snapshot: snapshot.snapshot,
+      timestamp: snapshot.timestamp,
+      timestamp_ms: DateTime.to_unix(snapshot.timestamp, :millisecond),
+      view_module: nil,
+      component: nil
+    }
   end
 end
