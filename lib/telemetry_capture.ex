@@ -238,7 +238,8 @@ defmodule Excessibility.TelemetryCapture do
         assigns: %{},
         timestamp: DateTime.utc_now(),
         view_module: nil,
-        component: nil
+        component: nil,
+        owner: capture_owner()
       })
     end
 
@@ -288,18 +289,34 @@ defmodule Excessibility.TelemetryCapture do
   @doc """
   Clears all captured snapshots.
   """
-  def clear_snapshots(_test_name \\ nil) do
+  def clear_snapshots do
     case :ets.whereis(:excessibility_snapshots) do
-      :undefined ->
-        :ok
-
-      _table ->
-        :ets.delete_all_objects(:excessibility_snapshots)
+      :undefined -> :ok
+      _table -> :ets.delete_all_objects(:excessibility_snapshots)
     end
   end
 
+  @doc """
+  Clears the snapshots captured for the test process `owner`.
+  """
+  @spec clear_snapshots(pid()) :: true | :ok
+  def clear_snapshots(owner) when is_pid(owner) do
+    case :ets.whereis(:excessibility_snapshots) do
+      :undefined -> :ok
+      _table -> :ets.match_delete(:excessibility_snapshots, {:_, %{owner: owner}})
+    end
+  end
+
+  @doc """
+  Retrieves the snapshots captured for the test process `owner`, oldest first.
+  """
+  @spec get_snapshots(pid()) :: [map()]
+  def get_snapshots(owner) when is_pid(owner) do
+    Enum.filter(get_snapshots(), &(Map.get(&1, :owner) == owner))
+  end
+
   @doc false
-  defdelegate write_snapshots(module, test_name), to: Writer
+  defdelegate write_snapshots(module, test_name, owner), to: Writer
 
   # The configured query-plan capture mode, reported into the digest. Task 10/11
   # will actually run EXPLAIN; here it only surfaces intent. `:explain_analyze`
@@ -337,6 +354,7 @@ defmodule Excessibility.TelemetryCapture do
       view_module: extract_view_module(socket, metadata),
       component: Map.get(metadata, :component),
       component_id: component_id(socket, metadata),
+      owner: capture_owner(),
       connected?: is_pid(Map.get(socket, :transport_pid)),
       metadata_keys: Map.keys(metadata),
       measurements: measurements,
@@ -345,6 +363,16 @@ defmodule Excessibility.TelemetryCapture do
     })
 
     Logger.debug("Excessibility: Captured snapshot for #{event_type} with assigns: #{inspect(Map.keys(clean_assigns))}")
+  end
+
+  # Tests run concurrently and share one table, so each event is tagged with the
+  # test that started its LiveView: LiveViewTest puts that test pid last in
+  # `$callers`, and the static render runs in the test process itself.
+  defp capture_owner do
+    case Process.get(:"$callers") do
+      [_ | _] = callers -> List.last(callers)
+      _none -> self()
+    end
   end
 
   defp component_id(socket, %{component: _component}), do: Map.get(socket.assigns, :id)

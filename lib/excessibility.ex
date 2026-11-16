@@ -74,7 +74,7 @@ defmodule Excessibility do
         # Store test name for telemetry capture
         if telemetry? do
           Process.put(:excessibility_test_name, context[:test])
-          Excessibility.TelemetryCapture.clear_snapshots(context[:test])
+          Excessibility.TelemetryCapture.clear_snapshots(self())
         end
 
         cond do
@@ -92,11 +92,13 @@ defmodule Excessibility do
             :ok
         end
 
+        test_pid = self()
+
         on_exit(fn ->
           # Write telemetry snapshots to files if captured
           if System.get_env("EXCESSIBILITY_TELEMETRY_CAPTURE") == "true" do
-            Excessibility.TelemetryCapture.write_snapshots(context[:module], context[:test])
-            Excessibility.TelemetryCapture.clear_snapshots()
+            Excessibility.TelemetryCapture.write_snapshots(context[:module], context[:test], test_pid)
+            Excessibility.TelemetryCapture.clear_snapshots(test_pid)
           end
 
           # Save timeline if requested

@@ -23,9 +23,9 @@ defmodule Excessibility.TelemetryCapture.Writer do
   here is logged rather than raised — instrumentation must not fail the
   test it observes.
   """
-  @spec write_snapshots(module(), atom() | String.t()) :: :ok | nil
-  def write_snapshots(module, test_name) do
-    snapshots = TelemetryCapture.get_snapshots()
+  @spec write_snapshots(module(), atom() | String.t(), pid()) :: :ok | nil
+  def write_snapshots(module, test_name, owner) do
+    snapshots = TelemetryCapture.get_snapshots(owner)
 
     if snapshots != [] do
       output_path = Excessibility.Paths.output_path()
