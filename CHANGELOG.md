@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **The telemetry timeline names each `handle_event` and records LiveComponent events** ([#234](https://github.com/lessthanseventy/excessibility/issues/234)). Every LiveView event was recorded as `handle_event:event`, because the name was read from the event payload instead of the telemetry metadata, and `handle_event` inside a LiveComponent was not captured at all. Each event is now recorded as `handle_event:<name>`, and every timeline event carries a `component` field: the LiveComponent module for a component's event, `null` otherwise. The memory, data growth, event pattern, state machine and render efficiency analyzers keep a component's events apart from its parent view's.
+- **A timeline event's `changes` are diffed against the previous event of the same view and component.** They were diffed against whatever event came just before, so the first event after a switch to another LiveView, or between a component and its parent, listed the other side's assigns as changes, with an assign that is `nil` reported as `nil → nil`. `duration_since_previous_ms` still measures from the event just before.
 
 ## [0.23.0] - 2026-11-15
 
